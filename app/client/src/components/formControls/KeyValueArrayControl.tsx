@@ -10,18 +10,25 @@ import type { ControlProps, ControlData } from "./BaseControl";
 import BaseControl from "./BaseControl";
 import type { ControlType } from "constants/PropertyControlConstants";
 import DynamicTextField from "components/editorComponents/form/fields/DynamicTextField";
-import type { InputProps } from "design-system";
+import type { InputProps } from "@appsmith/ads";
 import { setDefaultKeyValPairFlag } from "actions/datasourceActions";
 import { useDispatch } from "react-redux";
-import { Button, Input } from "design-system";
+import { Button, Icon, Input, Text, Tooltip } from "@appsmith/ads";
 export interface KeyValueArrayControlProps extends ControlProps {
   name: string;
   label: string;
   maxLen?: number;
   description?: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   actionConfig?: any;
   extraData?: ControlData[];
   isRequired?: boolean;
+  showHeader?: boolean;
+  headerTooltips?: {
+    key?: string;
+    value?: string;
+  };
 }
 
 const FormRowWithLabel = styled.div`
@@ -52,6 +59,29 @@ const StyledButton = styled(Button)`
   margin-left: 5px;
 `;
 const AddMoreButton = styled(Button)``;
+
+const FlexContainer = styled.div`
+  display: flex;
+  align-items: center;
+  width: calc(100% - 30px);
+  margin-bottom: 8px;
+
+  .key-value {
+    line-height: 1;
+    flex: 1;
+    display: flex;
+    align-items: center;
+
+    .ads-v2-icon {
+      cursor: pointer;
+      margin-left: 8px;
+    }
+
+    label:first-child {
+      font-weight: normal;
+    }
+  }
+`;
 
 function KeyValueRow(
   props: KeyValueArrayControlProps & WrappedFieldArrayProps,
@@ -84,7 +114,10 @@ function KeyValueRow(
 
   useEffect(() => {
     if (typeof props.fields.getAll() === "string") {
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const fieldsValue: any[] = JSON.parse(`${props.fields.getAll()}`);
+
       props.fields.removeAll();
       fieldsValue.forEach((value, index) => {
         props.fields.insert(index, value);
@@ -101,6 +134,7 @@ function KeyValueRow(
           ? { isValid: true }
           : { isValid: false, message: keyFieldProps.validationMessage };
       }
+
       return { isValid: true };
     },
     [keyFieldProps?.validationRegex, keyFieldProps?.validationMessage],
@@ -108,6 +142,50 @@ function KeyValueRow(
 
   return typeof props.fields.getAll() === "object" ? (
     <>
+      {props.showHeader && (
+        <FlexContainer>
+          <div className="key-value">
+            <Text kind="body-m" renderAs="label">
+              Key
+            </Text>
+            {props.headerTooltips && (
+              <Tooltip
+                content={props.headerTooltips.key}
+                placement="right"
+                trigger="hover"
+              >
+                <Icon
+                  className={"help-icon"}
+                  color="var(--ads-v2-color-fg)"
+                  name="question-line"
+                  size="md"
+                />
+              </Tooltip>
+            )}
+          </div>
+          <div className="key-value">
+            <Text kind="body-m" renderAs="label">
+              Value
+            </Text>
+            {props.headerTooltips && (
+              <Tooltip
+                content={props.headerTooltips.value}
+                placement="right"
+                trigger="hover"
+              >
+                <Icon
+                  className={"help-icon"}
+                  color="var(--ads-v2-color-fg)"
+                  name="question-line"
+                  size="md"
+                />
+              </Tooltip>
+            )}
+          </div>
+        </FlexContainer>
+      )}
+      {/* TODO: Fix this the next time the file is edited */}
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       {props.fields.map((field: any, index: number) => {
         let keyTextFieldName = `${field}.key`;
         let valueTextFieldName = `${field}.value`;
@@ -122,7 +200,7 @@ function KeyValueRow(
           <FormRowWithLabel key={index}>
             <div
               className="form-input-field"
-              data-replay-id={btoa(keyTextFieldName)}
+              data-location-id={btoa(keyTextFieldName)}
             >
               <Field
                 component={renderInput}
@@ -132,8 +210,8 @@ function KeyValueRow(
                   defaultValue: extraData[0]?.initialValue,
                   isKeyFieldValid: isKeyFieldValid,
                   placeholder: props.extraData
-                    ? props.extraData[1]?.placeholderText
-                    : "",
+                    ? props.extraData[0]?.placeholderText
+                    : `Key ${index + 1}`,
                   isRequired: extraData[0]?.isRequired,
                   name: keyTextFieldName,
                 }}
@@ -142,7 +220,7 @@ function KeyValueRow(
             {!props.actionConfig && (
               <div className="form-input-field">
                 <div
-                  data-replay-id={btoa(valueTextFieldName)}
+                  data-location-id={btoa(valueTextFieldName)}
                   style={{ display: "flex", flexDirection: "row" }}
                 >
                   <Field
@@ -153,7 +231,7 @@ function KeyValueRow(
                       defaultValue: extraData[1]?.initialValue,
                       placeholder: props.extraData
                         ? props.extraData[1]?.placeholderText
-                        : "",
+                        : `Value ${index + 1}`,
                       name: valueTextFieldName,
                       isRequired: extraData[1]?.isRequired,
                     }}

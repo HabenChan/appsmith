@@ -1,9 +1,9 @@
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { LayoutSystemTypes } from "layoutSystems/types";
 import type { CanvasWidgetsReduxState } from "reducers/entityReducers/canvasWidgetsReducer";
-import type { AppPositioningTypes } from "reducers/entityReducers/pageListReducer";
 import type {
   CONVERSION_STATES,
-  SnapShotDetails,
+  SnapshotDetails,
 } from "reducers/uiReducers/layoutConversionReducer";
 
 /**
@@ -28,12 +28,10 @@ export const updateLayoutForMobileBreakpointAction = (
   };
 };
 
-export const updateLayoutPositioning = (
-  positioningType: AppPositioningTypes,
-) => {
+export const updateLayoutSystemType = (layoutSystemType: LayoutSystemTypes) => {
   return {
-    type: ReduxActionTypes.UPDATE_LAYOUT_POSITIONING,
-    payload: positioningType,
+    type: ReduxActionTypes.UPDATE_LAYOUT_SYSTEM_TYPE,
+    payload: layoutSystemType,
   };
 };
 
@@ -48,11 +46,11 @@ export const setLayoutConversionStateAction = (
 };
 
 export const updateSnapshotDetails = (
-  snapShotDetails: SnapShotDetails | undefined,
+  snapshotDetails: SnapshotDetails | undefined,
 ) => {
   return {
     type: ReduxActionTypes.UPDATE_SNAPSHOT_DETAILS,
-    payload: snapShotDetails,
+    payload: snapshotDetails,
   };
 };
 export function updateWidgetDimensionAction(
@@ -69,6 +67,12 @@ export function updateWidgetDimensionAction(
     },
   };
 }
+
+export const fetchSnapshotDetailsAction = () => {
+  return {
+    type: ReduxActionTypes.FETCH_LAYOUT_SNAPSHOT_DETAILS,
+  };
+};
 
 export const setConversionStart = (conversionState: CONVERSION_STATES) => {
   return {

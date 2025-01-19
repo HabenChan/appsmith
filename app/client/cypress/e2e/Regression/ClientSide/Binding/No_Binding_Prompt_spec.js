@@ -1,14 +1,20 @@
-const dsl = require("../../../../fixtures/inputdsl.json");
+import EditorNavigation, {
+  EntityType,
+} from "../../../../support/Pages/EditorNavigation";
+
 const widgetsPage = require("../../../../locators/Widgets.json");
 const dynamicInput = require("../../../../locators/DynamicInput.json");
-
-describe("Binding prompt", function () {
+import {
+  entityExplorer,
+  agHelper,
+} from "../../../../support/Objects/ObjectsCore";
+describe("Binding prompt", { tags: ["@tag.Binding"] }, function () {
   before(() => {
-    cy.addDsl(dsl);
+    agHelper.AddDsl("inputdsl");
   });
 
   it("1. Show binding prompt when there are no bindings in the editor", () => {
-    cy.openPropertyPane("inputwidgetv2");
+    EditorNavigation.SelectEntityByName("Input1", EntityType.Widget);
     cy.testJsontext("defaultvalue", " ");
     cy.get(dynamicInput.bindingPrompt).should("be.visible");
     cy.get(widgetsPage.defaultInput).type("{{");

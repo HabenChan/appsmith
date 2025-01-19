@@ -3,19 +3,18 @@ import { useDispatch } from "react-redux";
 import type { Log, Message, SourceEntity } from "entities/AppsmithConsole";
 import { LOG_CATEGORY, Severity } from "entities/AppsmithConsole";
 import styled from "styled-components";
-import { Classes, getTypographyByKey } from "design-system-old";
+import { Classes, getTypographyByKey } from "@appsmith/ads-old";
 import LOG_TYPE from "entities/AppsmithConsole/logtype";
 import type { PluginErrorDetails } from "api/ActionAPI";
 import LogCollapseData from "./components/LogCollapseData";
 import LogAdditionalInfo from "./components/LogAdditionalInfo";
 import LogEntityLink from "./components/LogEntityLink";
-import LogTimeStamp from "./components/LogTimeStamp";
 import { getLogIcon } from "../helpers";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 import moment from "moment";
 import LogHelper from "./components/LogHelper";
 import { toggleExpandErrorLogItem } from "actions/debuggerActions";
-import { Button, Icon } from "design-system";
+import { Button, Icon } from "@appsmith/ads";
 
 const InnerWrapper = styled.div`
   display: flex;
@@ -49,6 +48,7 @@ const Wrapper = styled.div<{ collapsed: boolean }>`
         ? `transform: rotate(-90deg);`
         : `transform: rotate(0deg); `};
   }
+
   .debugger-time {
     ${getTypographyByKey("h6")}
     letter-spacing: -0.24px;
@@ -85,6 +85,7 @@ const Wrapper = styled.div<{ collapsed: boolean }>`
       -ms-user-select: all; /* No support yet */
       user-select: all; /* Likely future */
     }
+
     .debugger-entity {
       color: var(--ads-v2-color-fg);
       ${getTypographyByKey("h6")}
@@ -97,18 +98,6 @@ const Wrapper = styled.div<{ collapsed: boolean }>`
         }
       }
     }
-  }
-
-  .debugger-entity-link {
-    // TODO: unclear why this file and LogItem.tsx have different styles when they look so similar
-    ${getTypographyByKey("h6")}
-    font-weight: 400;
-    letter-spacing: -0.195px;
-    color: var(--ads-v2-color-fg-emphasis);
-    cursor: pointer;
-    text-decoration-line: underline;
-    flex-shrink: 0;
-    width: max-content;
   }
 `;
 
@@ -124,15 +113,20 @@ const showToggleIcon = (e: Log) => {
 };
 
 //format the requestedAt timestamp to a readable format.
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const getUpdateTimestamp = (state?: Record<string, any>) => {
   if (state) {
     //clone state to avoid mutating the original state.
     const copyState = JSON.parse(JSON.stringify(state));
+
     copyState.requestedAt = moment(copyState.requestedAt).format(
       "YYYY-MM-DD HH:mm:ss",
     );
+
     return copyState;
   }
+
   return state;
 };
 
@@ -156,10 +150,11 @@ export const getLogItemProps = (e: Log) => {
     collapsable: showToggleIcon(e),
     pluginErrorDetails: e.pluginErrorDetails,
     isExpanded: e.isExpanded,
+    environmentName: e.environmentName,
   };
 };
 
-export type LogItemProps = {
+export interface LogItemProps {
   collapsable?: boolean;
   icon: string;
   timestamp: string;
@@ -170,14 +165,19 @@ export type LogItemProps = {
   category: LOG_CATEGORY;
   iconId?: string;
   logType?: LOG_TYPE;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   logData?: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   state?: Record<string, any>;
   id?: string;
   source?: SourceEntity;
   messages?: Message[];
   pluginErrorDetails?: PluginErrorDetails;
   isExpanded: boolean;
-};
+  environmentName?: string;
+}
 
 // Log item component
 const ErrorLogItem = (props: LogItemProps) => {
@@ -193,12 +193,19 @@ const ErrorLogItem = (props: LogItemProps) => {
           downstreamErrorCode: props.pluginErrorDetails?.downstreamErrorCode,
         });
       }
+
       //update to redux store
       dispatch(toggleExpandErrorLogItem(props.id, !props.isExpanded));
     }
   };
 
-  const { collapsable } = props;
+  const { collapsable, messages, pluginErrorDetails } = props;
+
+  const errorType = messages && messages[0].message.name;
+
+  const errorTitle = pluginErrorDetails
+    ? pluginErrorDetails.title
+    : messages && messages[0].message.message;
 
   return (
     <Wrapper className={props.severity} collapsed={!props.isExpanded}>
@@ -217,16 +224,6 @@ const ErrorLogItem = (props: LogItemProps) => {
             name={props.icon}
             size="md"
           />
-
-          {props.logType &&
-            props.logType !== LOG_TYPE.LINT_ERROR &&
-            props.messages &&
-            props.messages[0].message.name !== "SyntaxError" && (
-              <LogTimeStamp
-                severity={props.severity}
-                timestamp={props.timestamp}
-              />
-            )}
           {collapsable && props.logType !== LOG_TYPE.LINT_ERROR && (
             <Button
               className={`${Classes.ICON} debugger-toggle`}
@@ -239,10 +236,16 @@ const ErrorLogItem = (props: LogItemProps) => {
               startIcon={"expand-more"}
             />
           )}
-          <div className={`debugger-error-type`}>
-            {`${props.messages && props.messages[0].message.name}:`}
-          </div>
 
+          {props.environmentName && (
+            <LogAdditionalInfo
+              text={`${
+                props.environmentName.charAt(0).toUpperCase() +
+                props.environmentName.slice(1)
+              }`}
+            />
+          )}
+          <div className={`debugger-error-type`}>{errorType}:</div>
           <LogEntityLink {...props} />
         </FlexWrapper>
         {!(
@@ -256,9 +259,7 @@ const ErrorLogItem = (props: LogItemProps) => {
               data-testid="t--debugger-log-message"
               onClick={(e) => e.stopPropagation()}
             >
-              {props.pluginErrorDetails
-                ? props.pluginErrorDetails.title
-                : props.messages && props.messages[0].message.message}
+              {errorTitle}
             </span>
           </div>
         )}
@@ -276,7 +277,8 @@ const ErrorLogItem = (props: LogItemProps) => {
           props.logType !== LOG_TYPE.LINT_ERROR && (
             <LogHelper
               logType={props.logType}
-              name={props.messages ? props.messages[0].message.name : ""}
+              message={errorTitle}
+              name={errorType}
               pluginErrorDetails={props.pluginErrorDetails}
               source={props.source}
             />

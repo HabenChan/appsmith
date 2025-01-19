@@ -19,7 +19,9 @@ import { debounce, isArray } from "lodash";
 import "./styles.css";
 import { importSvg } from "../utils/icon-loadables";
 
-const Check = importSvg(() => import("../assets/icons/control/checkmark.svg"));
+const Check = importSvg(
+  async () => import("../assets/icons/control/checkmark.svg"),
+);
 
 export type DropdownOnSelect = (
   value?: string,
@@ -27,7 +29,7 @@ export type DropdownOnSelect = (
   isUpdatedViaKeyboard?: boolean,
 ) => void;
 
-export type DropdownOption = {
+export interface DropdownOption {
   label?: string;
   value?: string;
   id?: string;
@@ -45,7 +47,7 @@ export type DropdownOption = {
   disabledTooltipText?: string;
   hasCustomBadge?: boolean;
   link?: string;
-};
+}
 
 export interface DropdownSearchProps {
   enableSearch?: boolean;
@@ -193,11 +195,13 @@ const SquareBox = styled.div<{
   margin-right: 10px;
   background-color: ${(props) => {
     if (props.backgroundColor) return props.backgroundColor;
+
     props.checked ? "var(--ads-color-black-900)" : "var(--ads-color-black-0)";
   }};
   border: 1.4px solid;
   border-color: ${(props) => {
     if (props.borderColor) return props.borderColor;
+
     props.checked ? "var(--ads-color-black-900)" : "var(--ads-color-black-400)";
   }};
   flex: 0 0 auto;
@@ -229,6 +233,7 @@ const Selected = styled.div<{
     } else if (props.hasError) {
       return "var(--ads-old-color-fair-pink)";
     }
+
     return props.bgColor || "var(--ads-color-black-0)";
   }};
   pointer-events: ${(props) => (props.disabled ? "none" : "auto")};
@@ -256,16 +261,16 @@ const Selected = styled.div<{
     props.hasError
       ? `border: 1px solid var(--ads-danger-main)`
       : props.isOpen
-      ? `border: 1px solid ${
-          !!props.bgColor
-            ? props.bgColor
-            : "var(--appsmith-input-focus-border-color)"
-        }`
-      : props.disabled
-      ? `border: 1px solid var(--ads-dropdown-disabled-header-background-color)`
-      : `border: 1px solid ${
-          !!props.bgColor ? props.bgColor : "var(--ads-color-black-250)"
-        }`};
+        ? `border: 1px solid ${
+            !!props.bgColor
+              ? props.bgColor
+              : "var(--appsmith-input-focus-border-color)"
+          }`
+        : props.disabled
+          ? `border: 1px solid var(--ads-dropdown-disabled-header-background-color)`
+          : `border: 1px solid ${
+              !!props.bgColor ? props.bgColor : "var(--ads-color-black-250)"
+            }`};
   .${Classes.TEXT} {
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -278,8 +283,8 @@ const Selected = styled.div<{
             !!props.bgColor
               ? "var(--ads-color-black-0)"
               : props.selected
-              ? "var(--ads-dropdown-selected-header-text-color)"
-              : "var(--ads-dropdown-default-header-text-color)"
+                ? "var(--ads-dropdown-selected-header-text-color)"
+                : "var(--ads-dropdown-default-header-text-color)"
           }`};
   }
   &:hover {
@@ -344,7 +349,8 @@ export const DropdownWrapper = styled.div<{
   border: 1px solid var(--ads-dropdown-default-menu-border-color);
   overflow: hidden;
   overflow-y: auto;
-  box-shadow: 0px 12px 16px -4px rgba(0, 0, 0, 0.1),
+  box-shadow:
+    0px 12px 16px -4px rgba(0, 0, 0, 0.1),
     0px 4px 6px -2px rgba(0, 0, 0, 0.05);
   display: ${(props) => (props.isOpen ? "inline-block" : "none")};
   .dropdown-search {
@@ -460,8 +466,8 @@ const OptionWrapper = styled.div<{
       props.disabled
         ? "var(--ads-color-black-470)"
         : props.selected
-        ? "var(--ads-dropdown-default-menu-hover-text-color)"
-        : "var(--ads-dropdown-default-menu-text-color)"};
+          ? "var(--ads-dropdown-default-menu-hover-text-color)"
+          : "var(--ads-dropdown-default-menu-text-color)"};
   }
   .${Classes.ICON} {
     margin-right: var(--ads-spaces-5);
@@ -670,6 +676,7 @@ function TooltipWrappedText(
 ) {
   const { label, ...textProps } = props;
   const targetRef = useRef<HTMLDivElement | null>(null);
+
   return (
     <Tooltip
       boundary="window"
@@ -703,8 +710,8 @@ function DefaultDropDownValueNode({
         ? selected.label
         : selected.value
       : placeholder
-      ? placeholder
-      : "Please select an option.";
+        ? placeholder
+        : "Please select an option.";
 
   function Label() {
     if (isMultiSelect && Array.isArray(selected) && selected.length) {
@@ -720,6 +727,7 @@ function DefaultDropDownValueNode({
                   name="close-x"
                   onClick={(event: any) => {
                     event.stopPropagation();
+
                     if (removeSelectedOptionClickHandler) {
                       removeSelectedOptionClickHandler(s as DropdownOption);
                     }
@@ -835,6 +843,7 @@ export function RenderDropdownOptions(props: DropdownOptionsProps) {
         );
       },
     );
+
     setSearchValue(searchStr);
     setOptions(filteredOptions);
     onSearch && onSearch(searchStr);
@@ -855,6 +864,7 @@ export function RenderDropdownOptions(props: DropdownOptionsProps) {
     <DropdownWrapper
       className="ads-dropdown-options-wrapper"
       data-cy="dropdown-options-wrapper"
+      // eslint-disable-next-line testing-library/consistent-data-testid
       data-testid="dropdown-options-wrapper"
       isOpen={props.isOpen}
       width={optionWidth}
@@ -878,6 +888,7 @@ export function RenderDropdownOptions(props: DropdownOptionsProps) {
       >
         {options.map((option: DropdownOption, index: number) => {
           let isSelected = false;
+
           if (
             props.isMultiSelect &&
             Array.isArray(props.selected) &&
@@ -890,6 +901,7 @@ export function RenderDropdownOptions(props: DropdownOptionsProps) {
             isSelected =
               (props.selected as DropdownOption).value === option.value;
           }
+
           if (renderOption) {
             return renderOption({
               option,
@@ -900,6 +912,7 @@ export function RenderDropdownOptions(props: DropdownOptionsProps) {
               isHighlighted: index === props.highlightIndex,
             });
           }
+
           return !option.isSectionHeader ? (
             <Tooltip
               className="ds--dropdown-tooltip"
@@ -1044,6 +1057,7 @@ export default function Dropdown(props: DropdownProps) {
 
   useEffect(() => {
     setSelected(props.selected);
+
     if (!props.isMultiSelect) closeIfOpen();
   }, [props.selected]);
 
@@ -1066,6 +1080,7 @@ export default function Dropdown(props: DropdownProps) {
             ...(selected as DropdownOption[]),
             option,
           ];
+
           setSelected(newOptions);
           setIsOpen(true);
         }
@@ -1074,6 +1089,7 @@ export default function Dropdown(props: DropdownProps) {
         setSelected(option);
         setIsOpen(false);
       }
+
       onSelect && onSelect(option.value, option, isUpdatedViaKeyboard);
       option.onSelect && option.onSelect(option.value, option);
     },
@@ -1084,11 +1100,13 @@ export default function Dropdown(props: DropdownProps) {
   const removeSelectedOptionClickHandler = useCallback(
     (optionToBeRemoved: DropdownOption) => {
       let selectedOptions: DropdownOption | DropdownOption[] = [];
+
       if (props.isMultiSelect) {
         setIsOpen(true);
       } else {
         setIsOpen(false);
       }
+
       if (!Array.isArray(selected)) {
         if (optionToBeRemoved.value === selected.value) {
           selectedOptions = optionToBeRemoved;
@@ -1098,6 +1116,7 @@ export default function Dropdown(props: DropdownProps) {
           (option: DropdownOption) => option.value !== optionToBeRemoved.value,
         );
       }
+
       setSelected(selectedOptions);
       removeSelectedOption &&
         removeSelectedOption(optionToBeRemoved.value, optionToBeRemoved);
@@ -1122,20 +1141,25 @@ export default function Dropdown(props: DropdownProps) {
       const elementList = document.getElementById(
         "ds--dropdown-options",
       )?.children;
+
       if (!elementList || elementList?.length === 0) {
         setHighlight(-1);
       }
+
       switch (e.key) {
         case "Escape":
           emitKeyPressEvent(dropdownWrapperRef.current, e.key);
+
           if (isOpen) {
             setSelected((prevSelected) => {
               if (prevSelected != props.selected) return props.selected;
+
               return prevSelected;
             });
             setIsOpen(false);
             e.nativeEvent.stopImmediatePropagation();
           }
+
           break;
         case " ":
           if (!isOpen) {
@@ -1143,16 +1167,20 @@ export default function Dropdown(props: DropdownProps) {
             onClickHandler();
             break;
           }
+
           if (!props.enableSearch) {
             emitKeyPressEvent(dropdownWrapperRef.current, e.key);
+
             if (closeOnSpace) {
               e.preventDefault();
+
               if (isOpen) {
                 if (highlight !== -1 && elementList) {
                   const optionElement = elementList[highlight] as HTMLElement;
                   const dropdownOptionElement = optionElement.querySelector(
                     ".t--dropdown-option",
                   ) as HTMLElement;
+
                   dropdownOptionElement &&
                   typeof dropdownOptionElement.click === "function"
                     ? dropdownOptionElement.click()
@@ -1163,16 +1191,19 @@ export default function Dropdown(props: DropdownProps) {
               }
             }
           }
+
           break;
         case "Enter":
           emitKeyPressEvent(dropdownWrapperRef.current, e.key);
           e.preventDefault();
+
           if (isOpen) {
             if (highlight !== -1 && elementList) {
               const optionElement = elementList[highlight] as HTMLElement;
               const dropdownOptionElement = optionElement.querySelector(
                 ".t--dropdown-option",
               ) as HTMLElement;
+
               dropdownOptionElement &&
               typeof dropdownOptionElement.click === "function"
                 ? dropdownOptionElement.click()
@@ -1181,6 +1212,7 @@ export default function Dropdown(props: DropdownProps) {
           } else {
             onClickHandler();
           }
+
           break;
         case "ArrowUp":
           if (!isOpen) {
@@ -1188,19 +1220,24 @@ export default function Dropdown(props: DropdownProps) {
             onClickHandler();
             break;
           }
+
           if (elementList) {
             emitKeyPressEvent(dropdownWrapperRef.current, e.key);
             e.preventDefault();
+
             if (highlight === -1) {
               setHighlight(elementList.length - 1);
             } else {
               setHighlight((x) => {
                 const index = x - 1 < 0 ? elementList.length - 1 : x - 1;
+
                 elementList[index]?.scrollIntoView(scrollIntoViewOptions);
+
                 return index;
               });
             }
           }
+
           break;
         case "ArrowDown":
           if (!isOpen) {
@@ -1208,28 +1245,35 @@ export default function Dropdown(props: DropdownProps) {
             onClickHandler();
             break;
           }
+
           if (elementList) {
             emitKeyPressEvent(dropdownWrapperRef.current, e.key);
             e.preventDefault();
+
             if (highlight === -1) {
               setHighlight(0);
             } else {
               setHighlight((x) => {
                 const index = x + 1 > elementList.length - 1 ? 0 : x + 1;
+
                 elementList[index]?.scrollIntoView(scrollIntoViewOptions);
+
                 return index;
               });
             }
           }
+
           break;
         case "Tab":
           emitKeyPressEvent(
             dropdownWrapperRef.current,
             `${e.shiftKey ? "Shift+" : ""}${e.key}`,
           );
+
           if (isOpen) {
             setIsOpen(false);
           }
+
           break;
       }
     },
@@ -1246,6 +1290,7 @@ export default function Dropdown(props: DropdownProps) {
       requestAnimationFrame(() => {
         if (dropdownWrapperRef.current) {
           const width = entries[0].borderBoxSize?.[0].inlineSize;
+
           if (typeof width === "number" && width !== prevWidth.current) {
             prevWidth.current = width;
             setDropdownWrapperWidth(`${width}px`);
@@ -1258,6 +1303,7 @@ export default function Dropdown(props: DropdownProps) {
 
   useEffect(() => {
     const resizeObserver = new ResizeObserver(onParentResize);
+
     if (dropdownWrapperRef.current && props.fillOptions)
       resizeObserver.observe(dropdownWrapperRef.current);
 
@@ -1267,6 +1313,7 @@ export default function Dropdown(props: DropdownProps) {
   }, [dropdownWrapperRef.current, props.fillOptions]);
 
   let dropdownHeight = props.isMultiSelect ? "auto" : "36px";
+
   if (props.height) {
     dropdownHeight = props.height;
   }

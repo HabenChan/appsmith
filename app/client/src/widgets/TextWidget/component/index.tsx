@@ -109,6 +109,7 @@ type StyledTextProps = React.PropsWithChildren<{
   textColor?: string;
   fontStyle?: string;
   fontSize?: TextSize;
+  minHeight?: number;
 }>;
 
 export const StyledText = styled(Text)<StyledTextProps>`
@@ -153,9 +154,11 @@ export const StyledText = styled(Text)<StyledTextProps>`
     white-space: pre-wrap;
     text-align: ${(props) => props.textAlign.toLowerCase()};
   }
-  .auto-layout & span {
-    min-height: 32px;
-  }
+  ${({ minHeight }) => `
+    span {
+      ${minHeight ? `min-height: ${minHeight}px;` : ""}
+    }
+  `}
 `;
 
 const ModalContent = styled.div<{
@@ -203,6 +206,7 @@ const Content = styled.div<{
   font-size: ${({ fontSize }) =>
     fontSizeUtility(fontSize) || DEFAULT_FONT_SIZE};
 `;
+
 export interface TextComponentProps extends ComponentProps {
   accentColor: string;
   text?: string;
@@ -219,17 +223,13 @@ export interface TextComponentProps extends ComponentProps {
   borderColor?: Color;
   borderWidth?: number;
   overflow: OverflowTypes;
-  // helpers to detect and re-calculate content width
-  bottomRow?: number;
-  leftColumn?: number;
-  rightColumn?: number;
-  topRow?: number;
+  minHeight?: number;
 }
 
-type State = {
+interface State {
   isTruncated: boolean;
   showModal: boolean;
-};
+}
 
 type TextRef = React.Ref<Text> | undefined;
 
@@ -241,8 +241,11 @@ class TextComponent extends React.Component<TextComponentProps, State> {
 
   textRef = React.createRef() as TextRef;
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getTruncate = (element: any) => {
     const { isTruncated } = this.state;
+
     // add ELLIPSIS_HEIGHT and check content content is overflowing or not
     return (
       element.scrollHeight >
@@ -252,8 +255,10 @@ class TextComponent extends React.Component<TextComponentProps, State> {
 
   componentDidMount = () => {
     const textRef = get(this.textRef, "current.textRef");
+
     if (textRef && this.props.overflow === OverflowTypes.TRUNCATE) {
       const isTruncated = this.getTruncate(textRef);
+
       this.setState({ isTruncated });
     }
   };
@@ -262,8 +267,10 @@ class TextComponent extends React.Component<TextComponentProps, State> {
     if (!equal(prevProps, this.props)) {
       if (this.props.overflow === OverflowTypes.TRUNCATE) {
         const textRef = get(this.textRef, "current.textRef");
+
         if (textRef) {
           const isTruncated = this.getTruncate(textRef);
+
           this.setState({ isTruncated });
         }
       } else if (
@@ -292,6 +299,7 @@ class TextComponent extends React.Component<TextComponentProps, State> {
       fontFamily,
       fontSize,
       fontStyle,
+      minHeight,
       overflow,
       text,
       textAlign,
@@ -311,6 +319,7 @@ class TextComponent extends React.Component<TextComponentProps, State> {
             fontSize={fontSize}
             fontStyle={fontStyle}
             isTruncated={this.state.isTruncated}
+            minHeight={minHeight}
             overflow={overflow}
             ref={this.textRef}
             textAlign={textAlign}

@@ -1,6 +1,6 @@
 import React from "react";
-import type { CheckboxProps } from "design-system";
-import { Checkbox } from "design-system";
+import type { CheckboxProps } from "@appsmith/ads";
+import { Checkbox } from "@appsmith/ads";
 import type { ControlProps } from "./BaseControl";
 import BaseControl from "./BaseControl";
 import type { ControlType } from "constants/PropertyControlConstants";
@@ -37,12 +37,14 @@ function renderComponent(props: renderComponentProps) {
     <Checkbox
       data-testid={props?.input?.name}
       isDefaultSelected={props?.input?.checked as boolean}
+      isSelected={props?.input?.checked as boolean}
       {...props}
       name={props?.input?.name}
       onChange={onChangeHandler}
     />
   );
 }
+
 export interface CheckboxControlProps extends ControlProps {
   info?: string;
 }

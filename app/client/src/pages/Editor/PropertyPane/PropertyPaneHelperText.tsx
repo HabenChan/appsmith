@@ -1,10 +1,10 @@
-import { Text, TextType } from "design-system-old";
+import { Text, TextType } from "@appsmith/ads-old";
 import React from "react";
 import styled from "styled-components";
 
-type Props = {
+interface Props {
   helperText?: string;
-};
+}
 const StyledHelperText = styled(Text)`
   font-size: 12px;
   color: var(--ads-v2-color-fg-muted);

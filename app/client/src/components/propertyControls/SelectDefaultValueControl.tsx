@@ -12,6 +12,8 @@ import {
 import { getDynamicBindings, isDynamicValue } from "utils/DynamicBindingUtils";
 import { isString } from "utils/helpers";
 import LazyCodeEditor from "components/editorComponents/LazyCodeEditor";
+import { bindingHintHelper } from "components/editorComponents/CodeEditor/hintHelpers";
+import { slashCommandHintHelper } from "components/editorComponents/CodeEditor/commandsHelper";
 
 export const getBindingTemplate = (widgetName: string) => {
   const prefixTemplate = `{{ ((options, serverSideFiltering) => ( `;
@@ -31,11 +33,13 @@ export const stringToJS = (string: string): string => {
       }
     })
     .join(" + ");
+
   return js;
 };
 
 export const JSToString = (js: string): string => {
   const segments = js.split(" + ");
+
   return segments
     .map((segment) => {
       if (segment.charAt(0) === "`") {
@@ -45,16 +49,18 @@ export const JSToString = (js: string): string => {
     .join("");
 };
 
-type InputTextProp = {
+interface InputTextProp {
   label: string;
   value: string;
   onChange: (event: React.ChangeEvent<HTMLTextAreaElement> | string) => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluatedValue?: any;
   expected?: CodeEditorExpected;
   placeholder?: string;
   dataTreePath?: string;
   theme: EditorTheme;
-};
+}
 
 function InputText(props: InputTextProp) {
   const {
@@ -66,6 +72,7 @@ function InputText(props: InputTextProp) {
     theme,
     value,
   } = props;
+
   return (
     <StyledDynamicInput>
       <LazyCodeEditor
@@ -73,12 +80,14 @@ function InputText(props: InputTextProp) {
         dataTreePath={dataTreePath}
         evaluatedValue={evaluatedValue}
         expected={expected}
+        hinting={[bindingHintHelper, slashCommandHintHelper]}
         input={{
           value: value,
           onChange: onChange,
         }}
         mode={EditorModes.TEXT_WITH_BINDING}
         placeholder={placeholder}
+        positionCursorInsideBinding
         size={EditorSize.EXTENDED}
         tabBehaviour={TabBehaviour.INDENT}
         theme={theme}
@@ -100,6 +109,7 @@ class SelectDefaultValueControl extends BaseControl<SelectDefaultValueControlPro
     const value = (() => {
       if (propertyValue && isDynamicValue(propertyValue)) {
         const { widgetName } = this.props.widgetProperties;
+
         return this.getInputComputedValue(propertyValue, widgetName);
       }
 
@@ -109,6 +119,7 @@ class SelectDefaultValueControl extends BaseControl<SelectDefaultValueControlPro
     if (value && !propertyValue) {
       this.onTextChange(value);
     }
+
     return (
       <InputText
         dataTreePath={dataTreePath}
@@ -145,11 +156,13 @@ class SelectDefaultValueControl extends BaseControl<SelectDefaultValueControlPro
 
   onTextChange = (event: React.ChangeEvent<HTMLTextAreaElement> | string) => {
     let value = "";
+
     if (typeof event !== "string") {
       value = event.target?.value;
     } else {
       value = event;
     }
+
     if (isString(value)) {
       const output = this.getComputedValue(
         value,

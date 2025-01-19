@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import styled from "styled-components";
 import moment from "moment";
 import "@github/g-emoji-element";
-import { Divider, Text, Button, Tag } from "design-system";
+import { Divider, Text, Button, Tag } from "@appsmith/ads";
 
 const StyledContainer = styled.div`
   color: ${(props) => props.theme.colors.text.normal};
@@ -72,16 +72,16 @@ const StyledContent = styled.div<{ maxHeight: number }>`
   max-height: ${(props) => props.maxHeight}px;
 `;
 
-export type Release = {
+export interface Release {
   descriptionHtml: string;
   name: string;
   publishedAt?: string;
   tagName: string;
-};
+}
 
-type ReleaseProps = {
+interface ReleaseProps {
   release: Release;
-};
+}
 
 enum ReleaseComponentViewState {
   "collapsed",
@@ -135,6 +135,7 @@ function ReleaseComponent({ release }: ReleaseProps) {
 
   const getReadMoreState = useCallback((): ReleaseComponentViewState => {
     if (isCollapsed) return ReleaseComponentViewState.collapsed;
+
     return ReleaseComponentViewState.expanded;
   }, [isCollapsed]);
 
@@ -144,6 +145,7 @@ function ReleaseComponent({ release }: ReleaseProps) {
 
   const getHeight = useCallback(() => {
     if (!contentRef.current) return 500;
+
     return isCollapsed ? 500 : contentRef.current.scrollHeight;
   }, [isCollapsed]);
 

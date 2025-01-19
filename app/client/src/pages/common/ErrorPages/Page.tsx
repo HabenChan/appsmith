@@ -1,6 +1,6 @@
 import React from "react";
 import { useSelector } from "react-redux";
-import { getTenantConfig } from "@appsmith/selectors/tenantSelectors";
+import { getTenantConfig } from "ee/selectors/tenantSelectors";
 import { getComplementaryGrayscaleColor } from "widgets/WidgetUtils";
 import styled from "styled-components";
 import type { PageErrorMessageProps } from "./Components/PageErrorMessage";
@@ -16,16 +16,18 @@ const ErrorIconContainer = styled.div`
   }
 `;
 
-type PageProps = {
+interface PageProps {
   children?: React.ReactNode;
   errorCode?: string | number;
   errorIcon?: React.ReactNode;
   title?: string;
   description?: string;
   cta?: React.ReactNode;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   flushErrorsAndRedirect?: any;
   errorMessages?: PageErrorMessageProps[];
-};
+}
 
 function Page(props: PageProps) {
   const { cta, description, errorCode, errorIcon, title } = props;

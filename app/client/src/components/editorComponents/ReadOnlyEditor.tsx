@@ -19,7 +19,6 @@ interface Props {
   folding: boolean;
   showLineNumbers?: boolean;
   isRawView?: boolean;
-  containerHeight?: number;
 }
 
 function ReadOnlyEditor(props: Props) {
@@ -40,9 +39,10 @@ function ReadOnlyEditor(props: Props) {
     folding: props.folding,
     isReadOnly: true,
     isRawView: props.isRawView,
-    containerHeight: props.containerHeight,
     border: CodeEditorBorder.NONE,
+    className: "as-mask",
   };
+
   return <LazyCodeEditor {...editorProps} />;
 }
 

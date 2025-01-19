@@ -36,6 +36,7 @@ export interface Connection {
 
 export interface SSL {
   authType: SSLType;
+  authTypeControl: boolean;
   certificateFile: Certificate;
 }
 
@@ -87,6 +88,7 @@ export interface AuthorizationCode extends Oauth2Common {
   authorizationUrl: string;
   customAuthenticationParameters: Property[];
   isAuthorized: boolean;
+  expiresIn: number;
 }
 
 export interface Basic {

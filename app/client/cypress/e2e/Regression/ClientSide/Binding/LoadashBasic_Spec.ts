@@ -1,46 +1,48 @@
-import { ObjectsRegistry } from "../../../../support/Objects/Registry";
+import {
+  agHelper,
+  assertHelper,
+  deployMode,
+  locators,
+  propPane,
+} from "../../../../support/Objects/ObjectsCore";
+import EditorNavigation, {
+  EntityType,
+} from "../../../../support/Pages/EditorNavigation";
 
-let dataSet: any;
-let agHelper = ObjectsRegistry.AggregateHelper,
-  ee = ObjectsRegistry.EntityExplorer,
-  propPane = ObjectsRegistry.PropertyPane,
-  locator = ObjectsRegistry.CommonLocators,
-  deployMode = ObjectsRegistry.DeployMode;
-
-describe("Loadash basic test with input Widget", () => {
-  before(() => {
-    cy.fixture("inputBindingdsl").then((val: any) => {
-      agHelper.AddDsl(val);
+describe(
+  "Loadash basic test with input Widget",
+  { tags: ["@tag.Binding"] },
+  () => {
+    before(() => {
+      agHelper.AddDsl("inputBindingdsl");
     });
 
-    cy.fixture("testdata").then(function (data: any) {
-      dataSet = data;
+    it("1. Input widget test with default value for atob method", () => {
+      cy.fixture("testdata").then(function (dataSet: any) {
+        EditorNavigation.SelectEntityByName("Input1", EntityType.Widget);
+        propPane.UpdatePropertyFieldValue(
+          "Default value",
+          dataSet.defaultInputBinding + "}}",
+        );
+        assertHelper.AssertNetworkStatus("@updateLayout");
+        //Input widget test with default value for btoa method
+        EditorNavigation.SelectEntityByName("Input2", EntityType.Widget);
+        propPane.UpdatePropertyFieldValue(
+          "Default value",
+          dataSet.loadashInput + "}}",
+        );
+      });
+      assertHelper.AssertNetworkStatus("@updateLayout");
+      //Publish and validate the data displayed in input widgets value for aToB and bToa
+      deployMode.DeployApp(locators._widgetInputSelector("inputwidgetv2"));
+      cy.get(locators._widgetInputSelector("inputwidgetv2"))
+        .first()
+        .invoke("attr", "value")
+        .should("contain", "7");
+      cy.get(locators._widgetInputSelector("inputwidgetv2"))
+        .last()
+        .invoke("attr", "value")
+        .should("contain", "7");
     });
-  });
-
-  it("1. Input widget test with default value for atob method", () => {
-    ee.SelectEntityByName("Input1", "Widgets");
-    propPane.UpdatePropertyFieldValue(
-      "Default value",
-      dataSet.defaultInputBinding + "}}",
-    );
-    agHelper.ValidateNetworkStatus("@updateLayout");
-    //Input widget test with default value for btoa method
-    ee.SelectEntityByName("Input2");
-    propPane.UpdatePropertyFieldValue(
-      "Default value",
-      dataSet.loadashInput + "}}",
-    );
-    agHelper.ValidateNetworkStatus("@updateLayout");
-    //Publish and validate the data displayed in input widgets value for aToB and bToa
-    deployMode.DeployApp(locator._widgetInputSelector("inputwidgetv2"));
-    cy.get(locator._widgetInputSelector("inputwidgetv2"))
-      .first()
-      .invoke("attr", "value")
-      .should("contain", "7");
-    cy.get(locator._widgetInputSelector("inputwidgetv2"))
-      .last()
-      .invoke("attr", "value")
-      .should("contain", "7");
-  });
-});
+  },
+);

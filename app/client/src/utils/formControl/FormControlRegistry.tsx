@@ -29,6 +29,15 @@ import SortingControl from "components/formControls/SortingControl";
 import type { EntitySelectorControlProps } from "components/formControls/EntitySelectorControl";
 import EntitySelectorControl from "components/formControls/EntitySelectorControl";
 import formControlTypes from "./formControlTypes";
+import SegmentedControl from "components/formControls/SegmentedControl";
+import type { SegmentedControlProps } from "components/formControls/SegmentedControl";
+import FormTemplateControl from "components/formControls/FormTemplateControl";
+import type { FormTemplateControlProps } from "components/formControls/FormTemplateControl";
+import MultiFilePickerControl from "components/formControls/MultiFilePickerControl";
+import type { MultipleFilePickerControlProps } from "components/formControls/MultiFilePickerControl";
+import type { RadioButtonControlProps } from "components/formControls/RadioButtonControl";
+import RadioButtonControl from "components/formControls/RadioButtonControl";
+import { RagDocuments } from "ee/components/formControls/RagDocuments";
 
 /**
  * NOTE: If you are adding a component that uses FormControl
@@ -49,6 +58,14 @@ class FormControlRegistry {
         ): JSX.Element {
           //TODO: may not be in use
           return <FixedKeyInputControl {...controlProps} />;
+        },
+      },
+    );
+    FormControlFactory.registerControlBuilder(
+      formControlTypes.SEGMENTED_CONTROL,
+      {
+        buildPropertyControl(controlProps: SegmentedControlProps): JSX.Element {
+          return <SegmentedControl {...controlProps} />;
         },
       },
     );
@@ -148,6 +165,38 @@ class FormControlRegistry {
             isMultiSelect
             isSearchable
             {...controlProps}
+          />
+        );
+      },
+    });
+    FormControlFactory.registerControlBuilder(formControlTypes.FORM_TEMPLATE, {
+      buildPropertyControl(
+        controlProps: FormTemplateControlProps,
+      ): JSX.Element {
+        return <FormTemplateControl {...controlProps} />;
+      },
+    });
+    FormControlFactory.registerControlBuilder(
+      formControlTypes.MULTIPLE_FILE_PICKER,
+      {
+        buildPropertyControl(
+          controlProps: MultipleFilePickerControlProps,
+        ): JSX.Element {
+          return <MultiFilePickerControl {...controlProps} />;
+        },
+      },
+    );
+    FormControlFactory.registerControlBuilder(formControlTypes.RADIO_BUTTON, {
+      buildPropertyControl(controlProps: RadioButtonControlProps): JSX.Element {
+        return <RadioButtonControl {...controlProps} />;
+      },
+    });
+    FormControlFactory.registerControlBuilder(formControlTypes.RAG_DOCUMENTS, {
+      buildPropertyControl(controlProps): JSX.Element {
+        return (
+          <RagDocuments
+            datasourceId={controlProps.datasourceId}
+            workspaceId={controlProps.workspaceId}
           />
         );
       },

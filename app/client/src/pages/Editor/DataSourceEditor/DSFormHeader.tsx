@@ -1,31 +1,39 @@
+/* DO NOT INTRODUCE PAGE AND APPLICATION DEPENDENCIES IN THIS COMPONENT */
 import React, { useState } from "react";
-import { Icon, IconSize } from "design-system-old";
 import FormTitle from "./FormTitle";
-import NewActionButton from "./NewActionButton";
-import { getAssetUrl } from "@appsmith/utils/airgapHelpers";
-import { Position } from "@blueprintjs/core";
-import { Colors } from "constants/Colors";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
 import type { Datasource } from "entities/Datasource";
 import {
   CONFIRM_CONTEXT_DELETING,
   CONFIRM_CONTEXT_DELETE,
   CONTEXT_DELETE,
-} from "ce/constants/messages";
-import { createMessage } from "design-system-old/build/constants/messages";
-import AnalyticsUtil from "utils/AnalyticsUtil";
-import { useDispatch } from "react-redux";
+  EDIT,
+  createMessage,
+} from "ee/constants/messages";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { useDispatch, useSelector } from "react-redux";
 import { deleteDatasource } from "actions/datasourceActions";
 import { debounce } from "lodash";
 import type { ApiDatasourceForm } from "entities/Datasource/RestAPIForm";
-import { MenuComponent, RedMenuItem } from "components/utils/formComponents";
+import { MenuWrapper, StyledMenu } from "components/utils/formComponents";
 import styled from "styled-components";
-import { Button } from "design-system";
-import { EDIT } from "ce/constants/messages";
+import { Button, MenuContent, MenuItem, MenuTrigger } from "@appsmith/ads";
 import { DatasourceEditEntryPoints } from "constants/Datasource";
+import {
+  DB_NOT_SUPPORTED,
+  isEnvironmentConfigured,
+} from "ee/utils/Environments";
+import { getCurrentEnvironmentId } from "ee/selectors/environmentSelectors";
+import type { PluginType } from "entities/Plugin";
+import { useEditorType } from "ee/hooks";
+import { useHistory } from "react-router";
+import { useHeaderActions } from "ee/hooks/datasourceEditorHooks";
 
 export const ActionWrapper = styled.div`
   display: flex;
+  flex-direction: row-reverse;
   gap: 16px;
+  align-items: center;
 `;
 
 export const FormTitleContainer = styled.div`
@@ -34,25 +42,16 @@ export const FormTitleContainer = styled.div`
   align-items: center;
 `;
 
-export const Header = styled.div`
+export const Header = styled.div<{ noBottomBorder: boolean }>`
   display: flex;
   flex-direction: row;
-  flex: "1 1 10%";
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--ads-v2-color-border);
-  padding: var(--ads-v2-spaces-7) 0 var(--ads-v2-spaces-7);
+  ${(props) =>
+    !props.noBottomBorder &&
+    "border-bottom: 1px solid var(--ads-v2-color-border);"}
+  padding: var(--ads-v2-spaces-5) 0 var(--ads-v2-spaces-5);
   margin: 0 var(--ads-v2-spaces-7);
-`;
-
-export const EditDatasourceButton = styled(Button)`
-  padding: 10px 20px;
-  &&&& {
-    height: 36px;
-    max-width: 160px;
-    border: 1px solid ${Colors.HIT_GRAY};
-    width: auto;
-  }
 `;
 
 export const PluginImageWrapper = styled.div`
@@ -69,6 +68,8 @@ export const PluginImageWrapper = styled.div`
   }
 `;
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const PluginImage = (props: any) => {
   return (
     <PluginImageWrapper>
@@ -77,8 +78,7 @@ export const PluginImage = (props: any) => {
   );
 };
 
-type DSFormHeaderProps = {
-  canCreateDatasourceActions: boolean;
+interface DSFormHeaderProps {
   canDeleteDatasource: boolean;
   canManageDatasource: boolean;
   datasource: Datasource | ApiDatasourceForm | undefined;
@@ -86,17 +86,19 @@ type DSFormHeaderProps = {
   isDeleting: boolean;
   isNewDatasource: boolean;
   isPluginAuthorized: boolean;
-  isSaving: boolean;
   pluginImage: string;
   pluginType: string;
   pluginName: string;
-  setDatasourceViewMode: (viewMode: boolean) => void;
+  setDatasourceViewMode: (payload: {
+    datasourceId: string;
+    viewMode: boolean;
+  }) => void;
   viewMode: boolean;
-};
+  noBottomBorder?: boolean;
+}
 
 export const DSFormHeader = (props: DSFormHeaderProps) => {
   const {
-    canCreateDatasourceActions,
     canDeleteDatasource,
     canManageDatasource,
     datasource,
@@ -104,6 +106,7 @@ export const DSFormHeader = (props: DSFormHeaderProps) => {
     isDeleting,
     isNewDatasource,
     isPluginAuthorized,
+    noBottomBorder,
     pluginImage,
     pluginName,
     pluginType,
@@ -113,9 +116,12 @@ export const DSFormHeader = (props: DSFormHeaderProps) => {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const dispatch = useDispatch();
+  const history = useHistory();
+  const editorType = useEditorType(history.location.pathname);
 
   const deleteAction = () => {
     if (isDeleting) return;
+
     AnalyticsUtil.logEvent("DATASOURCE_CARD_DELETE_ACTION");
     dispatch(deleteDatasource({ id: datasourceId }));
   };
@@ -124,32 +130,54 @@ export const DSFormHeader = (props: DSFormHeaderProps) => {
 
   const renderMenuOptions = () => {
     return [
-      <RedMenuItem
-        className="t--datasource-option-delete"
-        icon="delete"
-        isLoading={isDeleting}
+      <MenuItem
+        className="t--datasource-option-delete error-menuitem"
+        disabled={isDeleting}
         key={"delete-datasource-button"}
-        onSelect={() => {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        onSelect={(e: Event) => {
+          e.preventDefault();
+          e.stopPropagation();
+
           if (!isDeleting) {
             confirmDelete ? deleteAction() : setConfirmDelete(true);
           }
         }}
-        text={
-          isDeleting
-            ? createMessage(CONFIRM_CONTEXT_DELETING)
-            : confirmDelete
+        startIcon="delete-bin-line"
+      >
+        {isDeleting
+          ? createMessage(CONFIRM_CONTEXT_DELETING)
+          : confirmDelete
             ? createMessage(CONFIRM_CONTEXT_DELETE)
-            : createMessage(CONTEXT_DELETE)
-        }
-      />,
+            : createMessage(CONTEXT_DELETE)}
+      </MenuItem>,
     ];
   };
 
+  const currentEnv = useSelector(getCurrentEnvironmentId);
+  const envSupportedDs = !DB_NOT_SUPPORTED.includes(pluginType as PluginType);
+
+  const showReconnectButton = !(
+    isPluginAuthorized &&
+    (envSupportedDs
+      ? isEnvironmentConfigured(datasource as Datasource, currentEnv)
+      : true)
+  );
+
+  const headerActions = useHeaderActions(editorType, {
+    datasource,
+    isPluginAuthorized,
+    pluginType,
+    showReconnectButton,
+  });
+
   return (
-    <Header>
+    <Header noBottomBorder={!!noBottomBorder}>
       <FormTitleContainer>
         <PluginImage alt="Datasource" src={getAssetUrl(pluginImage)} />
         <FormTitle
+          datasourceId={datasourceId}
           disabled={!isNewDatasource && !canManageDatasource}
           focusOnMount={isNewDatasource}
         />
@@ -157,41 +185,53 @@ export const DSFormHeader = (props: DSFormHeaderProps) => {
       {viewMode && (
         <ActionWrapper>
           {canDeleteDatasource && (
-            <MenuComponent
-              menuItemWrapperWidth="160px"
-              onClose={onCloseMenu}
-              position={Position.LEFT}
-              target={
-                <Icon
-                  fillColor={Colors.GRAY2}
-                  name="context-menu"
-                  size={IconSize.XXXL}
-                />
-              }
+            <MenuWrapper
+              className="t--datasource-menu-option"
+              key={datasourceId}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
             >
-              {renderMenuOptions()}
-            </MenuComponent>
+              <StyledMenu onOpenChange={onCloseMenu}>
+                <MenuTrigger>
+                  <Button
+                    data-testid="t--context-menu-trigger"
+                    isIconButton
+                    kind="tertiary"
+                    size="md"
+                    startIcon="context-menu"
+                  />
+                </MenuTrigger>
+                <MenuContent align="end" style={{ zIndex: 100 }} width="200px">
+                  {renderMenuOptions()}
+                </MenuContent>
+              </StyledMenu>
+            </MenuWrapper>
           )}
-          <EditDatasourceButton
+          <Button
             className="t--edit-datasource"
             kind="secondary"
             onClick={() => {
-              setDatasourceViewMode(false);
+              setDatasourceViewMode({
+                datasourceId: datasourceId,
+                viewMode: false,
+              });
               AnalyticsUtil.logEvent("EDIT_DATASOURCE_CLICK", {
                 datasourceId: datasourceId,
                 pluginName,
                 entryPoint: DatasourceEditEntryPoints.DATASOURCE_FORM_EDIT,
               });
             }}
+            size="md"
           >
             {createMessage(EDIT)}
-          </EditDatasourceButton>
-          <NewActionButton
-            datasource={datasource as Datasource}
-            disabled={!canCreateDatasourceActions || !isPluginAuthorized}
-            eventFrom="datasource-pane"
-            pluginType={pluginType}
-          />
+          </Button>
+          {headerActions && headerActions.newActionButton
+            ? headerActions.newActionButton
+            : null}
+          {headerActions && headerActions.generatePageButton
+            ? headerActions.generatePageButton
+            : null}
         </ActionWrapper>
       )}
     </Header>

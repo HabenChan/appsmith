@@ -3,6 +3,10 @@
 .env
 
 stacks
+/deploy/docker/fs/opt/appsmith/info.json
+
+# Server artifacts
+/deploy/docker/fs/opt/appsmith/server
 
 # to ignore the node_modeules folder
 node_modules
@@ -17,7 +21,6 @@ deploy/ansible/appsmith_playbook/inventory
 # performance tests
 app/client/perf/traces/*
 .history
-stacks
 
 # helm dependencies
 deploy/helm/charts
@@ -36,3 +39,5 @@ app/client/.fleet/*
 # Observability related local storage
 utils/observability/tempo-data/*
 
+# Ignore the mongo data backup directory for Mongo to PG migrations
+mongo-data**

@@ -1,15 +1,16 @@
 import lodashPackageJson from "lodash/package.json";
 import momentPackageJson from "moment-timezone/package.json";
 
-export type TJSLibrary = {
+export interface JSLibrary {
   version?: string;
   docsURL: string;
   name: string;
   accessor: string[];
   url?: string;
-};
+  id?: string;
+}
 
-export const defaultLibraries: TJSLibrary[] = [
+export const defaultLibraries: JSLibrary[] = [
   {
     accessor: ["_"],
     version: lodashPackageJson.version,
@@ -23,12 +24,6 @@ export const defaultLibraries: TJSLibrary[] = [
     name: "moment",
   },
   {
-    accessor: ["xmlParser"],
-    version: "3.17.5",
-    docsURL: "https://github.com/NaturalIntelligence/fast-xml-parser",
-    name: "xmlParser",
-  },
-  {
     accessor: ["forge"],
     version: "1.3.0",
     docsURL: "https://github.com/digitalbazaar/forge",
@@ -37,9 +32,32 @@ export const defaultLibraries: TJSLibrary[] = [
 ];
 
 export const JSLibraries = [...defaultLibraries];
+
+const JSLibraryAccessorModifier = () => {
+  let jsLibraryAccessorSet = new Set(
+    JSLibraries.flatMap((lib) => lib.accessor),
+  );
+
+  return {
+    regenerateSet: () => {
+      jsLibraryAccessorSet = new Set(
+        JSLibraries.flatMap((lib) => lib.accessor),
+      );
+
+      return;
+    },
+    getSet: () => {
+      return jsLibraryAccessorSet;
+    },
+  };
+};
+
+export const JSLibraryAccessor = JSLibraryAccessorModifier();
+
 export const libraryReservedIdentifiers = defaultLibraries.reduce(
   (acc, lib) => {
     lib.accessor.forEach((a) => (acc[a] = true));
+
     return acc;
   },
   {} as Record<string, boolean>,

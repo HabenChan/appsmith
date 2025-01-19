@@ -1,15 +1,13 @@
-import type {
-  ApplicationPayload,
-  Page,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ApplicationPayload } from "entities/Application";
+import type { Page } from "entities/Page";
 import { NAVIGATION_SETTINGS } from "constants/AppConstants";
 import { get } from "lodash";
 import { useHref } from "pages/Editor/utils";
 import React from "react";
 import { useSelector } from "react-redux";
-import { builderURL } from "RouteBuilder";
+import { builderURL } from "ee/RouteBuilder";
 import { getSelectedAppTheme } from "selectors/appThemingSelectors";
-import { getCurrentPageId } from "selectors/editorSelectors";
+import { getCurrentBasePageId } from "selectors/editorSelectors";
 import MobileNavToggle from "./MobileNavToggle";
 import ApplicationName from "./ApplicationName";
 import ShareButton from "./ShareButton";
@@ -21,17 +19,18 @@ import ProfileDropdown from "pages/common/ProfileDropdown";
 import TopStacked from "../TopStacked";
 import { HeaderRow, StyledNav } from "./TopHeader.styled";
 import TopInline from "../TopInline";
-import NavigationLogo from "@appsmith/pages/AppViewer/NavigationLogo";
+import NavigationLogo from "ee/pages/AppViewer/NavigationLogo";
 import BackToAppsButton from "./BackToAppsButton";
 
-type TopHeaderProps = {
+interface TopHeaderProps {
   currentApplicationDetails?: ApplicationPayload;
   pages: Page[];
   currentWorkspaceId: string;
   currentUser?: User;
   isMenuOpen: boolean;
   setMenuOpen: (isMenuOpen: boolean) => void;
-};
+  showUserSettings: boolean;
+}
 
 const TopHeader = (props: TopHeaderProps) => {
   const {
@@ -58,8 +57,8 @@ const TopHeader = (props: TopHeaderProps) => {
     "properties.colors.primaryColor",
     "inherit",
   );
-  const pageId = useSelector(getCurrentPageId);
-  const editorURL = useHref(builderURL, { pageId });
+  const basePageId = useSelector(getCurrentBasePageId);
+  const editorURL = useHref(builderURL, { basePageId });
 
   return (
     <StyledNav
@@ -108,47 +107,49 @@ const TopHeader = (props: TopHeaderProps) => {
             />
           )}
 
-        <section className="relative flex items-center space-x-3 z-1 ml-auto py-3">
-          {currentApplicationDetails && currentApplicationDetails?.id && (
-            <div className="hidden space-x-1 md:flex">
-              <ShareButton
-                currentApplicationDetails={currentApplicationDetails}
-                currentWorkspaceId={currentWorkspaceId}
-              />
-
-              <HeaderRightItemContainer>
-                <PrimaryCTA
-                  className="t--back-to-editor"
-                  navColorStyle={navColorStyle}
-                  primaryColor={primaryColor}
-                  url={editorURL}
+        {props.showUserSettings && (
+          <section className="relative flex items-center space-x-3 z-1 ml-auto py-3">
+            {currentApplicationDetails && currentApplicationDetails?.id && (
+              <div className="hidden space-x-1 md:flex">
+                <ShareButton
+                  currentApplicationDetails={currentApplicationDetails}
+                  currentWorkspaceId={currentWorkspaceId}
                 />
 
-                <BackToAppsButton
-                  currentApplicationDetails={currentApplicationDetails}
+                <HeaderRightItemContainer>
+                  <PrimaryCTA
+                    className="t--back-to-editor"
+                    navColorStyle={navColorStyle}
+                    primaryColor={primaryColor}
+                    url={editorURL}
+                  />
+
+                  <BackToAppsButton
+                    currentApplicationDetails={currentApplicationDetails}
+                  />
+                </HeaderRightItemContainer>
+              </div>
+            )}
+
+            {currentUser && currentUser.username !== ANONYMOUS_USERNAME && (
+              <HeaderRightItemContainer>
+                <ProfileDropdown
+                  modifiers={{
+                    offset: {
+                      enabled: true,
+                      offset: `0, 0`,
+                    },
+                  }}
+                  name={currentUser.name}
+                  navColorStyle={navColorStyle}
+                  photoId={currentUser?.photoId}
+                  primaryColor={primaryColor}
+                  userName={currentUser?.username || ""}
                 />
               </HeaderRightItemContainer>
-            </div>
-          )}
-
-          {currentUser && currentUser.username !== ANONYMOUS_USERNAME && (
-            <HeaderRightItemContainer>
-              <ProfileDropdown
-                modifiers={{
-                  offset: {
-                    enabled: true,
-                    offset: `0, 0`,
-                  },
-                }}
-                name={currentUser.name}
-                navColorStyle={navColorStyle}
-                photoId={currentUser?.photoId}
-                primaryColor={primaryColor}
-                userName={currentUser?.username || ""}
-              />
-            </HeaderRightItemContainer>
-          )}
-        </section>
+            )}
+          </section>
+        )}
       </HeaderRow>
 
       {currentApplicationDetails?.applicationDetail?.navigationSetting

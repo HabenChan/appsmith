@@ -1,10 +1,16 @@
 import * as _ from "../../../../support/Objects/ObjectsCore";
+import PageList from "../../../../support/Pages/PageList";
 
-describe("Page Settings", () => {
+describe("Page Settings", { tags: ["@tag.Settings", "@tag.Sanity"] }, () => {
   it("1. Page name change updates URL", () => {
     _.appSettings.OpenAppSettings();
     _.appSettings.GoToPageSettings("Page1");
-    _.pageSettings.UpdatePageNameAndVerifyUrl("Page2", undefined, false);
+    _.pageSettings.UpdatePageNameAndVerifyUrl({
+      newPageName: "Page2",
+      verifyPageNameAs: undefined,
+      reset: false,
+      restOfUrl: "/settings",
+    });
     _.homePage.GetAppName().then((appName) => {
       _.deployMode.DeployApp();
       _.appSettings.CheckUrl(appName as string, "Page2", undefined, false);
@@ -16,7 +22,7 @@ describe("Page Settings", () => {
   it("2. Custom slug change updates URL", () => {
     _.appSettings.OpenAppSettings();
     _.appSettings.GoToPageSettings("Page2");
-    _.pageSettings.UpdateCustomSlugAndVerifyUrl("custom");
+    _.pageSettings.UpdateCustomSlugAndVerifyUrl("custom", "/settings");
     _.homePage.GetAppName().then((appName) => {
       _.deployMode.DeployApp();
       _.appSettings.CheckUrl(appName as string, "Page2", "custom", false);
@@ -25,7 +31,7 @@ describe("Page Settings", () => {
     _.agHelper.Sleep();
 
     //Check SetAsHome page setting
-    _.entityExplorer.AddNewPage();
+    PageList.AddNewPage();
     _.appSettings.OpenAppSettings();
     _.appSettings.GoToPageSettings("Page3");
     _.pageSettings.ToggleHomePage();
@@ -46,13 +52,17 @@ describe("Page Settings", () => {
     // Page name allows accented character
     _.appSettings.OpenAppSettings();
     _.appSettings.GoToPageSettings("Page3");
-    _.pageSettings.UpdatePageNameAndVerifyUrl("Page3œßð", "Page3");
+    _.pageSettings.UpdatePageNameAndVerifyUrl({
+      newPageName: "Page3œßð",
+      verifyPageNameAs: "Page3",
+      restOfUrl: "/settings",
+    });
     _.appSettings.ClosePane();
 
-    //Page name doesn't allow special character
+    // Page name doesn't allow slashes and colons
     _.appSettings.OpenAppSettings();
     _.appSettings.GoToPageSettings("Page3");
-    _.pageSettings.UpdatePageNameAndVerifyTextValue("Page3!@#", "Page3 ");
+    _.pageSettings.UpdatePageNameAndVerifyTextValue("Page3/\\:", "Page3");
     _.appSettings.ClosePane();
 
     // Page name doesn't allow empty

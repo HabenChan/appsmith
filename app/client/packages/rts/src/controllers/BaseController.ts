@@ -3,25 +3,25 @@ import type { ValidationError } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import type { IdentifierInfo } from "@shared/ast";
 
-type ErrorData = {
+interface ErrorData {
   error: string | string[];
   validationErrors?: ValidationError[];
-};
+}
 
-type ErrorBag = {
+interface ErrorBag {
   success: boolean;
   message: string;
   data?: ErrorData;
-};
+}
 
-type ResponseData = {
+interface ResponseData {
   success: boolean;
   message?: string;
   data: IdentifierInfo;
-};
+}
 
 export default class BaseController {
-  serverErrorMessaage = "Something went wrong";
+  serverErrorMessage = "Something went wrong";
   sendResponse(
     response: Response,
     result?: unknown,
@@ -57,6 +57,7 @@ export default class BaseController {
 
     if (errorMessage.constructor.name === "Result") {
       const validationError = errorMessage.array();
+
       errorBag.data = {
         error: [validationError[0].msg],
         validationErrors: validationError,

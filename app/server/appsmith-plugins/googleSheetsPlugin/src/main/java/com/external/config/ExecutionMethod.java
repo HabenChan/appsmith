@@ -29,8 +29,7 @@ public interface ExecutionMethod {
 
     String BASE_DRIVE_API_URL = "https://www.googleapis.com/drive/v3/files/";
 
-    ExchangeStrategies EXCHANGE_STRATEGIES = ExchangeStrategies
-            .builder()
+    ExchangeStrategies EXCHANGE_STRATEGIES = ExchangeStrategies.builder()
             .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(/* 10MB */ 10 * 1024 * 1024))
             .build();
 
@@ -43,18 +42,31 @@ public interface ExecutionMethod {
             try {
                 String decodedURL = URLDecoder.decode(baseUri + path, StandardCharsets.UTF_8);
                 URL url = new URL(decodedURL);
-                URI uri = new URI(url.getProtocol(), url.getUserInfo(), url.getHost(), url.getPort(), url.getPath(), url.getQuery(), url.getRef());
+                URI uri = new URI(
+                        url.getProtocol(),
+                        url.getUserInfo(),
+                        url.getHost(),
+                        url.getPort(),
+                        url.getPath(),
+                        url.getQuery(),
+                        url.getRef());
                 UriComponentsBuilder uriBuilder = UriComponentsBuilder.newInstance();
                 return uriBuilder.uri(uri);
             } catch (URISyntaxException | MalformedURLException e) {
-                throw Exceptions.propagate(new AppsmithPluginException(AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR, ErrorMessages.UNABLE_TO_CREATE_URI_ERROR_MSG, e.getMessage()));
+                throw Exceptions.propagate(new AppsmithPluginException(
+                        AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR,
+                        ErrorMessages.UNABLE_TO_CREATE_URI_ERROR_MSG,
+                        e.getMessage()));
             }
         } else {
             try {
                 UriComponentsBuilder uriBuilder = UriComponentsBuilder.newInstance();
                 return uriBuilder.uri(new URI(baseUri + path));
             } catch (URISyntaxException e) {
-                throw Exceptions.propagate(new AppsmithPluginException(AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR, ErrorMessages.UNABLE_TO_CREATE_URI_ERROR_MSG, e.getMessage()));
+                throw Exceptions.propagate(new AppsmithPluginException(
+                        AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR,
+                        ErrorMessages.UNABLE_TO_CREATE_URI_ERROR_MSG,
+                        e.getMessage()));
             }
         }
     }
@@ -65,13 +77,15 @@ public interface ExecutionMethod {
         return Mono.just(true);
     }
 
-    WebClient.RequestHeadersSpec<?> getExecutionClient(WebClient webClient, MethodConfig methodConfig);
+    default WebClient.RequestHeadersSpec<?> getExecutionClient(WebClient webClient, MethodConfig methodConfig) {
+        return null;
+    }
 
-    default JsonNode transformExecutionResponse(JsonNode response, MethodConfig methodConfig, Set<String> userAuthorizedSheetIds) {
+    default JsonNode transformExecutionResponse(
+            JsonNode response, MethodConfig methodConfig, Set<String> userAuthorizedSheetIds) {
         if (response == null) {
             throw Exceptions.propagate(new AppsmithPluginException(
-                    GSheetsPluginError.QUERY_EXECUTION_FAILED,
-                    ErrorMessages.MISSING_VALID_RESPONSE_ERROR_MSG));
+                    GSheetsPluginError.QUERY_EXECUTION_FAILED, ErrorMessages.MISSING_VALID_RESPONSE_ERROR_MSG));
         }
         // By default, no transformation takes place
         return response;
@@ -89,5 +103,10 @@ public interface ExecutionMethod {
         conversionMap.put(DataType.LONG, DataType.DOUBLE);
         conversionMap.put(DataType.FLOAT, DataType.DOUBLE);
         return conversionMap;
+    }
+
+    default WebClient.RequestHeadersSpec<?> getExecutionClientWithFlags(
+            WebClient webClient, MethodConfig methodConfig, Map<String, Boolean> featureFlagMap) {
+        return getExecutionClient(webClient, methodConfig);
     }
 }

@@ -1,24 +1,19 @@
 @import "~normalize.css";
 @import "~@blueprintjs/core/lib/css/blueprint.css";
 @import "~@blueprintjs/icons/lib/css/blueprint-icons.css";
-@import "~design-system-old/build/css/design-system-old.css";
-@import "~design-system/build/css/design-system.css";
 @import "theme/colors.css";
 @import "theme/defaultTheme.css";
 @import "theme/wds.css";
 @import "assets/fonts/custom/index.css";
-@import "assets/fonts/google/index.css";
 
 :root {
-  /* TODO: This needs to be fixed! This oveerride is to mainatain branding changes. */
+  /* TODO: This needs to be fixed! This override is to maintain branding changes. */
   --ads-color-background-secondary: var(--ads-v2-color-bg-subtle);
 }
 
 body {
   margin: 0;
   padding: 0;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   background-color: #fff !important;
   color: var(--ads-v2-color-fg);
 }
@@ -44,7 +39,7 @@ body.dragging * {
   outline-offset: 0 !important;
 }
 
-body.overlay {
+#root.overlay {
   opacity: 0;
   pointer-events: none;
 }
@@ -96,7 +91,7 @@ add-action.disabled span {
   min-width: 0;
 }
 
-/** 
+/**
   action selector block styles
 **/
 .bp3-submenu.bp3-popover > .bp3-popover-content {
@@ -228,10 +223,12 @@ div.bp3-popover-arrow {
 .error-menuitem > .ads-v2-menu__menu-item-children {
   color: var(--ads-v2-color-fg-error) !important;
 }
-.error-menuitem:hover {
+
+.error-menuitem:hover:not([data-disabled]),
+.error-menuitem:focus-visible {
   background-color: var(--ads-v2-color-red-50) !important;
 }
-.error-menuitem:active {
+.error-menuitem:active:not([data-disabled]) {
   background-color: var(--ads-v2-color-red-100) !important;
 }
 .menuitem-nohover:hover {
@@ -241,4 +238,8 @@ div.bp3-popover-arrow {
 
 .react-datepicker__children-container {
   margin-top: -10px !important;
+}
+
+.reconnect-datasource-modal {
+  z-index: 9 !important;
 }

@@ -1,26 +1,28 @@
-import { ObjectsRegistry } from "../../../../support/Objects/Registry";
+import { agHelper, propPane } from "../../../../support/Objects/ObjectsCore";
+import EditorNavigation, {
+  EntityType,
+} from "../../../../support/Pages/EditorNavigation";
 
-const { AggregateHelper, EntityExplorer, PropertyPane } = ObjectsRegistry;
-
-describe("Property Pane Code Commenting", () => {
-  before(() => {
-    cy.fixture("buttondsl").then((val: any) => {
-      AggregateHelper.AddDsl(val);
+describe(
+  "Property Pane Code Commenting",
+  { tags: ["@tag.JS", "@tag.Binding"] },
+  () => {
+    before(() => {
+      agHelper.AddDsl("buttondsl");
     });
-  });
 
-  it("1. Should comment code in Property Pane", () => {
-    EntityExplorer.SelectEntityByName("Button1", "Widgets");
-    PropertyPane.TypeTextIntoField("Label", "{{appsmith}}");
-    PropertyPane.ToggleCommentInTextField("Label");
+    it("1. Should comment code in Property Pane", () => {
+      EditorNavigation.SelectEntityByName("Button1", EntityType.Widget);
+      propPane.TypeTextIntoField("Label", "{{appsmith}}");
+      propPane.ToggleCommentInTextField("Label");
 
-    PropertyPane.ValidatePropertyFieldValue("Label", "{{// appsmith}}");
+      propPane.ValidatePropertyFieldValue("Label", "{{// appsmith}}");
 
-    //Uncomment
-    EntityExplorer.SelectEntityByName("Button1", "Widgets");
-    PropertyPane.TypeTextIntoField("Label", "{{// appsmith}}");
-    PropertyPane.ToggleCommentInTextField("Label");
-
-    PropertyPane.ValidatePropertyFieldValue("Label", "{{appsmith}}");
-  });
-});
+      //Uncomment
+      EditorNavigation.SelectEntityByName("Button1", EntityType.Widget);
+      propPane.TypeTextIntoField("Label", "{{// appsmith}}");
+      propPane.ToggleCommentInTextField("Label");
+      propPane.ValidatePropertyFieldValue("Label", "{{appsmith}}");
+    });
+  },
+);

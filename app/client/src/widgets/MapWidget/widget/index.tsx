@@ -1,4 +1,3 @@
-import type { WidgetType } from "constants/WidgetConstants";
 import { DEFAULT_CENTER } from "constants/WidgetConstants";
 import React from "react";
 import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
@@ -7,14 +6,29 @@ import MapComponent from "../component";
 
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
 import { ValidationTypes } from "constants/WidgetValidation";
-import type { Stylesheet } from "entities/AppTheming";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
 import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
 import styled from "styled-components";
-import type { DerivedPropertiesMap } from "utils/WidgetFactory";
+import type { DerivedPropertiesMap } from "WidgetProvider/factory";
 import type { MarkerProps } from "../constants";
 import { getBorderCSSShorthand } from "constants/DefaultTheme";
 import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
-import type { AutocompletionDefinitions } from "widgets/constants";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { FILL_WIDGET_MIN_WIDTH } from "constants/minWidthConstants";
+import {
+  FlexVerticalAlignment,
+  ResponsiveBehavior,
+} from "layoutSystems/common/utils/constants";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+import type {
+  SnipingModeProperty,
+  PropertyUpdates,
+} from "WidgetProvider/constants";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
 
 const DisabledContainer = styled.div<{
   borderRadius: string;
@@ -22,6 +36,8 @@ const DisabledContainer = styled.div<{
 }>`
   background-color: white;
   height: 100%;
+  width: 100%;
+  overflow: scroll;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -40,14 +56,95 @@ const DisabledContainer = styled.div<{
 
 const DefaultCenter = { ...DEFAULT_CENTER, long: DEFAULT_CENTER.lng };
 
-type Center = {
+interface Center {
   lat: number;
   long: number;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [x: string]: any;
-};
+}
 
 class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
   static defaultProps = {};
+
+  static type = "MAP_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Map",
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.CONTENT],
+      needsMeta: true,
+    };
+  }
+
+  static getDefaults() {
+    return {
+      rows: 40,
+      columns: 24,
+      isDisabled: false,
+      isVisible: true,
+      widgetName: "Map",
+      enableSearch: true,
+      zoomLevel: 50,
+      enablePickLocation: true,
+      allowZoom: true,
+      mapCenter: { lat: 40.7128, long: -74.006 },
+      defaultMarkers: [{ lat: 40.7128, long: -74.006, title: "New York" }],
+      isClickedMarkerCentered: true,
+      version: 1,
+      animateLoading: true,
+      responsiveBehavior: ResponsiveBehavior.Fill,
+      minWidth: FILL_WIDGET_MIN_WIDTH,
+      flexVerticalAlignment: FlexVerticalAlignment.Top,
+      enableMapTypeControl: false,
+    };
+  }
+
+  static getMethods() {
+    return {
+      getSnipingModeUpdates: (
+        propValueMap: SnipingModeProperty,
+      ): PropertyUpdates[] => {
+        return [
+          {
+            propertyPath: "defaultMarkers",
+            propertyValue: propValueMap.data,
+            isDynamicPropertyPath: true,
+          },
+        ];
+      },
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "280px",
+              minHeight: "300px",
+            };
+          },
+        },
+      ],
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: { base: "300px" },
+        minWidth: { base: "280px" },
+      },
+    };
+  }
 
   static getAutocompleteDefinitions(): AutocompletionDefinitions {
     return {
@@ -63,6 +160,17 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
         long: "number",
         title: "string",
         description: "string",
+      },
+    };
+  }
+
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
       },
     };
   }
@@ -234,6 +342,15 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
             isBindProperty: false,
             isTriggerProperty: false,
           },
+          {
+            propertyName: "enableMapTypeControl",
+            label: "Enable map types",
+            controlType: "SWITCH",
+            helpText: "Allows users to change the map type",
+            isJSConvertible: false,
+            isBindProperty: false,
+            isTriggerProperty: false,
+          },
         ],
       },
       {
@@ -312,6 +429,8 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
       },
     ];
   }
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getDefaultPropertiesMap(): Record<string, any> {
     return {
       markers: "defaultMarkers",
@@ -319,6 +438,8 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
     };
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       center: undefined,
@@ -347,9 +468,11 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
         if (index === i) {
           marker = { lat, long };
         }
+
         return marker;
       },
     );
+
     this.disableDrag(false);
     this.props.updateWidgetMetaProperty("markers", markers);
   };
@@ -359,6 +482,7 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
     const marker = { lat, long, title: "" };
 
     const markers = [];
+
     (this.props.markers || []).forEach((m) => {
       markers.push(m);
     });
@@ -384,6 +508,7 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
       long: long,
       title: title,
     };
+
     this.props.updateWidgetMetaProperty("selectedMarker", selectedMarker, {
       triggerPropertyName: "onMarkerClick",
       dynamicString: this.props.onMarkerClick,
@@ -412,6 +537,7 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
       JSON.stringify(this.props.mapCenter)
     ) {
       this.props.updateWidgetMetaProperty("center", this.props.mapCenter);
+
       return;
     }
 
@@ -432,7 +558,7 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
     this.disableDrag(false);
   };
 
-  getPageView() {
+  getWidgetView() {
     return (
       <>
         {!this.props.googleMapsApiKey && (
@@ -446,7 +572,7 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
             <p>
               {"See our"}
               <a
-                href="https://docs.appsmith.com/v/v1.2.1/setup/docker/google-maps"
+                href="https://docs.appsmith.com/getting-started/setup/instance-configuration/google-maps"
                 rel="noopener noreferrer"
                 target="_blank"
               >
@@ -467,6 +593,7 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
             clickedMarkerCentered={this.props.isClickedMarkerCentered}
             enableCreateMarker={this.props.enableCreateMarker}
             enableDrag={this.enableDrag}
+            enableMapTypeControl={this.props.enableMapTypeControl}
             enablePickLocation={this.props.enablePickLocation}
             enableSearch={this.props.enableSearch}
             isDisabled={this.props.isDisabled}
@@ -484,10 +611,6 @@ class MapWidget extends BaseWidget<MapWidgetProps, WidgetState> {
         )}
       </>
     );
-  }
-
-  static getWidgetType(): WidgetType {
-    return "MAP_WIDGET";
   }
 }
 
@@ -521,6 +644,7 @@ export interface MapWidgetProps extends WidgetProps {
   borderRadius: string;
   boxShadow?: string;
   allowClustering?: boolean;
+  enableMapTypeControl: boolean;
 }
 
 export default MapWidget;

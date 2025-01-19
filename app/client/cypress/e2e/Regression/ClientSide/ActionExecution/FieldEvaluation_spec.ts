@@ -1,22 +1,26 @@
-import * as _ from "../../../../support/Objects/ObjectsCore";
+import {
+  agHelper,
+  draggableWidgets,
+  entityExplorer,
+  propPane,
+} from "../../../../support/Objects/ObjectsCore";
+import EditorNavigation, {
+  EntityType,
+} from "../../../../support/Pages/EditorNavigation";
 
-const { agHelper, entityExplorer, propPane } = _;
-
-describe("Field value evaluation", () => {
-  before(() => {
-    cy.fixture("buttondsl").then((val: any) => {
-      agHelper.AddDsl(val);
+describe(
+  "Field value evaluation",
+  { tags: ["@tag.JS", "@tag.Binding"] },
+  () => {
+    before(() => {
+      entityExplorer.DragDropWidgetNVerify(draggableWidgets.BUTTON);
     });
-    entityExplorer.SelectEntityByName("Button1", "Widgets");
-  });
 
-  it("1. Evaluation works for fields", () => {
-    propPane.SelectPlatformFunction("onClick", "Show alert");
-    agHelper.TypeText(
-      propPane._actionSelectorFieldByLabel("Message"),
-      "{{Button1.text}}",
-    );
-
-    agHelper.VerifyEvaluatedValue("Submit");
-  });
-});
+    it("1. Evaluation works for fields", () => {
+      EditorNavigation.SelectEntityByName("Button1", EntityType.Widget);
+      propPane.SelectPlatformFunction("onClick", "Show alert");
+      agHelper.EnterActionValue("Message", "{{Button1.text}}");
+      agHelper.VerifyEvaluatedValue("Submit");
+    });
+  },
+);

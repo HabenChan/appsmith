@@ -1,6 +1,6 @@
 import React from "react";
 import styled from "styled-components";
-import { Spinner, Text } from "design-system";
+import { Spinner, Text } from "@appsmith/ads";
 
 const Wrapper = styled.div`
   height: 85vh;
@@ -11,9 +11,9 @@ const Wrapper = styled.div`
   gap: ${(props) => props.theme.spaces[9]}px;
 `;
 
-type LoadingScreenProps = {
+interface LoadingScreenProps {
   text: string;
-};
+}
 
 function LoadingScreen(props: LoadingScreenProps) {
   return (

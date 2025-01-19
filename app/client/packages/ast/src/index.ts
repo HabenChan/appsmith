@@ -2,10 +2,11 @@ import type { Node, SourceLocation, Options, Comment } from "acorn";
 import { parse } from "acorn";
 import { ancestor, simple } from "acorn-walk";
 import { ECMA_VERSION, NodeTypes } from "./constants";
-import { has, isFinite, isString, toPath } from "lodash";
-import { isTrueObject, sanitizeScript } from "./utils";
+import { has, isFinite, isNil, isString, toPath } from "lodash";
+import { getStringValue, isTrueObject, sanitizeScript } from "./utils";
 import { jsObjectDeclaration } from "./jsObject";
 import { attachComments } from "astravel";
+import { generate } from "astring";
 /*
  * Valuable links:
  *
@@ -25,7 +26,12 @@ import { attachComments } from "astravel";
  *
  */
 
-type Pattern = IdentifierNode | AssignmentPatternNode;
+type Pattern =
+  | IdentifierNode
+  | AssignmentPatternNode
+  | ArrayPatternNode
+  | ObjectPatternNode
+  | RestElementNode;
 type Expression = Node;
 export type ArgumentTypes =
   | LiteralNode
@@ -56,6 +62,31 @@ export interface BinaryExpressionNode extends Node {
 export interface IdentifierNode extends Node {
   type: NodeTypes.Identifier;
   name: string;
+}
+
+export interface ArrayPatternNode extends Node {
+  type: NodeTypes.ArrayPattern;
+  elements: Array<Pattern | null>;
+}
+
+export interface AssignmentProperty extends Node {
+  type: NodeTypes.Property;
+  key: Expression;
+  value: Pattern;
+  kind: "init";
+  method: false;
+  shorthand: boolean;
+  computed: boolean;
+}
+
+export interface RestElementNode extends Node {
+  type: NodeTypes.RestElement;
+  argument: Pattern;
+}
+
+export interface ObjectPatternNode extends Node {
+  type: NodeTypes.ObjectPattern;
+  properties: Array<AssignmentProperty | RestElementNode>;
 }
 
 //Using this to handle the Variable property refactor
@@ -103,6 +134,7 @@ export interface ObjectExpression extends Expression {
 interface AssignmentPatternNode extends Node {
   type: NodeTypes.AssignmentPattern;
   left: Pattern;
+  right: ArgumentTypes;
 }
 
 // doc: https://github.com/estree/estree/blob/master/es5.md#literal
@@ -118,17 +150,36 @@ export interface CallExpressionNode extends Node {
   arguments: ArgumentTypes[];
 }
 
+// https://github.com/estree/estree/blob/master/es5.md#thisexpression
+export interface ThisExpressionNode extends Expression {
+  type: "ThisExpression";
+}
+
+// https://github.com/estree/estree/blob/master/es5.md#conditionalexpression
+export interface ConditionalExpressionNode extends Expression {
+  type: "ConditionalExpression";
+  test: Expression;
+  alternate: Expression;
+  consequent: Expression;
+}
+
+// https://github.com/estree/estree/blob/master/es2017.md#awaitexpression
+export interface AwaitExpressionNode extends Expression {
+  type: "AwaitExpression";
+  argument: Expression;
+}
+
 export interface BlockStatementNode extends Node {
   type: "BlockStatement";
   body: [Node];
 }
 
-type NodeList = {
+interface NodeList {
   references: Set<string>;
   functionalParams: Set<string>;
   variableDeclarations: Set<string>;
   identifierList: Array<IdentifierNode>;
-};
+}
 
 // https://github.com/estree/estree/blob/master/es5.md#property
 export interface PropertyNode extends Node {
@@ -166,10 +217,10 @@ export type NodeWithLocation<NodeType> = NodeType & {
 
 type AstOptions = Omit<Options, "ecmaVersion">;
 
-type EntityRefactorResponse = {
+interface EntityRefactorResponse {
   isSuccess: boolean;
   body: { script: string; refactorCount: number } | { error: string };
-};
+}
 
 /* We need these functions to typescript casts the nodes with the correct types */
 export const isIdentifierNode = (node: Node): node is IdentifierNode => {
@@ -181,6 +232,21 @@ export const isMemberExpressionNode = (
 ): node is MemberExpressionNode => {
   return node.type === NodeTypes.MemberExpression;
 };
+
+export const isThisExpressionNode = (
+  node: Node,
+): node is ThisExpressionNode => {
+  return node.type === NodeTypes.ThisExpression;
+};
+
+export const isConditionalExpressionNode = (
+  node: Node,
+): node is ConditionalExpressionNode =>
+  node.type === NodeTypes.ConditionalExpression;
+
+export const isAwaitExpressionNode = (
+  node: Node,
+): node is AwaitExpressionNode => node.type === NodeTypes.AwaitExpression;
 
 export const isBinaryExpressionNode = (
   node: Node,
@@ -201,10 +267,17 @@ const isFunctionDeclaration = (node: Node): node is FunctionDeclarationNode => {
 const isFunctionExpression = (node: Node): node is FunctionExpressionNode => {
   return node.type === NodeTypes.FunctionExpression;
 };
+
 export const isArrowFunctionExpression = (
   node: Node,
 ): node is ArrowFunctionExpressionNode => {
   return node.type === NodeTypes.ArrowFunctionExpression;
+};
+
+export const isAssignmentExpression = (
+  node: Node,
+): node is AssignmentExpressionNode => {
+  return node.type === NodeTypes.AssignmentExpression;
 };
 
 export const isObjectExpression = (node: Node): node is ObjectExpression => {
@@ -213,6 +286,18 @@ export const isObjectExpression = (node: Node): node is ObjectExpression => {
 
 const isAssignmentPatternNode = (node: Node): node is AssignmentPatternNode => {
   return node.type === NodeTypes.AssignmentPattern;
+};
+
+export const isArrayPatternNode = (node: Node): node is ArrayPatternNode => {
+  return node.type === NodeTypes.ArrayPattern;
+};
+
+export const isObjectPatternNode = (node: Node): node is ObjectPatternNode => {
+  return node.type === NodeTypes.ObjectPattern;
+};
+
+export const isRestElementNode = (node: Node): node is RestElementNode => {
+  return node.type === NodeTypes.RestElement;
 };
 
 export const isLiteralNode = (node: Node): node is LiteralNode => {
@@ -277,6 +362,7 @@ export const wrapCode = (code: string) => {
 //Used slice for a quick resolve of critical bug
 const unwrapCode = (code: string) => {
   const unwrapedCode = code.slice(32);
+
   return unwrapedCode.slice(0, -10);
 };
 
@@ -315,6 +401,7 @@ export interface IdentifierInfo {
   references: string[];
   functionalParams: string[];
   variables: string[];
+  isError: boolean;
 }
 export const extractIdentifierInfoFromCode = (
   code: string,
@@ -322,6 +409,7 @@ export const extractIdentifierInfoFromCode = (
   invalidIdentifiers?: Record<string, unknown>,
 ): IdentifierInfo => {
   let ast: Node = { end: 0, start: 0, type: "" };
+
   try {
     const sanitizedScript = sanitizeScript(code, evaluationVersion);
     /* wrapCode - Wrapping code in a function, since all code/script get wrapped with a function during evaluation.
@@ -334,6 +422,7 @@ export const extractIdentifierInfoFromCode = (
       let result = function() { return 123; }() -> is valid
     */
     const wrappedCode = wrapCode(sanitizedScript);
+
     ast = getAST(wrappedCode);
     const { functionalParams, references, variableDeclarations }: NodeList =
       ancestorWalk(ast);
@@ -341,16 +430,19 @@ export const extractIdentifierInfoFromCode = (
       // To remove references derived from declared variables and function params,
       // We extract the topLevelIdentifier Eg. Api1.name => Api1
       const topLevelIdentifier = toPath(reference)[0];
+
       return !(
         functionalParams.has(topLevelIdentifier) ||
         variableDeclarations.has(topLevelIdentifier) ||
         has(invalidIdentifiers, topLevelIdentifier)
       );
     });
+
     return {
       references: referencesArr,
       functionalParams: Array.from(functionalParams),
       variables: Array.from(variableDeclarations),
+      isError: false,
     };
   } catch (e) {
     if (e instanceof SyntaxError) {
@@ -359,8 +451,10 @@ export const extractIdentifierInfoFromCode = (
         references: [],
         functionalParams: [],
         variables: [],
+        isError: true,
       };
     }
+
     throw e;
   }
 };
@@ -378,6 +472,7 @@ export const entityRefactorFromCode = (
   //If script is a JSObject then replace export default to decalartion.
   if (isJSObject) script = jsObjectToCode(script);
   else script = wrapCode(script);
+
   let ast: Node = { end: 0, start: 0, type: "" };
   //Copy of script to refactor
   let refactorScript = script;
@@ -387,6 +482,7 @@ export const entityRefactorFromCode = (
   let refactorOffset = 0;
   //Count of refactors on the script
   let refactorCount = 0;
+
   try {
     ast = getAST(script);
     const {
@@ -404,16 +500,19 @@ export const entityRefactorFromCode = (
       // To remove references derived from declared variables and function params,
       // We extract the topLevelIdentifier Eg. Api1.name => Api1
       const topLevelIdentifier = toPath(reference)[0];
+
       return !(
         functionalParams.has(topLevelIdentifier) ||
         variableDeclarations.has(topLevelIdentifier) ||
         has(invalidIdentifiers, topLevelIdentifier)
       );
     });
+
     //Traverse through all identifiers in the script
     identifierArray.forEach((identifier) => {
       if (identifier.name === oldNameArr[0]) {
         let index = 0;
+
         while (index < referencesArr.length) {
           if (identifier.name === referencesArr[index].split(".")[0]) {
             //Replace the oldName by newName
@@ -431,12 +530,14 @@ export const entityRefactorFromCode = (
               oldNameArr.length > 1 &&
               propertyNode &&
               oldNameArr[1] === propertyNode.name;
+
             //Condition to validate if Identifier || Property should be updated??
             if (oldNameArr.length === 1 || propertyCondFlag) {
               //Condition to extend end index in case of property match
               if (propertyCondFlag && propertyNode) {
                 endIndex = propertyNode.end;
               }
+
               refactorScript =
                 refactorScript.substring(0, identifier.start + refactorOffset) +
                 newName +
@@ -447,13 +548,16 @@ export const entityRefactorFromCode = (
               break;
             }
           }
+
           index++;
         }
       }
     });
+
     //If script is a JSObject then revert decalartion to export default.
     if (isJSObject) refactorScript = jsCodeToObject(refactorScript);
     else refactorScript = unwrapCode(refactorScript);
+
     return {
       isSuccess: true,
       body: { script: refactorScript, refactorCount },
@@ -463,11 +567,15 @@ export const entityRefactorFromCode = (
       // Syntax error. Ignore and return empty list
       return { isSuccess: false, body: { error: "Syntax Error" } };
     }
+
     throw e;
   }
 };
 
-export type functionParam = { paramName: string; defaultValue: unknown };
+export interface functionParam {
+  paramName: string;
+  defaultValue: unknown;
+}
 
 export const getFunctionalParamsFromNode = (
   node:
@@ -475,8 +583,10 @@ export const getFunctionalParamsFromNode = (
     | FunctionExpressionNode
     | ArrowFunctionExpressionNode,
   needValue = false,
+  code = "",
 ): Set<functionParam> => {
   const functionalParams = new Set<functionParam>();
+
   node.params.forEach((paramNode) => {
     if (isIdentifierNode(paramNode)) {
       functionalParams.add({
@@ -486,18 +596,56 @@ export const getFunctionalParamsFromNode = (
     } else if (isAssignmentPatternNode(paramNode)) {
       if (isIdentifierNode(paramNode.left)) {
         const paramName = paramNode.left.name;
-        if (!needValue) {
+
+        if (!needValue || !code) {
           functionalParams.add({ paramName, defaultValue: undefined });
         } else {
-          // figure out how to get value of paramNode.right for each node type
-          // currently we don't use params value, hence skipping it
-          // functionalParams.add({
-          //   defaultValue: paramNode.right.value,
-          // });
+          const defaultValueInString = code.slice(
+            paramNode.right.start,
+            paramNode.right.end,
+          );
+          const defaultValue =
+            paramNode.right.type === "Literal" &&
+            typeof paramNode.right.value === "string"
+              ? paramNode.right.value
+              : `{{${defaultValueInString}}}`;
+
+          functionalParams.add({
+            paramName,
+            defaultValue,
+          });
         }
+      } else if (
+        isObjectPatternNode(paramNode.left) ||
+        isArrayPatternNode(paramNode.left)
+      ) {
+        functionalParams.add({
+          paramName: "",
+          defaultValue: undefined,
+        });
+      }
+      // The below computations are very basic and can be evolved into nested
+      // parsing logic to find param and it's default value.
+    } else if (isObjectPatternNode(paramNode)) {
+      functionalParams.add({
+        paramName: "",
+        defaultValue: `{{{}}}`,
+      });
+    } else if (isArrayPatternNode(paramNode)) {
+      functionalParams.add({
+        paramName: "",
+        defaultValue: "{{[]}}",
+      });
+    } else if (isRestElementNode(paramNode)) {
+      if ("name" in paramNode.argument) {
+        functionalParams.add({
+          paramName: paramNode.argument.name,
+          defaultValue: undefined,
+        });
       }
     }
   });
+
   return functionalParams;
 };
 
@@ -506,11 +654,13 @@ const constructFinalMemberExpIdentifier = (
   child = "",
 ): string => {
   const propertyAccessor = getPropertyAccessor(node.property);
+
   if (isIdentifierNode(node.object)) {
     return `${node.object.name}${propertyAccessor}${child}`;
   } else {
     const propertyAccessor = getPropertyAccessor(node.property);
     const nestedChild = `${propertyAccessor}${child}`;
+
     return constructFinalMemberExpIdentifier(
       node.object as MemberExpressionNode,
       nestedChild,
@@ -542,6 +692,33 @@ export interface MemberExpressionData {
   object: NodeWithLocation<IdentifierNode>;
 }
 
+export interface AssignmentExpressionData {
+  property: NodeWithLocation<IdentifierNode | LiteralNode>;
+  object: NodeWithLocation<IdentifierNode | MemberExpressionNode>;
+  parentNode: NodeWithLocation<AssignmentExpressionNode>;
+}
+
+export interface CallExpressionData {
+  property: NodeWithLocation<IdentifierNode>;
+  params: NodeWithLocation<MemberExpressionNode | LiteralNode>[];
+}
+
+// This interface is used for storing call expression nodes with callee as member node
+// example of such case is when a function is called on object like obj.func()
+// This is required to understand whether appsmith.store.test.func() is present in script
+// in order to display mutation error on such statements.
+export interface MemberCallExpressionData {
+  property: NodeWithLocation<MemberExpressionNode | LiteralNode>;
+  object: NodeWithLocation<MemberExpressionNode>;
+  parentNode: NodeWithLocation<CallExpressionNode>;
+}
+
+export interface AssignmentExpressionNode extends Node {
+  operator: string;
+  left: Expression;
+  Right: Expression;
+}
+
 /** Function returns Invalid top-level member expressions from code
  * @param code
  * @param data
@@ -559,33 +736,52 @@ export interface MemberExpressionData {
  * },
  * For code {{Api1.name + JSObject.unknownProperty}}, function returns information about "JSObject.unknownProperty" node.
  */
-export const extractInvalidTopLevelMemberExpressionsFromCode = (
+export const extractExpressionsFromCode = (
   code: string,
   data: Record<string, any>,
   evaluationVersion: number,
-): MemberExpressionData[] => {
+): {
+  invalidTopLevelMemberExpressionsArray: MemberExpressionData[];
+  assignmentExpressionsData: AssignmentExpressionData[];
+  callExpressionsData: CallExpressionData[];
+  memberCallExpressionData: MemberCallExpressionData[];
+} => {
+  const assignmentExpressionsData = new Set<AssignmentExpressionData>();
+  const callExpressionsData = new Set<CallExpressionData>();
+  const memberCallExpressionData = new Set<MemberCallExpressionData>();
   const invalidTopLevelMemberExpressions = new Set<MemberExpressionData>();
   const variableDeclarations = new Set<string>();
   let functionalParams = new Set<string>();
   let ast: Node = { end: 0, start: 0, type: "" };
+
   try {
     const sanitizedScript = sanitizeScript(code, evaluationVersion);
     const wrappedCode = wrapCode(sanitizedScript);
+
     ast = getAST(wrappedCode, { locations: true });
   } catch (e) {
     if (e instanceof SyntaxError) {
       // Syntax error. Ignore and return empty list
-      return [];
+      return {
+        invalidTopLevelMemberExpressionsArray: [],
+        assignmentExpressionsData: [],
+        callExpressionsData: [],
+        memberCallExpressionData: [],
+      };
     }
+
     throw e;
   }
   simple(ast, {
     MemberExpression(node: Node) {
       const { computed, object, property } = node as MemberExpressionNode;
+
       // We are only interested in top-level MemberExpression nodes
       // Eg. for Api1.data.name, we are only interested in Api1.data
       if (!isIdentifierNode(object)) return;
+
       if (!(object.name in data) || !isTrueObject(data[object.name])) return;
+
       // For computed member expressions (assessed via [], eg. JSObject1["name"] ),
       // We are only interested in strings
       if (
@@ -598,6 +794,7 @@ export const extractInvalidTopLevelMemberExpressionsFromCode = (
           property,
         } as MemberExpressionData);
       }
+
       // We ignore computed member expressions if property is an identifier (JSObject[name])
       // This is because we can't statically determine what the value of the identifier might be.
       if (
@@ -618,6 +815,7 @@ export const extractInvalidTopLevelMemberExpressionsFromCode = (
     },
     FunctionDeclaration(node: Node) {
       if (!isFunctionDeclaration(node)) return;
+
       functionalParams = new Set([
         ...functionalParams,
         ...getFunctionalParamNamesFromNode(node),
@@ -625,6 +823,7 @@ export const extractInvalidTopLevelMemberExpressionsFromCode = (
     },
     FunctionExpression(node: Node) {
       if (!isFunctionExpression(node)) return;
+
       functionalParams = new Set([
         ...functionalParams,
         ...getFunctionalParamNamesFromNode(node),
@@ -632,10 +831,47 @@ export const extractInvalidTopLevelMemberExpressionsFromCode = (
     },
     ArrowFunctionExpression(node: Node) {
       if (!isArrowFunctionExpression(node)) return;
+
       functionalParams = new Set([
         ...functionalParams,
         ...getFunctionalParamNamesFromNode(node),
       ]);
+    },
+    AssignmentExpression(node: Node) {
+      if (
+        !isAssignmentExpression(node) ||
+        node.operator !== "=" ||
+        !isMemberExpressionNode(node.left)
+      )
+        return;
+
+      const { object, property } = node.left;
+
+      assignmentExpressionsData.add({
+        object,
+        property,
+        parentNode: node,
+      } as AssignmentExpressionData);
+    },
+    CallExpression(node: Node) {
+      if (isCallExpressionNode(node)) {
+        if (isIdentifierNode(node.callee)) {
+          callExpressionsData.add({
+            property: node.callee,
+            params: node.arguments,
+          } as CallExpressionData);
+        }
+
+        if (isMemberExpressionNode(node.callee)) {
+          const { object, property } = node.callee;
+
+          memberCallExpressionData.add({
+            object,
+            property,
+            parentNode: node,
+          } as MemberCallExpressionData);
+        }
+      }
     },
   });
 
@@ -648,7 +884,12 @@ export const extractInvalidTopLevelMemberExpressionsFromCode = (
     );
   });
 
-  return invalidTopLevelMemberExpressionsArray;
+  return {
+    invalidTopLevelMemberExpressionsArray,
+    assignmentExpressionsData: [...assignmentExpressionsData],
+    callExpressionsData: [...callExpressionsData],
+    memberCallExpressionData: [...memberCallExpressionData],
+  };
 };
 
 const ancestorWalk = (ast: Node): NodeList => {
@@ -677,8 +918,10 @@ const ancestorWalk = (ast: Node): NodeList => {
       let candidateTopLevelNode: IdentifierNode | MemberExpressionNode =
         node as IdentifierNode;
       let depth = ancestors.length - 2; // start "depth" with first parent
+
       while (depth > 0) {
         const parent = ancestors[depth];
+
         if (
           isMemberExpressionNode(parent) &&
           /* Member expressions that are "computed" (with [ ] search)
@@ -699,15 +942,18 @@ const ancestorWalk = (ast: Node): NodeList => {
           break;
         }
       }
+
       //If parent is a Member expression then attach property to the Node.
       //else push Identifier Node.
       const parentNode = ancestors[ancestors.length - 2];
+
       if (isMemberExpressionNode(parentNode)) {
         identifierList.push({
           ...(node as IdentifierNode),
           property: parentNode.property as IdentifierNode,
         });
       } else identifierList.push(node as RefactorIdentifierNode);
+
       if (isIdentifierNode(candidateTopLevelNode)) {
         // If the node is an Identifier, just save that
         references.add(candidateTopLevelNode.name);
@@ -717,6 +963,7 @@ const ancestorWalk = (ast: Node): NodeList => {
         const memberExpIdentifier = constructFinalMemberExpIdentifier(
           candidateTopLevelNode,
         );
+
         references.add(memberExpIdentifier);
       }
     },
@@ -731,6 +978,7 @@ const ancestorWalk = (ast: Node): NodeList => {
       // params in function declarations are also counted as references so we keep
       // track of them and remove them from the final list of references
       if (!isFunctionDeclaration(node)) return;
+
       functionalParams = new Set([
         ...functionalParams,
         ...getFunctionalParamNamesFromNode(node),
@@ -740,6 +988,7 @@ const ancestorWalk = (ast: Node): NodeList => {
       // params in function expressions are also counted as references so we keep
       // track of them and remove them from the final list of references
       if (!isFunctionExpression(node)) return;
+
       functionalParams = new Set([
         ...functionalParams,
         ...getFunctionalParamNamesFromNode(node),
@@ -749,12 +998,14 @@ const ancestorWalk = (ast: Node): NodeList => {
       // params in arrow function expressions are also counted as references so we keep
       // track of them and remove them from the final list of references
       if (!isArrowFunctionExpression(node)) return;
+
       functionalParams = new Set([
         ...functionalParams,
         ...getFunctionalParamNamesFromNode(node),
       ]);
     },
   });
+
   return {
     references,
     functionalParams,
@@ -787,6 +1038,7 @@ export const isFunctionPresent = (
     });
 
     let isFunction = false;
+
     simple(ast, {
       FunctionDeclaration() {
         isFunction = true;
@@ -804,3 +1056,42 @@ export const isFunctionPresent = (
     return false;
   }
 };
+
+export function getMemberExpressionObjectFromProperty(
+  propertyName: string,
+  code: string,
+  evaluationVersion = 2,
+) {
+  if (!propertyName) return [];
+
+  const memberExpressionObjects = new Set<string>();
+  let ast: Node = { end: 0, start: 0, type: "" };
+
+  try {
+    const sanitizedScript = sanitizeScript(code, evaluationVersion);
+    const wrappedCode = wrapCode(sanitizedScript);
+
+    ast = getAST(wrappedCode, { locations: true });
+    simple(ast, {
+      MemberExpression(node: Node) {
+        const { object, property } = node as MemberExpressionNode;
+
+        if (!isLiteralNode(property) && !isIdentifierNode(property)) return;
+
+        const propName = isLiteralNode(property)
+          ? property.value
+          : property.name;
+
+        if (!isNil(propName) && getStringValue(propName) === propertyName) {
+          const memberExpressionObjectString = generate(object);
+
+          memberExpressionObjects.add(memberExpressionObjectString);
+        }
+      },
+    });
+
+    return Array.from(memberExpressionObjects);
+  } catch (e) {
+    return [];
+  }
+}

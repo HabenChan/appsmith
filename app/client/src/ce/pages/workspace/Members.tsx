@@ -1,44 +1,46 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
-  getAllUsers,
   getAllRoles,
-  getCurrentWorkspace,
   getWorkspaceLoadingStates,
-} from "@appsmith/selectors/workspaceSelectors";
+  getFetchedWorkspaces,
+} from "ee/selectors/workspaceSelectors";
 import type { RouteComponentProps } from "react-router";
 import { useHistory } from "react-router";
 import { getCurrentUser } from "selectors/usersSelectors";
-import { HighlightText, Table } from "design-system-old";
+import { HighlightText, Table } from "@appsmith/ads-old";
 import {
   fetchUsersForWorkspace,
   fetchRolesForWorkspace,
   fetchWorkspace,
   changeWorkspaceUserRole,
   deleteWorkspaceUser,
-} from "@appsmith/actions/workspaceActions";
-import type { SelectOptionProps } from "design-system";
-import { Avatar, Button, Option, Select, Text } from "design-system";
+} from "ee/actions/workspaceActions";
+import type { SelectOptionProps } from "@appsmith/ads";
+import { Avatar, Button, Option, Select, Text } from "@appsmith/ads";
 import styled from "styled-components";
 import DeleteConfirmationModal from "pages/workspace/DeleteConfirmationModal";
 import { useMediaQuery } from "react-responsive";
 import { Card } from "@blueprintjs/core";
 import { USER_PHOTO_ASSET_URL } from "constants/userConstants";
-import type { WorkspaceUser } from "@appsmith/constants/workspaceConstants";
+import type { WorkspaceUser } from "ee/constants/workspaceConstants";
 import {
   createMessage,
   MEMBERS_TAB_TITLE,
   NO_SEARCH_DATA_TEXT,
-} from "@appsmith/constants/messages";
-import { getAppsmithConfigs } from "@appsmith/configs";
+} from "ee/constants/messages";
 import { APPLICATIONS_URL } from "constants/routes";
-import {
-  isPermitted,
-  PERMISSION_TYPE,
-} from "@appsmith/utils/permissionHelpers";
+import { isPermitted, PERMISSION_TYPE } from "ee/utils/permissionHelpers";
 import { getInitials } from "utils/AppsmithUtils";
-
-const { cloudHosting } = getAppsmithConfigs();
+import { CustomRolesRamp } from "ee/pages/workspace/InviteUsersForm";
+import { showProductRamps } from "ee/selectors/rampSelectors";
+import { RAMP_NAME } from "utils/ProductRamps/RampsControlList";
+import { useFeatureFlag } from "utils/hooks/useFeatureFlag";
+import { FEATURE_FLAG } from "ee/entities/FeatureFlag";
+import {
+  getAllUsersOfWorkspace,
+  selectedWorkspaceLoadingStates,
+} from "ee/selectors/selectedWorkspaceSelectors";
 
 export type PageProps = RouteComponentProps<{
   workspaceId: string;
@@ -49,52 +51,55 @@ export type PageProps = RouteComponentProps<{
 export const MembersWrapper = styled.div<{
   isMobile?: boolean;
 }>`
-  ${(props) => (props.isMobile ? "width: 100%; margin: auto" : null)}
-  table {
-    table-layout: fixed;
+  &.members-wrapper {
+    overflow: scroll;
+    height: 100%;
+    ${(props) => (props.isMobile ? "width: 100%; margin: auto" : null)}
+    table {
+      table-layout: fixed;
 
-    thead {
-      z-index: 1;
-      tr {
-        border-bottom: 1px solid var(--ads-v2-color-border);
-        th {
-          font-size: 14px;
-          font-weight: 500;
-          line-height: 1.5;
-          color: var(--ads-v2-color-fg);
-          padding: 8px 20px;
+      thead {
+        tr {
+          border-bottom: 1px solid var(--ads-v2-color-border);
+          th {
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.5;
+            color: var(--ads-v2-color-fg);
+            padding: 8px 20px;
 
-          &:last-child {
-            width: 120px;
-          }
+            &:last-child {
+              width: 120px;
+            }
 
-          svg {
-            margin: auto 8px;
-            display: initial;
+            svg {
+              margin: auto 8px;
+              display: initial;
+            }
           }
         }
       }
-    }
 
-    tbody {
-      tr {
-        td {
-          word-break: break-word;
-          padding: 0 var(--ads-spaces-9);
-          border-bottom: none;
-          height: 40px;
+      tbody {
+        tr {
+          td {
+            word-break: break-word;
+            padding: 0 var(--ads-spaces-9);
+            border-bottom: none;
+            height: 40px;
 
-          &:first-child {
-            text-align: left;
-          }
+            &:first-child {
+              text-align: left;
+            }
 
-          .ads-v2-select {
-            width: fit-content;
-            > .rc-select-selector {
-              border: none;
+            .ads-v2-select {
+              width: fit-content;
+              > .rc-select-selector {
+                border: none;
 
-              > .rc-select-selection-item {
-                padding-left: 0;
+                > .rc-select-selection-item {
+                  padding-left: 0;
+                }
               }
             }
           }
@@ -121,7 +126,7 @@ export const UserCard = styled(Card)`
   border: 1px solid var(--ads-v2-color-border);
   border-radius: var(--ads-v2-border-radius);
   padding: ${(props) =>
-    `${props.theme.spaces[15]}px ${props.theme.spaces[7] * 4}px;`}
+    `${props.theme.spaces[15]}px ${props.theme.spaces[7] * 4}px;`};
   width: 100%;
   height: 201px;
   margin: auto;
@@ -197,6 +202,9 @@ export default function MemberSettings(props: PageProps) {
   const dispatch = useDispatch();
   const history = useHistory();
 
+  const showRampSelector = showProductRamps(RAMP_NAME.CUSTOM_ROLES);
+  const canShowRamp = useSelector(showRampSelector);
+
   useEffect(() => {
     dispatch(fetchUsersForWorkspace(workspaceId));
     dispatch(fetchRolesForWorkspace(workspaceId));
@@ -225,8 +233,11 @@ export default function MemberSettings(props: PageProps) {
     onOpenConfirmationModal();
   };
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onDeleteMember = (data?: any) => {
     if (!userToBeDeleted && !data) return null;
+
     dispatch(
       deleteWorkspaceUser(
         userToBeDeleted?.workspaceId || data?.workspaceId,
@@ -235,16 +246,13 @@ export default function MemberSettings(props: PageProps) {
     );
   };
 
-  const {
-    deletingUserInfo,
-    isFetchingAllRoles,
-    isFetchingAllUsers,
-    roleChangingUserInfo,
-  } = useSelector(getWorkspaceLoadingStates);
+  const { deletingUserInfo, isFetchingAllUsers, roleChangingUserInfo } =
+    useSelector(selectedWorkspaceLoadingStates);
+  const { isFetchingAllRoles } = useSelector(getWorkspaceLoadingStates);
   const allRoles = useSelector(getAllRoles);
-  const allUsers = useSelector(getAllUsers);
+  const allUsers = useSelector(getAllUsersOfWorkspace);
   const currentUser = useSelector(getCurrentUser);
-  const currentWorkspace = useSelector(getCurrentWorkspace).find(
+  const currentWorkspace = useSelector(getFetchedWorkspaces).find(
     (el) => el.id === workspaceId,
   );
 
@@ -257,11 +265,14 @@ export default function MemberSettings(props: PageProps) {
     PERMISSION_TYPE.MANAGE_WORKSPACE,
   );
 
+  const isGACEnabled = useFeatureFlag(FEATURE_FLAG.license_gac_enabled);
+
   useEffect(() => {
     if (!!userToBeDeleted && showMemberDeletionConfirmation) {
       const userBeingDeleted = allUsers.find(
         (user) => user.username === userToBeDeleted.username,
       );
+
       if (!userBeingDeleted) {
         setUserToBeDeleted(null);
         onCloseConfirmationModal();
@@ -305,6 +316,7 @@ export default function MemberSettings(props: PageProps) {
   useEffect(() => {
     if (searchValue) {
       const filteredUsers = getFilteredUsers();
+
       setFilteredData(filteredUsers);
     } else {
       setFilteredData(membersData);
@@ -314,11 +326,14 @@ export default function MemberSettings(props: PageProps) {
   const columns = [
     {
       Header: createMessage(() =>
-        MEMBERS_TAB_TITLE(filteredData?.length, cloudHosting),
+        MEMBERS_TAB_TITLE(filteredData?.length, !isGACEnabled),
       ),
       accessor: "users",
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       Cell: function UserCell(props: any) {
         const member = props.cell.row.original;
+
         return (
           <EachUser>
             <>
@@ -342,6 +357,8 @@ export default function MemberSettings(props: PageProps) {
     {
       Header: "Resource",
       accessor: "resource",
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       Cell: function ResourceCell(cellProps: any) {
         return (
           <RowWrapper>
@@ -356,11 +373,15 @@ export default function MemberSettings(props: PageProps) {
     {
       Header: "Role",
       accessor: "permissionGroupName",
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       Cell: function DropdownCell(cellProps: any) {
         const data = cellProps.cell.row.original;
         const allRoles = useSelector(getAllRoles);
         const roles = allRoles
-          ? allRoles.map((role: any) => {
+          ? // TODO: Fix this the next time the file is edited
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            allRoles.map((role: any) => {
               return {
                 key: role.id,
                 value: role.name?.split(" - ")[0],
@@ -373,6 +394,7 @@ export default function MemberSettings(props: PageProps) {
             role.value?.split(" - ")[0] ===
             cellProps.cell.value?.split(" - ")[0],
         );
+
         if (data.username === currentUser?.username) {
           return (
             <StyledText renderAs="p">
@@ -380,6 +402,7 @@ export default function MemberSettings(props: PageProps) {
             </StyledText>
           );
         }
+
         return (
           <Select
             className="t--user-status"
@@ -389,7 +412,9 @@ export default function MemberSettings(props: PageProps) {
               roleChangingUserInfo &&
               roleChangingUserInfo.username === data.username
             }
-            listHeight={300}
+            listHeight={400}
+            // TODO: Fix this the next time the file is edited
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             onSelect={(_value: string, option: any) => {
               dispatch(
                 changeWorkspaceUserRole(workspaceId, option.key, data.username),
@@ -413,6 +438,11 @@ export default function MemberSettings(props: PageProps) {
                 </div>
               </Option>
             ))}
+            {canShowRamp && (
+              <Option disabled>
+                <CustomRolesRamp />
+              </Option>
+            )}
           </Select>
         );
       },
@@ -420,6 +450,8 @@ export default function MemberSettings(props: PageProps) {
     {
       Header: "Actions",
       accessor: "actions",
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       Cell: function DeleteCell(cellProps: any) {
         return (
           <Button
@@ -447,7 +479,9 @@ export default function MemberSettings(props: PageProps) {
   ];
   const isMobile: boolean = useMediaQuery({ maxWidth: 767 });
   const roles = allRoles
-    ? allRoles.map((role: any) => {
+    ? // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      allRoles.map((role: any) => {
         return {
           key: role.id,
           value: role.name?.split(" - ")[0],
@@ -456,12 +490,18 @@ export default function MemberSettings(props: PageProps) {
       })
     : [];
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const selectRole = (option: any, username: any) => {
     dispatch(changeWorkspaceUserRole(workspaceId, option, username));
   };
 
   return (
-    <MembersWrapper data-testid="t--members-wrapper" isMobile={isMobile}>
+    <MembersWrapper
+      className="members-wrapper"
+      data-testid="t--members-wrapper"
+      isMobile={isMobile}
+    >
       <>
         {!isMobile && (
           <Table
@@ -481,10 +521,13 @@ export default function MemberSettings(props: PageProps) {
             {filteredData.map((member, index) => {
               const role =
                 roles.find(
+                  // TODO: Fix this the next time the file is edited
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   (role: any) =>
                     role.value === member.permissionGroupName.split(" - ")[0],
                 ) || roles[0];
               const isOwner = member.username === currentUser?.username;
+
               return (
                 <UserCard key={index}>
                   <>
@@ -528,6 +571,8 @@ export default function MemberSettings(props: PageProps) {
                         roleChangingUserInfo &&
                         roleChangingUserInfo.username === member.username
                       }
+                      // TODO: Fix this the next time the file is edited
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       onSelect={(_value: string, option: any) => {
                         selectRole(option.key, member.username);
                       }}
@@ -551,6 +596,11 @@ export default function MemberSettings(props: PageProps) {
                           </div>
                         </Option>
                       ))}
+                      {canShowRamp && (
+                        <Option disabled>
+                          <CustomRolesRamp />
+                        </Option>
+                      )}
                     </Select>
                   )}
                   <DeleteIcon

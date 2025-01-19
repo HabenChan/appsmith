@@ -1,18 +1,23 @@
 import type { EventType } from "constants/AppsmithActionConstants/ActionConstants";
-import type { TriggerMeta } from "@appsmith/sagas/ActionExecution/ActionExecutionSagas";
+import type { TriggerMeta } from "ee/sagas/ActionExecution/ActionExecutionSagas";
 import { call, put, spawn, take } from "redux-saga/effects";
-import { logActionExecutionError } from "sagas/ActionExecution/errorUtils";
+import { showToastOnExecutionError } from "sagas/ActionExecution/errorUtils";
 import { setUserCurrentGeoLocation } from "actions/browserRequestActions";
 import type { Channel } from "redux-saga";
 import { channel } from "redux-saga";
-import { evalWorker } from "sagas/EvaluationsSaga";
+import { evalWorker } from "utils/workerInstances";
 import type {
   TGetGeoLocationDescription,
   TWatchGeoLocationDescription,
 } from "workers/Evaluation/fns/geolocationFns";
 
 class GeoLocationError extends Error {
-  constructor(message: string, private responseData?: any) {
+  constructor(
+    message: string,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private responseData?: any,
+  ) {
     super(message);
   }
 }
@@ -21,7 +26,7 @@ let successChannel: Channel<GeolocationPosition> | null = null;
 let errorChannel: Channel<GeolocationPositionError> | null = null;
 
 // Making the getCurrentPosition call in a promise fashion
-export const getUserLocation = (options?: PositionOptions) =>
+export const getUserLocation = async (options?: PositionOptions) =>
   new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
       (location) => resolve(location),
@@ -58,6 +63,7 @@ export const extractGeoLocation = (
     accuracy,
     speed,
   };
+
   return {
     coords,
     timestamp: location.timestamp,
@@ -75,19 +81,22 @@ export const extractGeoLocation = (
  * Hence we're creating a new object with same structure which can be passed to the worker thread
  */
 function sanitizeGeolocationError(error: GeolocationPositionError) {
-  const { code, message } = error;
   return {
-    code,
-    message,
+    code: error.code,
+    message: error.message,
   };
 }
 
 function* successCallbackHandler(listenerId?: string) {
   let payload: GeolocationPosition;
+
   if (!successChannel) return;
+
   while ((payload = yield take(successChannel))) {
     const currentLocation = extractGeoLocation(payload);
+
     yield put(setUserCurrentGeoLocation(currentLocation));
+
     if (listenerId)
       yield call(evalWorker.ping, { data: currentLocation }, listenerId);
   }
@@ -95,7 +104,9 @@ function* successCallbackHandler(listenerId?: string) {
 
 function* errorCallbackHandler(triggerMeta: TriggerMeta, listenerId?: string) {
   if (!errorChannel) return;
+
   let error: GeolocationPositionError;
+
   while ((error = yield take(errorChannel))) {
     if (listenerId)
       yield call(
@@ -103,46 +114,55 @@ function* errorCallbackHandler(triggerMeta: TriggerMeta, listenerId?: string) {
         { error: sanitizeGeolocationError(error) },
         listenerId,
       );
-    logActionExecutionError(error.message, true);
+
+    yield call(showToastOnExecutionError, error.message);
   }
 }
 
 export function* getCurrentLocationSaga(action: TGetGeoLocationDescription) {
   const { payload: actionPayload } = action;
+
   try {
     const location: GeolocationPosition = yield call(
       getUserLocation,
       actionPayload.options,
     );
     const currentLocation = extractGeoLocation(location);
+
     yield put(setUserCurrentGeoLocation(currentLocation));
+
     return currentLocation;
   } catch (error) {
-    logActionExecutionError((error as Error).message, true);
+    yield call(showToastOnExecutionError, (error as Error).message);
+
     if (error instanceof GeolocationPositionError) {
       const sanitizedError = sanitizeGeolocationError(error);
+
       throw new GeoLocationError(sanitizedError.message, [sanitizedError]);
     }
   }
 }
 
 let watchId: number | undefined;
+
 export function* watchCurrentLocation(
   action: TWatchGeoLocationDescription,
   _: EventType,
   triggerMeta: TriggerMeta,
 ) {
   const { payload: actionPayload } = action;
+
   if (watchId) {
     // When a watch is already active, we will not start a new watch.
     // at a given point in time, only one watch is active
-    logActionExecutionError(
+    yield call(
+      showToastOnExecutionError,
       "A watchLocation is already active. Clear it before before starting a new one",
-      true,
     );
 
     return;
   }
+
   successChannel = channel<GeolocationPosition>();
   errorChannel = channel<GeolocationPositionError>();
   yield spawn(successCallbackHandler, actionPayload.listenerId);
@@ -158,6 +178,7 @@ export function* watchCurrentLocation(
         navigator.geolocation.clearWatch(watchId);
         watchId = undefined;
       }
+
       errorChannel?.put(error);
     },
     actionPayload.options,
@@ -166,9 +187,11 @@ export function* watchCurrentLocation(
 
 export function* stopWatchCurrentLocation() {
   if (watchId === undefined) {
-    logActionExecutionError("No location watch active", true);
+    yield call(showToastOnExecutionError, "No location watch active");
+
     return;
   }
+
   navigator.geolocation.clearWatch(watchId);
   watchId = undefined;
   successChannel?.close();

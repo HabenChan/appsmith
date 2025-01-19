@@ -6,15 +6,19 @@ import type {
   BatchUpdateWidgetMetaPropertyPayload,
 } from "actions/metaActions";
 
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionTypes,
   WidgetReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+} from "ee/constants/ReduxActionConstants";
 import produce from "immer";
-import type { EvalMetaUpdates } from "@appsmith/workers/common/DataTreeEvaluator/types";
-import { getMetaWidgetResetObj } from "./metaReducerUtils";
-import type { WidgetEntityConfig } from "entities/DataTree/dataTreeFactory";
+import type { EvalMetaUpdates } from "ee/workers/common/DataTreeEvaluator/types";
+import {
+  getMetaWidgetResetObj,
+  getNextMetaStateWithUpdates,
+  setMetaValuesOnResetFromEval,
+} from "./metaReducerUtils";
+import type { WidgetEntityConfig } from "ee/entities/DataTree/types";
 
 export type WidgetMetaState = Record<string, unknown>;
 export type MetaState = Record<string, WidgetMetaState>;
@@ -28,16 +32,7 @@ export const metaReducer = createReducer(initialState, {
       evalMetaUpdates: EvalMetaUpdates;
     }>,
   ) => {
-    const { evalMetaUpdates } = action.payload;
-
-    // if metaObject is updated in dataTree we also update meta values, to keep meta state in sync.
-    const newMetaState = produce(state, (draftMetaState) => {
-      evalMetaUpdates.forEach(({ metaPropertyPath, value, widgetId }) => {
-        set(draftMetaState, [widgetId, ...metaPropertyPath], value);
-      });
-      return draftMetaState;
-    });
-    return newMetaState;
+    return getNextMetaStateWithUpdates(state, action);
   },
   [ReduxActionTypes.SET_META_PROP]: (
     state: MetaState,
@@ -49,6 +44,7 @@ export const metaReducer = createReducer(initialState, {
         `${action.payload.widgetId}.${action.payload.propertyName}`,
         action.payload.propertyValue,
       );
+
       return draftMetaState;
     });
 
@@ -60,9 +56,11 @@ export const metaReducer = createReducer(initialState, {
   ) => {
     const nextState = produce(state, (draftMetaState) => {
       const { batchMetaUpdates } = action.payload;
+
       batchMetaUpdates.forEach(({ propertyName, propertyValue, widgetId }) => {
         set(draftMetaState, `${widgetId}.${propertyName}`, propertyValue);
       });
+
       return draftMetaState;
     });
 
@@ -78,6 +76,7 @@ export const metaReducer = createReducer(initialState, {
         `${action.payload.widgetId}.${action.payload.propertyName}`,
         action.payload.propertyValue,
       );
+
       return draftMetaState;
     });
 
@@ -88,7 +87,10 @@ export const metaReducer = createReducer(initialState, {
     action: ReduxAction<TableFilterPanePositionConfig>,
   ) => {
     const next = { ...state };
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let widgetMetaProps: Record<string, any> = next[action.payload.widgetId];
+
     if (widgetMetaProps === undefined) {
       widgetMetaProps = {
         isMoved: true,
@@ -101,7 +103,9 @@ export const metaReducer = createReducer(initialState, {
         position: { ...action.payload.position },
       };
     }
+
     next[action.payload.widgetId] = widgetMetaProps;
+
     return next;
   },
   [WidgetReduxActionTypes.WIDGET_DELETE]: (
@@ -109,7 +113,9 @@ export const metaReducer = createReducer(initialState, {
     action: ReduxAction<{ widgetId: string }>,
   ) => {
     const next = { ...state };
+
     delete next[action.payload.widgetId];
+
     return next;
   },
   [ReduxActionTypes.RESET_WIDGET_META]: (
@@ -128,18 +134,29 @@ export const metaReducer = createReducer(initialState, {
         ),
       };
     }
+
     return state;
+  },
+  [ReduxActionTypes.RESET_WIDGET_META_UPDATES]: (
+    state: MetaState,
+    action: ReduxAction<{
+      evalMetaUpdates: EvalMetaUpdates;
+    }>,
+  ) => {
+    return setMetaValuesOnResetFromEval(state, action);
   },
   [ReduxActionTypes.RESET_WIDGETS_META_STATE]: (
     state: MetaState,
     action: ReduxAction<{ widgetIdsToClear: string[] }>,
   ) => {
     const next = { ...state };
+
     for (const metaWidgetId of action.payload.widgetIdsToClear) {
       if (metaWidgetId && next[metaWidgetId]) {
         delete next[metaWidgetId];
       }
     }
+
     return next;
   },
   [ReduxActionTypes.FETCH_PAGE_SUCCESS]: () => {

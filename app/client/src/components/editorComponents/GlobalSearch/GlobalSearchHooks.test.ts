@@ -1,15 +1,14 @@
-import { getFilteredAndSortedFileOperations } from "./GlobalSearchHooks";
+import { useFilteredAndSortedFileOperations } from "./GlobalSearchHooks";
 import type { Datasource } from "entities/Datasource";
 import { SEARCH_ITEM_TYPES } from "./utils";
-import { PERMISSION_TYPE } from "@appsmith/utils/permissionHelpers";
 
 describe("getFilteredAndSortedFileOperations", () => {
   it("works without any datasources", () => {
-    const fileOptions = getFilteredAndSortedFileOperations("");
+    const fileOptions = useFilteredAndSortedFileOperations({ query: "" });
 
     expect(fileOptions[0]).toEqual(
       expect.objectContaining({
-        title: "New JS object",
+        title: "New JS Object",
       }),
     );
 
@@ -38,61 +37,73 @@ describe("getFilteredAndSortedFileOperations", () => {
     );
   });
   it("works without permissions", () => {
-    const actionOperationsWithoutCreate = getFilteredAndSortedFileOperations(
-      "",
-      [],
-      [],
-      {},
-      false,
-    );
+    const actionOperationsWithoutCreate = useFilteredAndSortedFileOperations({
+      query: "",
+      allDatasources: [],
+      recentlyUsedDSMap: {},
+      canCreateActions: false,
+    });
 
     expect(actionOperationsWithoutCreate.length).toEqual(0);
 
     const actionOperationsWithoutDatasourcePermission =
-      getFilteredAndSortedFileOperations("", [], [], {}, true, false);
+      useFilteredAndSortedFileOperations({
+        query: "",
+        allDatasources: [],
+        recentlyUsedDSMap: {},
+        canCreateActions: true,
+        canCreateDatasource: false,
+      });
 
     expect(actionOperationsWithoutDatasourcePermission.length).toEqual(4);
   });
 
   it("shows app datasources before other datasources", () => {
     const appDatasource: Datasource = {
-      datasourceConfiguration: {
-        url: "",
+      datasourceStorages: {
+        unused_env: {
+          datasourceId: "",
+          environmentId: "",
+          datasourceConfiguration: {
+            url: "",
+          },
+          isValid: true,
+        },
       },
       id: "",
-      isValid: true,
       pluginId: "",
       workspaceId: "",
       name: "App datasource",
     };
 
     const otherDatasource: Datasource = {
-      datasourceConfiguration: {
-        url: "",
+      datasourceStorages: {
+        unused_env: {
+          datasourceId: "",
+          environmentId: "",
+          datasourceConfiguration: {
+            url: "",
+          },
+          isValid: false,
+        },
       },
       id: "",
-      isValid: false,
       pluginId: "",
       workspaceId: "",
       name: "Other datasource",
     };
 
-    const fileOptions = getFilteredAndSortedFileOperations(
-      "",
-      [appDatasource],
-      [otherDatasource],
-      {},
-      true,
-      true,
-      [
-        PERMISSION_TYPE.CREATE_ACTIONS,
-        PERMISSION_TYPE.CREATE_DATASOURCE_ACTIONS,
-      ],
-    );
+    const fileOptions = useFilteredAndSortedFileOperations({
+      query: "",
+      allDatasources: [appDatasource, otherDatasource],
+      recentlyUsedDSMap: {},
+      canCreateActions: true,
+      canCreateDatasource: true,
+    });
 
     expect(fileOptions[0]).toEqual(
       expect.objectContaining({
-        title: "New JS object",
+        title: "New JS Object",
       }),
     );
 
@@ -118,43 +129,50 @@ describe("getFilteredAndSortedFileOperations", () => {
 
   it("sorts datasources based on recency", () => {
     const appDatasource: Datasource = {
-      datasourceConfiguration: {
-        url: "",
+      datasourceStorages: {
+        unused_env: {
+          datasourceId: "",
+          environmentId: "",
+          datasourceConfiguration: {
+            url: "",
+          },
+          isValid: true,
+        },
       },
       id: "123",
-      isValid: true,
       pluginId: "",
       workspaceId: "",
       name: "App datasource",
     };
 
     const otherDatasource: Datasource = {
-      datasourceConfiguration: {
-        url: "",
+      datasourceStorages: {
+        unused_env: {
+          datasourceId: "",
+          environmentId: "",
+          datasourceConfiguration: {
+            url: "",
+          },
+          isValid: false,
+        },
       },
       id: "abc",
-      isValid: false,
       pluginId: "",
       workspaceId: "",
       name: "Other datasource",
     };
 
-    const fileOptions = getFilteredAndSortedFileOperations(
-      "",
-      [appDatasource],
-      [otherDatasource],
-      { abc: 1, "123": 3 },
-      true,
-      true,
-      [
-        PERMISSION_TYPE.CREATE_ACTIONS,
-        PERMISSION_TYPE.CREATE_DATASOURCE_ACTIONS,
-      ],
-    );
+    const fileOptions = useFilteredAndSortedFileOperations({
+      query: "",
+      allDatasources: [appDatasource, otherDatasource],
+      recentlyUsedDSMap: { abc: 1, "123": 3 },
+      canCreateActions: true,
+      canCreateDatasource: true,
+    });
 
     expect(fileOptions[0]).toEqual(
       expect.objectContaining({
-        title: "New JS object",
+        title: "New JS Object",
       }),
     );
 
@@ -180,39 +198,46 @@ describe("getFilteredAndSortedFileOperations", () => {
 
   it("filters with a query", () => {
     const appDatasource: Datasource = {
-      datasourceConfiguration: {
-        url: "",
+      datasourceStorages: {
+        unused_env: {
+          datasourceId: "",
+          environmentId: "",
+          datasourceConfiguration: {
+            url: "",
+          },
+          isValid: true,
+        },
       },
       id: "",
-      isValid: true,
       pluginId: "",
       workspaceId: "",
       name: "App datasource",
     };
 
     const otherDatasource: Datasource = {
-      datasourceConfiguration: {
-        url: "",
+      datasourceStorages: {
+        unused_env: {
+          datasourceId: "",
+          environmentId: "",
+          datasourceConfiguration: {
+            url: "",
+          },
+          isValid: false,
+        },
       },
       id: "",
-      isValid: false,
       pluginId: "",
       workspaceId: "",
       name: "Other datasource",
     };
 
-    const fileOptions = getFilteredAndSortedFileOperations(
-      "App",
-      [appDatasource],
-      [otherDatasource],
-      {},
-      true,
-      true,
-      [
-        PERMISSION_TYPE.CREATE_ACTIONS,
-        PERMISSION_TYPE.CREATE_DATASOURCE_ACTIONS,
-      ],
-    );
+    const fileOptions = useFilteredAndSortedFileOperations({
+      query: "App",
+      allDatasources: [appDatasource, otherDatasource],
+      recentlyUsedDSMap: {},
+      canCreateActions: true,
+      canCreateDatasource: true,
+    });
 
     expect(fileOptions[0]).toEqual(
       expect.objectContaining({
@@ -223,39 +248,104 @@ describe("getFilteredAndSortedFileOperations", () => {
 
   it("Non matching query shows on datasource creation", () => {
     const appDatasource: Datasource = {
-      datasourceConfiguration: {
-        url: "",
+      datasourceStorages: {
+        unused_env: {
+          datasourceId: "",
+          environmentId: "",
+          datasourceConfiguration: {
+            url: "",
+          },
+          isValid: true,
+        },
       },
       id: "",
-      isValid: true,
       pluginId: "",
       workspaceId: "",
       name: "App datasource",
     };
 
     const otherDatasource: Datasource = {
-      datasourceConfiguration: {
-        url: "",
+      datasourceStorages: {
+        unused_env: {
+          datasourceId: "",
+          environmentId: "",
+          datasourceConfiguration: {
+            url: "",
+          },
+          isValid: false,
+        },
       },
       id: "",
-      isValid: false,
       pluginId: "",
       workspaceId: "",
       name: "Other datasource",
     };
 
-    const fileOptions = getFilteredAndSortedFileOperations(
-      "zzzz",
-      [appDatasource],
-      [otherDatasource],
-      {},
-      true,
-      true,
-    );
+    const fileOptions = useFilteredAndSortedFileOperations({
+      query: "zzzz",
+      allDatasources: [appDatasource, otherDatasource],
+      recentlyUsedDSMap: {},
+      canCreateActions: true,
+      canCreateDatasource: true,
+    });
 
     expect(fileOptions[0]).toEqual(
       expect.objectContaining({
         title: "New datasource",
+      }),
+    );
+  });
+
+  it("should not show new js object option if disableJSObjectCreation is true", () => {
+    const fileOptions = useFilteredAndSortedFileOperations({
+      query: "new js",
+      allDatasources: [],
+      recentlyUsedDSMap: {},
+      canCreateActions: true,
+      canCreateDatasource: true,
+      disableJSObjectCreation: true,
+    });
+
+    expect(fileOptions.length).toEqual(1);
+    expect(fileOptions[0]).toEqual(
+      expect.objectContaining({
+        title: "New datasource",
+      }),
+    );
+  });
+
+  it("should show new js object option if disableJSObjectCreation is false", () => {
+    const fileOptions = useFilteredAndSortedFileOperations({
+      query: "new js",
+      allDatasources: [],
+      recentlyUsedDSMap: {},
+      canCreateActions: true,
+      canCreateDatasource: true,
+      disableJSObjectCreation: false,
+    });
+
+    expect(fileOptions.length).toEqual(2);
+    expect(fileOptions[0]).toEqual(
+      expect.objectContaining({
+        title: "New JS Object",
+      }),
+    );
+  });
+
+  it("should show new js object option if disableJSObjectCreation is not set", () => {
+    const fileOptions = useFilteredAndSortedFileOperations({
+      query: "new js",
+      allDatasources: [],
+      recentlyUsedDSMap: {},
+      canCreateActions: true,
+      canCreateDatasource: true,
+      disableJSObjectCreation: false,
+    });
+
+    expect(fileOptions.length).toEqual(2);
+    expect(fileOptions[0]).toEqual(
+      expect.objectContaining({
+        title: "New JS Object",
       }),
     );
   });

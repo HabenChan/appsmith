@@ -2,8 +2,8 @@ import React from "react";
 import styled from "styled-components";
 import type { ControlData, ControlProps } from "./BaseControl";
 import BaseControl from "./BaseControl";
-import type { SegmentedControlOption } from "design-system";
-import { SegmentedControl } from "design-system";
+import type { SegmentedControlOption } from "@appsmith/ads";
+import { SegmentedControl } from "@appsmith/ads";
 import type { DSEventDetail } from "utils/AppsmithUtils";
 import {
   DSEventTypes,
@@ -12,8 +12,16 @@ import {
 } from "utils/AppsmithUtils";
 
 const StyledSegmentedControl = styled(SegmentedControl)`
+  &.ads-v2-segmented-control {
+    gap: 0;
+  }
+
   > .ads-v2-segmented-control__segments-container {
-    flex: 1 1 0%;
+    flex: 1 1 auto;
+  }
+
+  > .ads-v2-segmented-control__segments-container:has(.ads-v2-text) span {
+    padding: 0;
   }
 `;
 
@@ -53,13 +61,7 @@ class IconTabControl extends BaseControl<IconTabControlProps> {
   };
 
   selectOption = (value: string, isUpdatedViaKeyboard = false) => {
-    if (this.props.propertyValue === value) {
-      this.updateProperty(
-        this.props.propertyName,
-        this.props.defaultValue,
-        isUpdatedViaKeyboard,
-      );
-    } else {
+    if (this.props.propertyValue !== value) {
       this.updateProperty(this.props.propertyName, value, isUpdatedViaKeyboard);
     }
   };
@@ -71,7 +73,7 @@ class IconTabControl extends BaseControl<IconTabControlProps> {
         onChange={this.selectOption}
         options={this.props.options}
         ref={this.componentRef}
-        value={this.props.propertyValue}
+        value={this.props.propertyValue || this.props.defaultValue}
       />
     );
   }
@@ -80,6 +82,8 @@ class IconTabControl extends BaseControl<IconTabControlProps> {
     return "ICON_TABS";
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static canDisplayValueInUI(config: ControlData, value: any): boolean {
     if (
       (config as IconTabControlProps)?.options
@@ -87,6 +91,7 @@ class IconTabControl extends BaseControl<IconTabControlProps> {
         .includes(value)
     )
       return true;
+
     return false;
   }
 }

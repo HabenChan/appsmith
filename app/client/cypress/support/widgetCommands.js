@@ -1,9 +1,10 @@
 /* eslint-disable cypress/no-unnecessary-waiting */
 /* eslint-disable cypress/no-assigning-return-values */
 
+import PageList from "./Pages/PageList";
+
 require("cy-verify-downloads").addCustomCommand();
 require("cypress-file-upload");
-const pages = require("../locators/Pages.json");
 const commonlocators = require("../locators/commonlocators.json");
 const modalWidgetPage = require("../locators/ModalWidget.json");
 const widgetsPage = require("../locators/Widgets.json");
@@ -12,9 +13,9 @@ const formWidgetsPage = require("../locators/FormWidgets.json");
 const apiwidget = require("../locators/apiWidgetslocator.json");
 const dynamicInputLocators = require("../locators/DynamicInput.json");
 const viewWidgetsPage = require("../locators/ViewWidgets.json");
-const generatePage = require("../locators/GeneratePage.json");
 import { ObjectsRegistry } from "../support/Objects/Registry";
 import { TABLE_COLUMN_ORDER_KEY } from "./Constants";
+import { EntityItems } from "./Pages/AssertHelper";
 
 let pageidcopy = " ";
 
@@ -140,7 +141,7 @@ Cypress.Commands.add("createModal", (ModalName, property) => {
   cy.wait(2000);
   cy.get(modalWidgetPage.createModalButton).click({ force: true });
   cy.wait(3000);
-  cy.assertPageSave();
+  agHelper.AssertAutoSave();
   // changing the model name verify
   // cy.widgetText(
   //   ModalName,
@@ -152,46 +153,17 @@ Cypress.Commands.add("createModal", (ModalName, property) => {
   // cy.get(modalWidgetPage.modalWidget + " " + widgetsPage.textWidget)
   //   .first()
   //   .trigger("mouseover");
-
-  ee.SelectEntityInModal("Modal1", "Widgets");
+  cy.get(widgetsPage.modalWidget)
+    .find(widgetsPage.textWidget)
+    .first()
+    .click({ force: true });
 
   //cy.get(".t--modal-widget" +" "+ widgetsPage.textWidget).click();
   cy.testCodeMirror(ModalName);
   cy.moveToStyleTab();
   cy.xpath(widgetsPage.textCenterAlign).first().click({ force: true });
-  cy.assertPageSave();
+  agHelper.AssertAutoSave();
   cy.get(".bp3-overlay-backdrop").last().click({ force: true });
-});
-
-Cypress.Commands.add("createModalWithIndex", (ModalName, index) => {
-  cy.get(widgetsPage.actionSelect).eq(index).click({ force: true });
-  cy.selectOnClickOption("Open modal");
-  cy.get(modalWidgetPage.selectModal).click();
-  cy.wait(2000);
-  cy.get(modalWidgetPage.createModalButton).click({ force: true });
-  cy.wait(3000);
-  cy.assertPageSave();
-  // changing the model name verify
-  // cy.widgetText(
-  //   ModalName,
-  //   modalWidgetPage.modalName,
-  //   modalWidgetPage.modalName,
-  // );
-
-  //cy.wait(20000);
-  //changing the Model label
-  // cy.get(modalWidgetPage.modalWidget + " " + widgetsPage.textWidget)
-  //   .first()
-  //   .trigger("mouseover");
-
-  ee.SelectEntityInModal("Modal1", "Widgets");
-
-  //cy.get(".t--modal-widget" +" "+ widgetsPage.textWidget).click();
-  cy.testCodeMirror(ModalName);
-  cy.moveToStyleTab();
-  cy.xpath(widgetsPage.textCenterAlign).first().click({ force: true });
-  cy.assertPageSave();
-  cy.get(".bp3-overlay-backdrop").click({ force: true });
 });
 
 Cypress.Commands.add("selectOnClickOption", (option) => {
@@ -214,14 +186,14 @@ Cypress.Commands.add("CheckWidgetProperties", (checkboxCss) => {
   cy.get(checkboxCss).check({
     force: true,
   });
-  cy.assertPageSave();
+  agHelper.AssertAutoSave();
 });
 
 Cypress.Commands.add("UncheckWidgetProperties", (checkboxCss) => {
   cy.get(checkboxCss).uncheck({
     force: true,
   });
-  cy.assertPageSave();
+  agHelper.AssertAutoSave();
 });
 
 Cypress.Commands.add("EditWidgetPropertiesUsingJS", (checkboxCss, inputJS) => {
@@ -230,7 +202,7 @@ Cypress.Commands.add("EditWidgetPropertiesUsingJS", (checkboxCss, inputJS) => {
     .should("exist")
     .dblclick({ force: true })
     .type(inputJS);
-  cy.assertPageSave();
+  agHelper.AssertAutoSave();
 });
 
 Cypress.Commands.add(
@@ -256,7 +228,7 @@ Cypress.Commands.add("verifyUpdatedWidgetName", (text, txtToVerify) => {
     .click({ force: true })
     .type(text)
     .type("{enter}");
-  cy.assertPageSave();
+  agHelper.AssertAutoSave();
   if (!txtToVerify) cy.get(".editable-text-container").contains(text);
   else cy.get(".editable-text-container").contains(txtToVerify);
   cy.wait(2000); //for widget name to reflect!
@@ -865,10 +837,10 @@ Cypress.Commands.add("selectWidgetForReset", (value) => {
 });
 
 Cypress.Commands.add("SetDateToToday", () => {
-  cy.get(".react-datepicker .react-datepicker__day--today").click({
+  cy.get("button:contains('Today')").click({
     force: true,
   });
-  cy.assertPageSave();
+  agHelper.AssertAutoSave();
 });
 
 Cypress.Commands.add("enterActionValue", (value, property) => {
@@ -944,7 +916,7 @@ Cypress.Commands.add("enterNavigatePageName", (value) => {
 
 Cypress.Commands.add("ClearDate", () => {
   cy.get(".t--property-control-defaultdate input").clear();
-  cy.assertPageSave();
+  agHelper.AssertAutoSave();
 });
 
 Cypress.Commands.add("ClearDateFooter", () => {
@@ -960,34 +932,22 @@ Cypress.Commands.add("DeleteModal", () => {
 });
 
 Cypress.Commands.add("Createpage", (pageName, navigateToCanvasPage = true) => {
-  let pageId;
-  cy.CreatePage();
-  cy.wait("@createPage").then((xhr) => {
-    expect(xhr.response.body.responseMeta.status).to.equal(201);
+  PageList.AddNewPage().then((oldPageName) => {
     if (pageName) {
-      pageId = xhr.response.body.data.id;
       cy.wait(2000);
-      cy.get(`div[id=entity-${pageId}] .t--context-menu`).click({
-        force: true,
-      });
-      cy.get(pages.editName).click({ force: true });
-      cy.get(pages.editInput).type(pageName + "{enter}");
-      cy.wrap(pageId).as("currentPageId");
+      ee.RenameEntityFromExplorer(
+        oldPageName,
+        pageName,
+        false,
+        EntityItems.Page,
+      );
     }
     cy.get("#loading").should("not.exist");
   });
-});
-
-Cypress.Commands.add("Deletepage", (Pagename) => {
-  cy.CheckAndUnfoldEntityItem("Pages");
-  cy.get(`.t--entity-item:contains(${Pagename})`).within(() => {
-    cy.get(".t--context-menu").click({ force: true });
+  cy.get("@createPage").then((xhr) => {
+    const pageId = xhr.response.body.data.id;
+    cy.wrap(pageId).as("currentPageId");
   });
-  cy.wait(2000);
-  cy.selectAction("Delete");
-  cy.selectAction("Are you sure?");
-  cy.wait("@deletePage");
-  cy.get("@deletePage").should("have.property", "status", 200);
 });
 
 Cypress.Commands.add("dropdownDynamic", (text) => {
@@ -1043,7 +1003,9 @@ Cypress.Commands.add("selectTxtSize", (text) => {
 
 Cypress.Commands.add("getAlert", (eventName, value = "hello") => {
   cy.get(`.t--add-action-${eventName}`).scrollIntoView().click({ force: true });
-  cy.get('.single-select:contains("Show alert")').click({ force: true });
+  cy.get('.single-select:contains("Show alert")')
+    .click({ force: true })
+    .wait(500);
   agHelper.EnterActionValue("Message", value);
   cy.get(".t--open-dropdown-Select-type").click({ force: true });
   cy.get(".bp3-popover-content .bp3-menu li")
@@ -1054,13 +1016,6 @@ Cypress.Commands.add("getAlert", (eventName, value = "hello") => {
     0,
     true,
   );
-});
-
-Cypress.Commands.add("togglebar", (value) => {
-  cy.get(value).check({ force: true }).should("be.checked");
-});
-Cypress.Commands.add("togglebarDisable", (value) => {
-  cy.get(value).uncheck({ force: true }).should("not.checked");
 });
 
 Cypress.Commands.add("addQueryFromLightningMenu", (QueryName) => {
@@ -1084,7 +1039,7 @@ Cypress.Commands.add(
 Cypress.Commands.add("radioInput", (index, text) => {
   cy.get(widgetsPage.RadioInput)
     .eq(index)
-    .click({ force: true })
+    .focus()
     .clear({ force: true })
     .type(text)
     .wait(200);
@@ -1144,21 +1099,14 @@ Cypress.Commands.add(
 );
 
 Cypress.Commands.add("openPropertyPaneCopy", (widgetType) => {
-  if (widgetType === "List1Copy") {
-    cy.SearchEntityandOpen(widgetType);
-  } else {
-    const selector = `.t--draggable-${widgetType}`;
-    cy.get(selector).last().trigger("mouseover", { force: true }).wait(500);
-    cy.get(`${selector}:first-of-type`)
-      .first()
-      .click({ force: true })
-      .wait(500);
-    cy.get(".t--widget-propertypane-toggle > .t--widget-name")
-      .first()
-      .click({ force: true });
-    // eslint-disable-next-line cypress/no-unnecessary-waiting
-    cy.wait(1000);
-  }
+  const selector = `.t--draggable-${widgetType}`;
+  cy.get(selector).last().trigger("mouseover", { force: true }).wait(500);
+  cy.get(`${selector}:first-of-type`).first().click({ force: true }).wait(500);
+  cy.get(".t--widget-propertypane-toggle > .t--widget-name")
+    .first()
+    .click({ force: true });
+  // eslint-disable-next-line cypress/no-unnecessary-waiting
+  cy.wait(1000);
 });
 
 Cypress.Commands.add("copyWidget", (widget, widgetLocator) => {
@@ -1225,7 +1173,7 @@ Cypress.Commands.add("ExportVerify", (togglecss, name) => {
   cy.get(".t--draggable-tablewidget button")
     .invoke("attr", "aria-label")
     .should("contain", name);
-  cy.togglebarDisable(togglecss);
+  agHelper.CheckUncheck(togglecss, false);
 });
 
 Cypress.Commands.add("getTableDataSelector", (rowNum, colNum) => {
@@ -1375,16 +1323,6 @@ Cypress.Commands.add("clearPropertyValue", (value) => {
   // eslint-disable-next-line cypress/no-unnecessary-waiting
   cy.wait(1000);
 });
-Cypress.Commands.add("deleteQueryOrJS", (Action) => {
-  cy.CheckAndUnfoldEntityItem("Queries/JS");
-  cy.get(`.t--entity-item:contains(${Action})`).within(() => {
-    cy.get(".t--context-menu").click({ force: true });
-  });
-  cy.selectAction("Delete");
-  cy.selectAction("Are you sure?");
-  cy.wait("@deleteAction");
-  cy.get("@deleteAction").should("have.property", "status", 200);
-});
 Cypress.Commands.add(
   "validateNSelectDropdown",
   (ddTitle, currentValue, newValue) => {
@@ -1411,8 +1349,14 @@ Cypress.Commands.add("EnableAllCodeEditors", () => {
   cy.get(commonlocators.lazyCodeEditorFallback, { timeout: 60000 }).should(
     "not.exist",
   );
-  cy.get(commonlocators.lazyCodeEditorRendered).each(($el) => {
-    cy.wrap($el).find(".CodeMirror").should("exist");
+  // Code editors might not always be present on the page, so we need to check for their existence first
+  // (https://docs.cypress.io/guides/core-concepts/conditional-testing#Element-existence)
+  cy.get("body").then(($body) => {
+    if ($body.find(commonlocators.lazyCodeEditorRendered).length === 0) return;
+
+    return cy.get(commonlocators.lazyCodeEditorRendered).each(($el) => {
+      cy.wrap($el).find(".CodeMirror").should("exist");
+    });
   });
 });
 
@@ -1440,6 +1384,7 @@ Cypress.Commands.add("editTableCell", (x, y) => {
   cy.get(`[data-colindex="${x}"][data-rowindex="${y}"] .t--editable-cell-icon`)
     .invoke("show")
     .click({ force: true });
+  cy.wait(500);
   cy.get(
     `[data-colindex="${x}"][data-rowindex="${y}"] .t--inlined-cell-editor input.bp3-input`,
   ).should("exist");
@@ -1454,12 +1399,6 @@ Cypress.Commands.add("editTableSelectCell", (x, y) => {
   );
 });
 
-Cypress.Commands.add("makeColumnEditable", (column) => {
-  cy.get(
-    `[data-rbd-draggable-id="${column}"] .t--card-checkbox input+span`,
-  ).click();
-});
-
 Cypress.Commands.add("enterTableCellValue", (x, y, text) => {
   cy.get(
     `[data-colindex="${x}"][data-rowindex="${y}"] .t--inlined-cell-editor input.bp3-input`,
@@ -1472,7 +1411,8 @@ Cypress.Commands.add("enterTableCellValue", (x, y, text) => {
       `[data-colindex="${x}"][data-rowindex="${y}"] .t--inlined-cell-editor input.bp3-input`,
     )
       .focus()
-      .type(text);
+      .type(text)
+      .wait(500);
   }
 });
 
@@ -1492,6 +1432,16 @@ Cypress.Commands.add("saveTableRow", (x, y) => {
   cy.get(
     `[data-colindex="${x}"][data-rowindex="${y}"] button span:contains('Save')`,
   ).click({ force: true });
+});
+
+Cypress.Commands.add("AssertTableRowSavable", (x, y) => {
+  cy.get(
+    `[data-colindex="${x}"][data-rowindex="${y}"] button span:contains('Save')`,
+  ).should("exist");
+
+  cy.get(
+    `[data-colindex="${x}"][data-rowindex="${y}"] button span:contains('Save')`,
+  ).should("not.be.disabled");
 });
 
 Cypress.Commands.add("discardTableRow", (x, y) => {
@@ -1648,6 +1598,7 @@ Cypress.Commands.add(
   },
 );
 Cypress.Commands.add("findAndExpandEvaluatedTypeTitle", () => {
+  cy.wait(2500); //for eval popup to open
   cy.get(commonlocators.evaluatedTypeTitle).first().next().find("span").click();
 });
 

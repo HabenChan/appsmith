@@ -1,12 +1,12 @@
 import React from "react";
 import clsx from "classnames";
-import { Text, Tag } from "design-system";
+import { Text, Tag } from "@appsmith/ads";
 import { ActionCreatorContext } from "../..";
 import { AppsmithFunction } from "../../constants";
 import type { TActionBlock, VariantType } from "../../types";
 import { getActionInfo } from "../ActionBlockTree/utils";
 
-type TActionCardProps = {
+interface TActionCardProps {
   onSelect: () => void;
   selected: boolean;
   actionBlock: TActionBlock;
@@ -15,7 +15,7 @@ type TActionCardProps = {
   showCallbacks?: boolean;
   id: string;
   level: number;
-};
+}
 
 function ActionCard(props: TActionCardProps) {
   const actionBlock = props.actionBlock;

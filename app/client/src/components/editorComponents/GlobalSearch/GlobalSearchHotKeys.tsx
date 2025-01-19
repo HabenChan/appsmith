@@ -2,7 +2,7 @@ import React from "react";
 import { Hotkey, Hotkeys, HotkeysTarget } from "@blueprintjs/core";
 import type { SearchItem, SelectEvent } from "./utils";
 
-type Props = {
+interface Props {
   modalOpen: boolean;
   toggleShow: () => void;
   handleUpKey: () => void;
@@ -13,7 +13,8 @@ type Props = {
     source?: string,
   ) => void;
   children: React.ReactNode;
-};
+}
+
 @HotkeysTarget
 class GlobalSearchHotKeys extends React.Component<Props> {
   get hotKeysConfig() {
@@ -37,7 +38,10 @@ class GlobalSearchHotKeys extends React.Component<Props> {
       {
         combo: "return",
         onKeyDown: (event: KeyboardEvent) => {
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const activeElement = document.activeElement as any;
+
           activeElement?.blur(); // scroll into view doesn't work with the search input focused
           this.props.handleItemLinkClick(event, null, "ENTER_KEY");
         },

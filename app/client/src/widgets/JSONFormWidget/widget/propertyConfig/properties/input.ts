@@ -8,12 +8,18 @@ import { ISDCodeDropdownOptions } from "widgets/PhoneInputWidget/component/ISDCo
 import type { JSONFormWidgetProps } from "../..";
 import type { ValidationResponse } from "constants/WidgetValidation";
 import { ValidationTypes } from "constants/WidgetValidation";
-import { ICON_NAMES } from "widgets/constants";
+import { ICON_NAMES } from "WidgetProvider/constants";
 
 function defaultValueValidation(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   props: JSONFormWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lodash: any,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
   propertyPath: string,
 ): ValidationResponse {
@@ -81,6 +87,7 @@ function defaultValueValidation(
 
   let parsed = value;
   let isValid = lodash.isString(parsed);
+
   if (!isValid) {
     try {
       parsed = lodash.toString(parsed);
@@ -107,9 +114,15 @@ function defaultValueValidation(
 }
 
 export function minValueValidation(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   min: any,
   props: JSONFormWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lodash: any,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
   propertyPath: string,
 ) {
@@ -118,6 +131,7 @@ export function minValueValidation(
   const schemaItem = lodash.get(props, parentPath);
   const max = schemaItem.maxNum;
   const value = min;
+
   min = Number(min);
 
   if (lodash?.isNil(value) || value === "") {
@@ -158,9 +172,15 @@ export function minValueValidation(
 }
 
 export function maxValueValidation(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   max: any,
   props: JSONFormWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lodash: any,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
   propertyPath: string,
 ) {
@@ -169,6 +189,7 @@ export function maxValueValidation(
   const schemaItem = lodash.get(props, parentPath);
   const min = schemaItem.minNum;
   const value = max;
+
   max = Number(max);
 
   if (lodash?.isNil(value) || value === "") {
@@ -232,7 +253,34 @@ const PROPERTIES = {
           },
         },
         hidden: (...args: HiddenFnParams) =>
-          getSchemaItem(...args).fieldTypeNotIncludes(INPUT_TYPES),
+          getSchemaItem(...args).fieldTypeNotIncludes(INPUT_TYPES) ||
+          getSchemaItem(...args).fieldTypeMatches(FieldType.PHONE_NUMBER_INPUT),
+        dependencies: ["schema"],
+      },
+      {
+        helpText:
+          "Sets the default text of the widget. The text is updated if the default text changes",
+        propertyName: "defaultValue",
+        label: "Default value",
+        controlType: "JSON_FORM_COMPUTE_VALUE",
+        placeholderText: "(000) 000-0000",
+        isBindProperty: true,
+        isTriggerProperty: false,
+        validation: {
+          type: ValidationTypes.FUNCTION,
+          params: {
+            fn: defaultValueValidation,
+            expected: {
+              type: "string",
+              example: `(000) 000-0000`,
+              autocompleteDataType: AutocompleteDataType.STRING,
+            },
+          },
+        },
+        hidden: (...args: HiddenFnParams) =>
+          getSchemaItem(...args).fieldTypeNotMatches(
+            FieldType.PHONE_NUMBER_INPUT,
+          ),
         dependencies: ["schema"],
       },
       {
@@ -313,6 +361,22 @@ const PROPERTIES = {
           {
             label: "2",
             value: 2,
+          },
+          {
+            label: "3",
+            value: 3,
+          },
+          {
+            label: "4",
+            value: 4,
+          },
+          {
+            label: "5",
+            value: 5,
+          },
+          {
+            label: "6",
+            value: 6,
           },
         ],
         hidden: (...args: HiddenFnParams) =>
@@ -536,6 +600,7 @@ const PROPERTIES = {
         label: "Position",
         helpText: "Sets the icon position of input field",
         controlType: "ICON_TABS",
+        defaultValue: "left",
         fullWidth: false,
         options: [
           {

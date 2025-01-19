@@ -68,6 +68,7 @@ describe(".onGenerateFormClick", () => {
 
     expect(mockBatchUpdateProperties.mock.calls.length).toBe(1);
     const response = mockBatchUpdateProperties.mock.calls[0][0];
+
     expect(response.fieldLimitExceeded).toEqual(false);
     expect(response.dynamicPropertyPathList).toEqual(
       expectedDynamicPropertyPathList,
@@ -79,6 +80,7 @@ describe(".onGenerateFormClick", () => {
     const existingDynamicBindingPropertyPathList = [
       { key: "dummy.path1" },
       { key: "dummy.path2" },
+      { key: "sourceData" },
     ];
 
     const mockBatchUpdateProperties = jest.fn();
@@ -112,6 +114,7 @@ describe(".onGenerateFormClick", () => {
 
     expect(mockBatchUpdateProperties.mock.calls.length).toBe(1);
     const response = mockBatchUpdateProperties.mock.calls[0][0];
+
     expect(response.fieldLimitExceeded).toEqual(false);
     expect(response.dynamicPropertyPathList).toEqual(
       expectedDynamicPropertyPathList,
@@ -123,6 +126,7 @@ describe(".onGenerateFormClick", () => {
     const existingDynamicBindingPropertyPathList = [
       { key: "dummy.path1" },
       { key: "dummy.path2" },
+      { key: "sourceData" },
     ];
 
     const mockBatchUpdateProperties = jest.fn();
@@ -156,6 +160,7 @@ describe(".onGenerateFormClick", () => {
 
     expect(mockBatchUpdateProperties.mock.calls.length).toBe(1);
     const response = mockBatchUpdateProperties.mock.calls[0][0];
+
     expect(response.fieldLimitExceeded).toEqual(false);
     expect(response.dynamicPropertyPathList).toEqual(
       expectedDynamicPropertyPathList,

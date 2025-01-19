@@ -1,19 +1,20 @@
+import type { ApplicationVersion } from "ee/actions/applicationActions";
+import { getSnapShotAPIRoute } from "ee/constants/ApiConstants";
 import Api from "api/Api";
 import type { ApiResponse } from "api/ApiResponses";
-import type { AxiosPromise } from "axios";
+import type { AxiosProgressEvent, AxiosPromise } from "axios";
+import type { NavigationSetting, ThemeSetting } from "constants/AppConstants";
 import type { AppColorCode } from "constants/DefaultTheme";
-import type { IconNames } from "design-system";
-import type {
-  AppLayoutConfig,
-  AppPositioningTypeConfig,
-} from "reducers/entityReducers/pageListReducer";
+import type { EvaluationVersion } from "constants/EvalConstants";
+import type { IconNames } from "@appsmith/ads";
+import type { Action, BaseAction } from "entities/Action";
 import type { APP_MODE } from "entities/App";
-import type { ApplicationVersion } from "@appsmith/actions/applicationActions";
 import type { Datasource } from "entities/Datasource";
-import type { NavigationSetting } from "constants/AppConstants";
-import { getSnapShotAPIRoute } from "@appsmith/constants/ApiConstants";
-
-export type EvaluationVersion = number;
+import type {
+  LayoutSystemTypeConfig,
+  LayoutSystemTypes,
+} from "layoutSystems/types";
+import type { AppLayoutConfig } from "reducers/entityReducers/pageListReducer";
 
 export interface PublishApplicationRequest {
   applicationId: string;
@@ -28,12 +29,13 @@ export type PublishApplicationResponse = ApiResponse;
 
 export interface ApplicationPagePayload {
   id: string;
+  baseId: string;
   name: string;
   isDefault: boolean;
   slug: string;
   isHidden?: boolean;
   customSlug?: string;
-  userPermissions?: string;
+  userPermissions?: string[];
 }
 
 export type GitApplicationMetadata =
@@ -51,6 +53,7 @@ export type GitApplicationMetadata =
 
 export interface ApplicationResponsePayload {
   id: string;
+  baseId: string;
   name: string;
   workspaceId: string;
   evaluationVersion?: EvaluationVersion;
@@ -66,6 +69,7 @@ export interface ApplicationResponsePayload {
 export interface FetchApplicationPayload {
   applicationId?: string;
   pageId?: string;
+  pages?: FetchApplicationResponse;
   mode: APP_MODE;
 }
 
@@ -88,10 +92,12 @@ export interface CreateApplicationRequest {
   workspaceId: string;
   color?: AppColorCode;
   icon?: IconNames;
+  layoutSystemType: LayoutSystemTypes;
+  showNavbar?: boolean;
 }
 
 export interface SetDefaultPageRequest {
-  id: string;
+  pageId: string;
   applicationId: string;
 }
 
@@ -102,11 +108,10 @@ export interface DeleteApplicationRequest {
 export interface ForkApplicationRequest {
   applicationId: string;
   workspaceId: string;
+  editMode?: boolean;
 }
 
-export type GetAllApplicationResponse = ApiResponse<ApplicationPagePayload[]>;
-
-export type UpdateApplicationPayload = {
+export interface UpdateApplicationPayload {
   icon?: string;
   color?: string;
   name?: string;
@@ -116,10 +121,11 @@ export type UpdateApplicationPayload = {
   embedSetting?: AppEmbedSetting;
   applicationDetail?: {
     navigationSetting?: NavigationSetting;
-    appPositioning?: AppPositioningTypeConfig;
+    themeSetting?: ThemeSetting;
+    appPositioning?: LayoutSystemTypeConfig;
   };
   forkingEnabled?: boolean;
-};
+}
 
 export type UpdateApplicationRequest = UpdateApplicationPayload & {
   id: string;
@@ -160,12 +166,19 @@ export interface FetchUsersApplicationsWorkspacesResponse extends ApiResponse {
     workspaceApplications: Array<WorkspaceApplicationObject>;
     user: string;
     newReleasesCount?: string;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     releaseItems?: Array<Record<string, any>>;
   };
+}
+export interface FetchApplicationsOfWorkspaceResponse extends ApiResponse {
+  data: Array<ApplicationObject>;
 }
 export interface FetchReleaseItemsResponse extends ApiResponse {
   data: {
     newReleasesCount: string;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     releaseItems: Array<Record<string, any>>;
   };
 }
@@ -176,7 +189,7 @@ export interface FetchUnconfiguredDatasourceListResponse extends ApiResponse {
 export interface ImportApplicationRequest {
   workspaceId: string;
   applicationFile?: File;
-  progress?: (progressEvent: ProgressEvent) => void;
+  progress?: (progressEvent: AxiosProgressEvent) => void;
   onSuccessCallback?: () => void;
   appId?: string;
 }
@@ -211,13 +224,15 @@ export interface UpdateApplicationResponse {
   embedSetting: AppEmbedSetting;
   applicationDetail?: {
     navigationSetting?: NavigationSetting;
+    appPositioning?: LayoutSystemTypeConfig;
+    themeSetting?: ThemeSetting;
   };
 }
 
 export interface PageDefaultMeta {
   id: string;
   isDefault: boolean;
-  defaultPageId: string;
+  baseId: string;
   default: boolean;
 }
 
@@ -234,19 +249,54 @@ export interface DeleteNavigationLogoRequest {
 export interface snapShotApplicationRequest {
   applicationId: string;
 }
+
+export interface exportApplicationRequest {
+  actionList: string[];
+  actionCollectionList: string[];
+  customJsLib: string[];
+  datasourceList: string[];
+  widget: string;
+}
+
+export interface ImportPartialApplicationRequest {
+  workspaceId: string;
+  applicationFile: File;
+  progress?: (progressEvent: AxiosProgressEvent) => void;
+  onSuccessCallback?: () => void;
+  applicationId: string;
+  pageId: string;
+}
+
+export interface ImportBuildingBlockToApplicationRequest {
+  pageId: string;
+  applicationId: string;
+  workspaceId: string;
+  templateId: string;
+}
+
+interface ImportBuildingBlockOnPageActions extends BaseAction {
+  timeoutInMilliseconds: number;
+  pluginType: string;
+}
+
+export interface ImportBuildingBlockToApplicationResponse {
+  widgetDsl: string;
+  onPageLoadActions: ImportBuildingBlockOnPageActions[];
+  newActionList: Action[];
+  datasourceList: Datasource[];
+}
+
 export class ApplicationApi extends Api {
   static baseURL = "v1/applications";
   static publishURLPath = (applicationId: string) =>
     `/publish/${applicationId}`;
-  static createApplicationPath = (workspaceId: string) =>
-    `?workspaceId=${workspaceId}`;
   static changeAppViewAccessPath = (applicationId: string) =>
     `/${applicationId}/changeAccess`;
   static setDefaultPagePath = (request: SetDefaultPageRequest) =>
-    `${ApplicationApi.baseURL}/${request.applicationId}/page/${request.id}/makeDefault`;
-  static publishApplication(
+    `${ApplicationApi.baseURL}/${request.applicationId}/page/${request.pageId}/makeDefault`;
+  static async publishApplication(
     publishApplicationRequest: PublishApplicationRequest,
-  ): AxiosPromise<PublishApplicationResponse> {
+  ): Promise<AxiosPromise<PublishApplicationResponse>> {
     return Api.post(
       ApplicationApi.baseURL +
         ApplicationApi.publishURLPath(publishApplicationRequest.applicationId),
@@ -254,58 +304,69 @@ export class ApplicationApi extends Api {
       {},
     );
   }
-  static fetchApplications(): AxiosPromise<FetchApplicationsResponse> {
+  static async fetchApplications(): Promise<
+    AxiosPromise<FetchApplicationsResponse>
+  > {
     return Api.get(ApplicationApi.baseURL);
   }
 
-  static getAllApplication(): AxiosPromise<GetAllApplicationResponse> {
-    return Api.get(ApplicationApi.baseURL + "/new");
+  static async fetchAllApplicationsOfWorkspace(
+    workspaceId: string,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<any> {
+    return Api.get(ApplicationApi.baseURL + "/home?workspaceId=" + workspaceId);
   }
 
-  static getReleaseItems(): AxiosPromise<FetchReleaseItemsResponse> {
+  static async getReleaseItems(): Promise<
+    AxiosPromise<FetchReleaseItemsResponse>
+  > {
     return Api.get(ApplicationApi.baseURL + "/releaseItems");
   }
 
-  static fetchApplication(
+  static async fetchApplication(
     applicationId: string,
-  ): AxiosPromise<FetchApplicationResponse> {
+  ): Promise<AxiosPromise<FetchApplicationResponse>> {
     return Api.get(ApplicationApi.baseURL + "/" + applicationId);
   }
 
-  static fetchUnconfiguredDatasourceList(payload: {
+  static async fetchUnconfiguredDatasourceList(payload: {
     applicationId: string;
     workspaceId: string;
-  }): AxiosPromise<FetchUnconfiguredDatasourceListResponse> {
+  }): Promise<AxiosPromise<FetchUnconfiguredDatasourceListResponse>> {
     return Api.get(
       `${ApplicationApi.baseURL}/import/${payload.workspaceId}/datasources?defaultApplicationId=${payload.applicationId}`,
     );
   }
 
-  static fetchApplicationForViewMode(
+  static async fetchApplicationForViewMode(
     applicationId: string,
-  ): AxiosPromise<FetchApplicationResponse> {
+  ): Promise<AxiosPromise<FetchApplicationResponse>> {
     return Api.get(ApplicationApi.baseURL + `/view/${applicationId}`);
   }
 
-  static createApplication(
+  static async createApplication(
     request: CreateApplicationRequest,
-  ): AxiosPromise<PublishApplicationResponse> {
-    return Api.post(
-      ApplicationApi.baseURL +
-        ApplicationApi.createApplicationPath(request.workspaceId),
-      { name: request.name, color: request.color, icon: request.icon },
-    );
+  ): Promise<AxiosPromise<PublishApplicationResponse>> {
+    return Api.post(ApplicationApi.baseURL, {
+      workspaceId: request.workspaceId,
+      name: request.name,
+      color: request.color,
+      icon: request.icon,
+      positioningType: request.layoutSystemType,
+      showNavbar: request.showNavbar ?? null,
+    });
   }
 
-  static setDefaultApplicationPage(
+  static async setDefaultApplicationPage(
     request: SetDefaultPageRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.put(ApplicationApi.setDefaultPagePath(request));
   }
 
-  static changeAppViewAccess(
+  static async changeAppViewAccess(
     request: ChangeAppViewAccessRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.put(
       ApplicationApi.baseURL +
         ApplicationApi.changeAppViewAccessPath(request.applicationId),
@@ -313,22 +374,27 @@ export class ApplicationApi extends Api {
     );
   }
 
-  static updateApplication(
+  static async updateApplication(
     request: UpdateApplicationRequest,
-  ): AxiosPromise<ApiResponse<UpdateApplicationResponse>> {
+  ): Promise<AxiosPromise<ApiResponse<UpdateApplicationResponse>>> {
     const { id, ...rest } = request;
-    return Api.put(ApplicationApi.baseURL + "/" + id, rest);
+    const payload = {
+      ...rest,
+      currentApp: undefined,
+    };
+
+    return Api.put(ApplicationApi.baseURL + "/" + id, payload);
   }
 
-  static deleteApplication(
+  static async deleteApplication(
     request: DeleteApplicationRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.delete(ApplicationApi.baseURL + "/" + request.applicationId);
   }
 
-  static forkApplication(
+  static async forkApplication(
     request: ForkApplicationRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.post(
       ApplicationApi.baseURL +
         "/" +
@@ -338,13 +404,15 @@ export class ApplicationApi extends Api {
     );
   }
 
-  static importApplicationToWorkspace(
+  static async importApplicationToWorkspace(
     request: ImportApplicationRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     const formData = new FormData();
+
     if (request.applicationFile) {
       formData.append("file", request.applicationFile);
     }
+
     return Api.post(
       `${ApplicationApi.baseURL}/import/${request.workspaceId}${
         request.appId ? `?applicationId=${request.appId}` : ""
@@ -360,9 +428,9 @@ export class ApplicationApi extends Api {
     );
   }
 
-  static uploadNavigationLogo(
+  static async uploadNavigationLogo(
     request: UploadNavigationLogoRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     const formData = new FormData();
 
     if (request.logo) {
@@ -381,28 +449,72 @@ export class ApplicationApi extends Api {
     );
   }
 
-  static deleteNavigationLogo(
+  static async deleteNavigationLogo(
     request: DeleteNavigationLogoRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.delete(
       ApplicationApi.baseURL + "/" + request.applicationId + "/logo",
     );
   }
 
-  static createApplicationSnapShot(request: snapShotApplicationRequest) {
+  static async createApplicationSnapShot(request: snapShotApplicationRequest) {
     return Api.post(getSnapShotAPIRoute(request.applicationId));
   }
 
-  static getSnapShotDetails(request: snapShotApplicationRequest) {
+  static async getSnapShotDetails(request: snapShotApplicationRequest) {
     return Api.get(getSnapShotAPIRoute(request.applicationId));
   }
 
-  static restoreApplicationFromSnapshot(request: snapShotApplicationRequest) {
+  static async restoreApplicationFromSnapshot(
+    request: snapShotApplicationRequest,
+  ) {
     return Api.post(getSnapShotAPIRoute(request.applicationId) + "/restore");
   }
 
-  static deleteApplicationSnapShot(request: snapShotApplicationRequest) {
+  static async deleteApplicationSnapShot(request: snapShotApplicationRequest) {
     return Api.delete(getSnapShotAPIRoute(request.applicationId));
+  }
+
+  static async exportPartialApplication(
+    applicationId: string,
+    pageId: string,
+    requestBody: exportApplicationRequest,
+  ) {
+    return Api.post(
+      `${ApplicationApi.baseURL}/export/partial/${applicationId}/${pageId}`,
+      requestBody,
+      null,
+    );
+  }
+
+  static async importPartialApplication(
+    request: ImportPartialApplicationRequest,
+  ): Promise<AxiosPromise<ApiResponse>> {
+    const formData = new FormData();
+
+    if (request.applicationFile) {
+      formData.append("file", request.applicationFile);
+    }
+
+    return Api.post(
+      `${ApplicationApi.baseURL}/import/partial/${request.workspaceId}/${request.applicationId}?pageId=${request.pageId}`,
+      formData,
+      null,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: request.progress,
+      },
+    );
+  }
+
+  static async importBuildingBlockToApplication(
+    request: ImportBuildingBlockToApplicationRequest,
+  ): Promise<
+    AxiosPromise<ApiResponse<ImportBuildingBlockToApplicationResponse>>
+  > {
+    return Api.post(`${ApplicationApi.baseURL}/import/partial/block`, request);
   }
 }
 

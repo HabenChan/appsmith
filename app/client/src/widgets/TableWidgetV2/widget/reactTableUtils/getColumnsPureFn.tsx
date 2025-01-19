@@ -7,21 +7,20 @@ import {
   DEFAULT_COLUMN_WIDTH,
   DEFAULT_COLUMN_NAME,
 } from "../../constants";
-import { fetchSticky } from "../utilities";
-import type {
-  ColumnProperties,
-  ReactTableColumnProps,
-} from "../../component/Constants";
+import type { ReactTableColumnProps } from "../../component/Constants";
 import memoizeOne from "memoize-one";
 
 export type getColumns = (
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   renderCell: any,
   columnWidthMap: { [key: string]: number } | undefined,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   orderedTableColumns: any,
   componentWidth: number,
-  primaryColumns: Record<string, ColumnProperties>,
   renderMode: RenderMode,
-  widgetId: string,
+  isPreviewMode: boolean,
 ) => ReactTableColumnProps[];
 
 //TODO: (Vamsi) need to unit test this function
@@ -31,9 +30,8 @@ export const getColumnsPureFn: getColumns = (
   columnWidthMap = {},
   orderedTableColumns = [],
   componentWidth,
-  primaryColumns,
   renderMode,
-  widgetId,
+  isPreviewMode,
 ) => {
   let columns: ReactTableColumnProps[] = [];
   const hiddenColumns: ReactTableColumnProps[] = [];
@@ -41,6 +39,8 @@ export const getColumnsPureFn: getColumns = (
   let totalColumnWidth = 0;
 
   if (isArray(orderedTableColumns)) {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     orderedTableColumns.forEach((column: any) => {
       const isHidden = !column.isVisible;
 
@@ -51,6 +51,8 @@ export const getColumnsPureFn: getColumns = (
             ? column.label
             : DEFAULT_COLUMN_NAME,
         alias: column.alias,
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         accessor: (row: any) => row[column.alias],
         width: columnWidthMap[column.id] || DEFAULT_COLUMN_WIDTH,
         minWidth: COLUMN_MIN_WIDTH,
@@ -58,12 +60,13 @@ export const getColumnsPureFn: getColumns = (
         isHidden: false,
         isAscOrder: column.isAscOrder,
         isDerived: column.isDerived,
-        sticky: fetchSticky(column.id, primaryColumns, renderMode, widgetId),
+        sticky: column.sticky,
         metaProperties: {
           isHidden: isHidden,
           type: column.columnType,
           format: column.outputFormat || "",
           inputFormat: column.inputFormat || "",
+          decimals: column.decimals || 0,
         },
         columnProperties: column,
         Cell: renderCell,
@@ -91,6 +94,7 @@ export const getColumnsPureFn: getColumns = (
   }
 
   const lastColumnIndex = columns.length - 1;
+
   if (totalColumnWidth < componentWidth) {
     /*
       This "if" block is responsible for upsizing the last column width
@@ -100,6 +104,7 @@ export const getColumnsPureFn: getColumns = (
       const lastColumnWidth =
         columns[lastColumnIndex].width || DEFAULT_COLUMN_WIDTH;
       const remainingWidth = componentWidth - totalColumnWidth;
+
       // Adding the remaining width i.e. space left towards the right, to the last column width
       columns[lastColumnIndex].width = lastColumnWidth + remainingWidth;
     }
@@ -109,8 +114,12 @@ export const getColumnsPureFn: getColumns = (
       if the last column spills over resulting in horizontal scroll
     */
     const extraWidth = totalColumnWidth - componentWidth;
-    const lastColWidth = columns[lastColumnIndex].width || DEFAULT_COLUMN_WIDTH;
-    /*
+
+    if (columns[lastColumnIndex]) {
+      const lastColWidth =
+        columns[lastColumnIndex].width || DEFAULT_COLUMN_WIDTH;
+
+      /*
       Below if condition explanation:
       Condition 1: (lastColWidth > COLUMN_MIN_WIDTH)
         We will downsize the last column only if its greater than COLUMN_MIN_WIDTH
@@ -118,25 +127,36 @@ export const getColumnsPureFn: getColumns = (
         This condition checks whether the last column is the only column that is spilling over.
         If more than one columns are spilling over we won't downsize the last column
     */
-    if (lastColWidth > COLUMN_MIN_WIDTH && extraWidth < lastColWidth) {
-      const availableWidthForLastColumn = lastColWidth - extraWidth;
-      /*
+      if (lastColWidth > COLUMN_MIN_WIDTH && extraWidth < lastColWidth) {
+        const availableWidthForLastColumn = lastColWidth - extraWidth;
+
+        /*
         Below we are making sure last column width doesn't go lower than COLUMN_MIN_WIDTH again
         as availableWidthForLastColumn might go lower than COLUMN_MIN_WIDTH in some cases
       */
-      columns[lastColumnIndex].width =
-        availableWidthForLastColumn < COLUMN_MIN_WIDTH
-          ? COLUMN_MIN_WIDTH
-          : availableWidthForLastColumn;
+        columns[lastColumnIndex].width =
+          availableWidthForLastColumn < COLUMN_MIN_WIDTH
+            ? COLUMN_MIN_WIDTH
+            : availableWidthForLastColumn;
+      }
     }
   }
 
-  if (hiddenColumns.length && renderMode === RenderModes.CANVAS) {
+  /*
+   * In canvas render mode, hidden columns are rendered at the end of the table, so users can
+   * edit the hidden columns without having to make them visible first.
+   */
+  if (
+    hiddenColumns.length &&
+    renderMode === RenderModes.CANVAS &&
+    !isPreviewMode
+  ) {
     // Get the index of the first column that is frozen to right
     const rightFrozenColumnIdx = findIndex(
       columns,
       (col) => col.sticky === StickyType.RIGHT,
     );
+
     if (rightFrozenColumnIdx !== -1) {
       columns.splice(rightFrozenColumnIdx, 0, ...hiddenColumns);
     } else {
@@ -157,6 +177,7 @@ export const getMemoiseGetColumnsWithLocalStorageFn = () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     (widgetLocalStorageState) => {
       memoisedGetColumns.clear();
+
       return memoisedGetColumns as getColumns;
     },
     isEqual,

@@ -1,22 +1,10 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import DebuggerTabs from "./DebuggerTabs";
-import type { AppState } from "@appsmith/reducers";
-import {
-  setDebuggerSelectedTab,
-  setErrorCount,
-  showDebugger as showDebuggerAction,
-} from "actions/debuggerActions";
-import AnalyticsUtil from "utils/AnalyticsUtil";
-import { stopEventPropagation } from "utils/AppsmithUtils";
-import {
-  getDebuggerSelectedTab,
-  getMessageCount,
-  hideDebuggerIconSelector,
-  showDebuggerFlag,
-} from "selectors/debuggerSelectors";
-import { DEBUGGER_TAB_KEYS } from "./helpers";
-import { Button, Tooltip } from "design-system";
+import { setErrorCount } from "actions/debuggerActions";
+import { getMessageCount, showDebuggerFlag } from "selectors/debuggerSelectors";
+import { Tooltip, Button } from "@appsmith/ads";
+import useDebuggerTriggerClick from "./hooks/useDebuggerTriggerClick";
 
 function Debugger() {
   // Debugger render flag
@@ -27,55 +15,39 @@ function Debugger() {
 
 export function DebuggerTrigger() {
   const dispatch = useDispatch();
-  const showDebugger = useSelector(
-    (state: AppState) => state.ui.debugger.isOpen,
-  );
-  const selectedTab = useSelector(getDebuggerSelectedTab);
   const messageCounters = useSelector(getMessageCount);
-  const totalMessageCount = messageCounters.errors + messageCounters.warnings;
-  const hideDebuggerIcon = useSelector(hideDebuggerIconSelector);
-  dispatch(setErrorCount(totalMessageCount));
 
-  const onClick = (e: any) => {
-    // If debugger is already open and selected tab is error tab then we will close debugger.
-    if (showDebugger && selectedTab === DEBUGGER_TAB_KEYS.ERROR_TAB) {
-      dispatch(showDebuggerAction(false));
-    } else {
-      // If debugger is not open then we will open debugger and show error tab.
-      if (!showDebugger) {
-        dispatch(showDebuggerAction(true));
-      }
-      // Select error tab if debugger is open and selected tab is not error tab.
-      // And also when we are opening debugger.
-      dispatch(setDebuggerSelectedTab(DEBUGGER_TAB_KEYS.ERROR_TAB));
-    }
-    if (!showDebugger)
-      AnalyticsUtil.logEvent("OPEN_DEBUGGER", {
-        source: "CANVAS",
-      });
-    stopEventPropagation(e);
-  };
+  useEffect(() => {
+    dispatch(setErrorCount(messageCounters.errors));
+  });
+
+  const onClick = useDebuggerTriggerClick();
 
   //tooltip will always show error count as we are opening error tab on click of debugger.
   const tooltipContent =
-    totalMessageCount !== 0
-      ? `View details for ${totalMessageCount} ${
-          totalMessageCount > 1 ? "errors" : "error"
+    messageCounters.errors !== 0
+      ? `View details for ${messageCounters.errors} ${
+          messageCounters.errors > 1 ? "errors" : "error"
         }`
       : `No errors`;
 
-  if (hideDebuggerIcon) return null;
+  const countContent =
+    messageCounters.errors !== 0
+      ? messageCounters.errors > 99
+        ? "(99+)"
+        : `(${messageCounters.errors})`
+      : "";
 
   return (
     <Tooltip content={tooltipContent}>
       <Button
         className="t--debugger-count"
-        kind={totalMessageCount > 0 ? "error" : "tertiary"}
+        kind={messageCounters.errors > 0 ? "error" : "tertiary"}
         onClick={onClick}
         size="md"
-        startIcon={totalMessageCount ? "close-circle" : "close-circle-line"}
+        startIcon="debug"
       >
-        {totalMessageCount > 99 ? "99+" : totalMessageCount}
+        Debug {countContent}
       </Button>
     </Tooltip>
   );

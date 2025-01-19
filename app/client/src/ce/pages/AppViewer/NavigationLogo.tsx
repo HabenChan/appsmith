@@ -8,18 +8,21 @@ import classNames from "classnames";
 import {
   getAppMode,
   getCurrentApplication,
-} from "@appsmith/selectors/applicationSelectors";
-import type { ApplicationPayload } from "@appsmith/constants/ReduxActionConstants";
-import { getViewModePageList } from "selectors/editorSelectors";
+} from "ee/selectors/applicationSelectors";
+import type { ApplicationPayload } from "entities/Application";
+import {
+  getCurrentPageId,
+  getViewModePageList,
+} from "selectors/editorSelectors";
 import { useHref } from "pages/Editor/utils";
 import { APP_MODE } from "entities/App";
-import { builderURL, viewerURL } from "RouteBuilder";
+import { builderURL, viewerURL } from "ee/RouteBuilder";
 import { get } from "lodash";
-import { getAssetUrl } from "@appsmith/utils/airgapHelpers";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
 
-type NavigationLogoProps = {
+interface NavigationLogoProps {
   logoConfiguration: NavigationSetting["logoConfiguration"];
-};
+}
 
 const StyledImage = styled.img`
   max-width: 10rem;
@@ -37,7 +40,7 @@ function NavigationLogo(props: NavigationLogoProps) {
   const pageUrl = useHref(
     appMode === APP_MODE.PUBLISHED ? viewerURL : builderURL,
     {
-      pageId: defaultPage?.pageId,
+      basePageId: defaultPage?.basePageId,
     },
   );
   const logoAssetId = get(
@@ -45,6 +48,7 @@ function NavigationLogo(props: NavigationLogoProps) {
     "applicationDetail.navigationSetting.logoAssetId",
     "",
   );
+  const currentPageId = useSelector(getCurrentPageId);
 
   if (
     !logoAssetId?.length ||
@@ -60,7 +64,8 @@ function NavigationLogo(props: NavigationLogoProps) {
     <Link
       className={classNames({
         "mr-4": true,
-        "pointer-events-none select-none": pages.length <= 1,
+        "pointer-events-none select-none":
+          pages.length <= 1 || defaultPage.pageId === currentPageId,
       })}
       to={pageUrl}
     >

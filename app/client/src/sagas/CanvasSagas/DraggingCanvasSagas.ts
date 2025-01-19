@@ -1,49 +1,51 @@
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+} from "ee/constants/ReduxActionConstants";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { BlueprintOperationTypes } from "WidgetProvider/constants";
 import { generateAutoHeightLayoutTreeAction } from "actions/autoHeightActions";
 import type { WidgetAddChild } from "actions/pageActions";
 import { updateAndSaveLayout } from "actions/pageActions";
-import { calculateDropTargetRows } from "components/editorComponents/DropTargetUtils";
 import { CANVAS_DEFAULT_MIN_HEIGHT_PX } from "constants/AppConstants";
 import type { OccupiedSpace } from "constants/CanvasEditorConstants";
 import {
+  BUILDING_BLOCK_EXPLORER_TYPE,
   GridDefaults,
   MAIN_CONTAINER_WIDGET_ID,
 } from "constants/WidgetConstants";
+import { toast } from "@appsmith/ads";
+import { updateRelationships } from "layoutSystems/autolayout/utils/autoLayoutDraggingUtils";
+import type { WidgetDraggingUpdateParams } from "layoutSystems/common/canvasArenas/ArenaTypes";
+import { calculateDropTargetRows } from "layoutSystems/common/dropTarget/DropTargetUtils";
+import { LayoutSystemTypes } from "layoutSystems/types";
 import { cloneDeep } from "lodash";
 import log from "loglevel";
-import type { WidgetDraggingUpdateParams } from "pages/common/CanvasArenas/hooks/useBlocksToBeDraggedOnCanvas";
 import type {
   CanvasWidgetsReduxState,
   FlattenedWidgetProps,
 } from "reducers/entityReducers/canvasWidgetsReducer";
-import { AppPositioningTypes } from "reducers/entityReducers/pageListReducer";
 import type { MainCanvasReduxState } from "reducers/uiReducers/mainCanvasReducer";
 import { all, call, put, select, takeLatest } from "redux-saga/effects";
-import { getWidget, getWidgets, getWidgetsMeta } from "sagas/selectors";
+import { addAndMoveBuildingBlockToCanvasSaga } from "sagas/BuildingBlockSagas/BuildingBlockAdditionSagas";
 import { getUpdateDslAfterCreatingChild } from "sagas/WidgetAdditionSagas";
 import {
   executeWidgetBlueprintBeforeOperations,
   traverseTreeAndExecuteBlueprintChildOperations,
 } from "sagas/WidgetBlueprintSagas";
+import { getWidget, getWidgets, getWidgetsMeta } from "sagas/selectors";
 import {
   getCanvasWidth,
-  getCurrentAppPositioningType,
   getIsAutoLayoutMobileBreakPoint,
   getMainCanvasProps,
   getOccupiedSpacesSelectorForContainer,
 } from "selectors/editorSelectors";
-import AnalyticsUtil from "utils/AnalyticsUtil";
-import { updateRelationships } from "utils/autoLayout/autoLayoutDraggingUtils";
+import { getLayoutSystemType } from "selectors/layoutSystemSelectors";
 import { collisionCheckPostReflow } from "utils/reflowHookUtils";
 import type { WidgetProps } from "widgets/BaseWidget";
-import { BlueprintOperationTypes } from "widgets/constants";
-import { toast } from "design-system";
 
-export type WidgetMoveParams = {
+export interface WidgetMoveParams {
   widgetId: string;
   leftColumn: number;
   topRow: number;
@@ -59,7 +61,7 @@ export type WidgetMoveParams = {
   allWidgets: CanvasWidgetsReduxState;
   position?: number;
   useAutoLayout?: boolean;
-};
+}
 
 export function* getCanvasSizeAfterWidgetMove(
   canvasWidgetId: string,
@@ -71,22 +73,25 @@ export function* getCanvasSizeAfterWidgetMove(
   //get mainCanvas's minHeight if the canvasWidget is mianCanvas
   let mainCanvasMinHeight;
   let canvasParentMinHeight = canvasWidget.minHeight;
+
   if (canvasWidgetId === MAIN_CONTAINER_WIDGET_ID) {
-    const mainCanvasProps: MainCanvasReduxState = yield select(
-      getMainCanvasProps,
-    );
+    const mainCanvasProps: MainCanvasReduxState =
+      yield select(getMainCanvasProps);
+
     mainCanvasMinHeight = mainCanvasProps?.height;
   } else if (canvasWidget.parentId) {
     const parent: FlattenedWidgetProps = yield select(
       getWidget,
       canvasWidget.parentId,
     );
+
     if (!parent.detachFromLayout) {
       canvasParentMinHeight =
         (parent.bottomRow - parent.topRow) *
         GridDefaults.DEFAULT_GRID_ROW_HEIGHT;
     }
   }
+
   if (canvasWidget) {
     const occupiedSpacesByChildren: OccupiedSpace[] | undefined = yield select(
       getOccupiedSpacesSelectorForContainer(canvasWidgetId),
@@ -122,6 +127,7 @@ export function* getCanvasSizeAfterWidgetMove(
       // erstwhile: Math.round((rows * props.snapRowSpace) / props.parentRowSpace),
       return newBottomRow;
     }
+
     return canvasWidget.bottomRow;
   }
 }
@@ -137,19 +143,36 @@ const getBottomMostRowAfterMove = (
   const widgetBottomRow =
     updateWidgetParams.payload.topRow +
     (updateWidgetParams.payload.rows || widget.bottomRow - widget.topRow);
+
   return widgetBottomRow;
 };
 
-function* addWidgetAndMoveWidgetsSaga(
+function* addAndMoveUIEntitySaga(
   actionPayload: ReduxAction<{
     newWidget: WidgetAddChild;
     draggedBlocksToUpdate: WidgetDraggingUpdateParams[];
     canvasId: string;
   }>,
 ) {
+  if (actionPayload.payload.newWidget.type === BUILDING_BLOCK_EXPLORER_TYPE) {
+    yield call(addAndMoveBuildingBlockToCanvasSaga, actionPayload);
+  } else {
+    yield call(addWidgetAndMoveWidgetsSaga, actionPayload);
+  }
+}
+
+export function* addWidgetAndMoveWidgetsSaga(
+  actionPayload: ReduxAction<{
+    newWidget: WidgetAddChild;
+    draggedBlocksToUpdate: WidgetDraggingUpdateParams[];
+    canvasId: string;
+    shouldReplay?: boolean;
+  }>,
+) {
   const start = performance.now();
 
   const { canvasId, draggedBlocksToUpdate, newWidget } = actionPayload.payload;
+
   try {
     const updatedWidgetsOnAddAndMove: CanvasWidgetsReduxState = yield call(
       addWidgetAndMoveWidgets,
@@ -157,6 +180,7 @@ function* addWidgetAndMoveWidgetsSaga(
       draggedBlocksToUpdate,
       canvasId,
     );
+
     if (
       !collisionCheckPostReflow(
         updatedWidgetsOnAddAndMove,
@@ -166,7 +190,12 @@ function* addWidgetAndMoveWidgetsSaga(
     ) {
       throw Error;
     }
-    yield put(updateAndSaveLayout(updatedWidgetsOnAddAndMove));
+
+    yield put(
+      updateAndSaveLayout(updatedWidgetsOnAddAndMove, {
+        shouldReplay: actionPayload.payload.shouldReplay,
+      }),
+    );
     yield put(generateAutoHeightLayoutTreeAction(true, true));
     yield put({
       type: ReduxActionTypes.RECORD_RECENTLY_ADDED_WIDGET,
@@ -179,12 +208,11 @@ function* addWidgetAndMoveWidgetsSaga(
       payload: {
         action: ReduxActionTypes.WIDGETS_ADD_CHILD_AND_MOVE,
         error,
+        logToDebugger: true,
       },
     });
   }
 }
-
-// function* update
 
 function* addWidgetAndMoveWidgets(
   newWidget: WidgetAddChild,
@@ -220,7 +248,9 @@ function* addWidgetAndMoveWidgets(
   const updatedWidgets = {
     ...updatedWidgetsOnMove,
   };
+
   updatedWidgets[canvasId].bottomRow = bottomMostRow;
+
   return updatedWidgets;
 }
 
@@ -249,8 +279,10 @@ function* moveAndUpdateWidgets(
     movedWidgetIds,
     bottomMostRowAfterMove,
   );
+
   if (updatedCanvasBottomRow) {
     const canvasWidget = updatedWidgets[canvasId];
+
     updatedWidgets[canvasId] = {
       ...canvasWidget,
       bottomRow: updatedCanvasBottomRow,
@@ -258,6 +290,7 @@ function* moveAndUpdateWidgets(
   }
 
   const widgetPayload = draggedBlocksToUpdate?.[0]?.updateWidgetParams?.payload;
+
   //execute blueprint sagas when moving to a different canvas
   if (widgetPayload && widgetPayload.newParentId !== widgetPayload.parentId) {
     // some widgets need to update property of parent if the parent have CHILD_OPERATIONS
@@ -269,6 +302,7 @@ function* moveAndUpdateWidgets(
       movedWidgetIds,
       updatedWidgets,
     );
+
     return modifiedWidgets;
   }
 
@@ -303,6 +337,7 @@ function getParentWidgetType(
     // Now take the parent of canvas1 that is listWidget
     if (containerParent.parentId) {
       const mainParent = allWidgets[containerParent.parentId];
+
       return mainParent.type;
     }
   }
@@ -319,6 +354,7 @@ function* moveWidgetsSaga(
   const start = performance.now();
 
   const { canvasId, draggedBlocksToUpdate } = actionPayload.payload;
+
   try {
     const allWidgets: CanvasWidgetsReduxState = yield select(getWidgets);
 
@@ -335,18 +371,21 @@ function* moveWidgetsSaga(
       );
     }
 
-    const appPositioningType: AppPositioningTypes = yield select(
-      getCurrentAppPositioningType,
-    );
+    const layoutSystemType: LayoutSystemTypes =
+      yield select(getLayoutSystemType);
     let updatedWidgets: CanvasWidgetsReduxState = { ...allWidgets };
-    if (appPositioningType === AppPositioningTypes.AUTO) {
+
+    if (layoutSystemType === LayoutSystemTypes.AUTO) {
       /**
-       * If previous parent is an auto layout container,
+       * If previous parent is an auto-layout container,
        * then update the flex layers.
        */
       const isMobile: boolean = yield select(getIsAutoLayoutMobileBreakPoint);
       const mainCanvasWidth: number = yield select(getCanvasWidth);
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const metaProps: Record<string, any> = yield select(getWidgetsMeta);
+
       updatedWidgets = updateRelationships(
         draggedBlocksToUpdate.map((block) => block.widgetId),
         updatedWidgets,
@@ -357,6 +396,7 @@ function* moveWidgetsSaga(
         metaProps,
       );
     }
+
     const updatedWidgetsOnMove: CanvasWidgetsReduxState = yield call(
       moveAndUpdateWidgets,
       updatedWidgets,
@@ -388,6 +428,7 @@ function* moveWidgetsSaga(
     AnalyticsUtil.logEvent("WIDGET_DRAG", {
       widgets: draggedBlocksToUpdate.map((block) => {
         const widget = allWidgets[block.widgetId];
+
         return {
           widgetType: widget.type,
           widgetName: widget.widgetName,
@@ -405,6 +446,7 @@ function* moveWidgetsSaga(
       payload: {
         action: ReduxActionTypes.WIDGETS_MOVE,
         error,
+        logToDebugger: true,
       },
     });
   }
@@ -439,17 +481,21 @@ function moveWidget(widgetMoveParams: WidgetMoveParams) {
     leftColumn,
     rightColumn,
   };
+
   widget = { ...widget, ...updatedPosition };
 
   // Replace widget with update widget props
   widgets[widgetId] = widget;
+
   // If the parent has changed i.e parentWidgetId is not parent.widgetId
   if (parent.widgetId !== newParentId && widgetId !== newParentId) {
     // Remove from the previous parent
 
     if (parent.children && Array.isArray(parent.children)) {
       const indexOfChild = parent.children.indexOf(widgetId);
+
       if (indexOfChild > -1) delete parent.children[indexOfChild];
+
       parent.children = parent.children.filter(Boolean);
     }
 
@@ -462,9 +508,11 @@ function moveWidget(widgetMoveParams: WidgetMoveParams) {
         ? [...(widgets[newParentId].children || []), widgetId]
         : [widgetId],
     };
+
     widgets[widgetId].parentId = newParentId;
     widgets[newParentId] = newParent;
   }
+
   return widgets;
 }
 
@@ -473,7 +521,7 @@ export default function* draggingCanvasSagas() {
     takeLatest(ReduxActionTypes.WIDGETS_MOVE, moveWidgetsSaga),
     takeLatest(
       ReduxActionTypes.WIDGETS_ADD_CHILD_AND_MOVE,
-      addWidgetAndMoveWidgetsSaga,
+      addAndMoveUIEntitySaga,
     ),
   ]);
 }

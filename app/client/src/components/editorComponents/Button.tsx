@@ -50,8 +50,8 @@ const buttonStyles = css<Partial<ButtonProps>>`
         props.skin === undefined
           ? "center"
           : props.iconAlignment === Directions.RIGHT
-          ? "space-between"
-          : "flex-start"};
+            ? "space-between"
+            : "flex-start"};
     }
   }
   ${(props) => (props.outline ? outline : "")}
@@ -81,7 +81,7 @@ const StyledAnchorButton = styled(
   ${buttonStyles}
 `;
 
-export type ButtonProps = {
+export interface ButtonProps {
   outline?: boolean;
   filled?: boolean;
   intent?: Intent;
@@ -101,7 +101,7 @@ export type ButtonProps = {
   borderRadius?: string;
   boxShadow?: string;
   boxShadowColor?: string;
-};
+}
 
 export const Button = (props: ButtonProps) => {
   const icon: IconName | undefined =
@@ -131,6 +131,7 @@ export const Button = (props: ButtonProps) => {
     skin: props.skin,
     iconAlignment: props.iconAlignment ? props.iconAlignment : undefined,
   };
+
   if (props.href) {
     return (
       <StyledAnchorButton

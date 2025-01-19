@@ -8,11 +8,7 @@ import type { Typography, TypographyKeys } from "./typography";
 import { typography } from "./typography";
 
 import type { LabelPosition } from "components/constants";
-import {
-  TABLE_SCROLLBAR_HEIGHT,
-  TABLE_SCROLLBAR_WIDTH,
-} from "widgets/TableWidgetV2/component/Constants";
-import { Icon } from "design-system";
+import { Icon } from "@appsmith/ads";
 import React from "react";
 export type FontFamily = (typeof FontFamilies)[keyof typeof FontFamilies];
 
@@ -56,6 +52,8 @@ export const truncateTextUsingEllipsis = css`
 `;
 
 export const getTypographyByKey = (
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   props: Record<string, any>,
   key: TypographyKeys,
 ) => `
@@ -332,12 +330,14 @@ export const BlueprintRadioSwitchGroupTransform = css<{
       if (alignment === Alignment.RIGHT) {
         return inline ? "inline-block" : "block";
       }
+
       return "flex";
     }};
     width: ${({ alignment, inline }) => {
       if (alignment === Alignment.RIGHT) {
         return inline ? "auto" : "100%";
       }
+
       return "auto";
     }};
     align-items: center;
@@ -369,30 +369,32 @@ const iconSizes = {
 
 type IconSizeType = typeof iconSizes;
 
-export type ThemeBorder = {
+export interface ThemeBorder {
   thickness: number;
   style: "dashed" | "solid";
   color: Color;
-};
+}
 
-type PropertyPaneTheme = {
+interface PropertyPaneTheme {
   width: number;
   height: number;
   dividerColor: Color;
   titleHeight: number;
   connectionsHeight: number;
-};
+}
 
 export type NestedObjectOrArray<T> =
   | Record<string, T | T[] | Record<string, T | T[]>>
   | T
   | T[];
-export type Theme = {
+export interface Theme {
   radii: Array<number>;
   fontSizes: Array<number>;
   drawerWidth: string;
   spaces: Array<number>;
   fontWeights: Array<number>;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   colors: any;
   typography: Typography;
   lineHeights: Array<number>;
@@ -412,6 +414,8 @@ export type Theme = {
   pageTabsHeight: string;
   integrationsPageUnusableHeight: string;
   backBanner: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   homePage: any;
   sidebarWidth: string;
   canvasBottomPadding: number;
@@ -513,7 +517,7 @@ export type Theme = {
     footerShadow: string;
     linkBg: string;
   };
-};
+}
 
 export const getColorWithOpacity = (color: Color, opacity: number) => {
   color = color.slice(1);
@@ -521,45 +525,24 @@ export const getColorWithOpacity = (color: Color, opacity: number) => {
   const r = (val >> 16) & 255;
   const g = (val >> 8) & 255;
   const b = val & 255;
+
   return `rgba(${r},${g},${b},${opacity})`;
 };
 
 export const getBorderCSSShorthand = (border?: ThemeBorder): string => {
   const values: string[] = [];
+
   if (border) {
     for (const [key, value] of Object.entries(border)) {
       values.push(key === "thickness" ? value + "px" : value.toString());
     }
   }
+
   return values.join(" ");
 };
 
 export const labelStyle = css`
   font-weight: ${(props) => props.theme.fontWeights[3]};
-`;
-
-export const tableScrollBars = css`
-  &::-webkit-scrollbar {
-    width: ${TABLE_SCROLLBAR_WIDTH}px;
-    height: ${TABLE_SCROLLBAR_HEIGHT}px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: var(--wds-color-bg-disabled);
-    border-radius: 10px;
-  }
-
-  &:hover {
-    &::-webkit-scrollbar-track {
-      background: var(--wds-color-bg-disabled);
-      border-radius: 10px;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: ${getColorWithOpacity(Colors.CHARCOAL, 0.5)};
-      border-radius: 10px;
-    }
-  }
 `;
 
 export const hideScrollbar = css`
@@ -665,15 +648,15 @@ const lightShades = [
 
 type ShadeColor = (typeof darkShades)[number] | (typeof lightShades)[number];
 
-type buttonVariant = {
+interface buttonVariant {
   main: string;
   light: string;
   dark: string;
   darker: string;
   darkest: string;
-};
+}
 
-type ButtonVariantColor = {
+interface ButtonVariantColor {
   primary: {
     bgColor?: Color;
     borderColor?: Color;
@@ -692,9 +675,9 @@ type ButtonVariantColor = {
     hoverColor: Color;
     textColor?: Color;
   };
-};
+}
 
-type ColorType = {
+interface ColorType {
   overlayColor: string;
   button: {
     disabledText: ShadeColor;
@@ -1096,7 +1079,11 @@ type ColorType = {
       fullForm: string;
     };
   };
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   floatingBtn: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   auth: any;
   formMessage: Record<string, Record<Intent, string>>;
   header: {
@@ -1329,7 +1316,7 @@ type ColorType = {
   settings: {
     link: string;
   };
-};
+}
 
 const editorBottomBar = {
   background: Colors.WHITE,
@@ -1343,6 +1330,7 @@ const gitSyncModal = {
   closeIcon: Colors.SCORPION,
   closeIconHover: Colors.GREY_900,
 };
+
 type GitSyncModalColors = typeof gitSyncModal;
 
 const tabItemBackgroundFill = {
@@ -3015,7 +3003,7 @@ export const theme: Theme = {
     },
   },
   actionSidePane: {
-    width: 265,
+    width: 280,
   },
   onboarding: {
     statusBarHeight: 92,

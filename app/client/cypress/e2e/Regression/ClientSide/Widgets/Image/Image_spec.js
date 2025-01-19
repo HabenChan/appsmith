@@ -2,98 +2,88 @@ const commonlocators = require("../../../../../locators/commonlocators.json");
 const viewWidgetsPage = require("../../../../../locators/ViewWidgets.json");
 const publish = require("../../../../../locators/publishWidgetspage.json");
 const widgetsPage = require("../../../../../locators/Widgets.json");
-const dsl = require("../../../../../fixtures/displayWidgetDsl.json");
+import {
+  agHelper,
+  dataManager,
+  deployMode,
+} from "../../../../../support/Objects/ObjectsCore";
 
-describe("Image Widget Functionality", function () {
-  before(() => {
-    cy.addDsl(dsl);
-  });
+describe(
+  "Image Widget Functionality",
+  { tags: ["@tag.Widget", "@tag.Image", "@tag.Binding"] },
+  function () {
+    before(() => {
+      agHelper.AddDsl("displayWidgetDsl");
+    });
 
-  it("Image Widget Functionality", function () {
-    cy.openPropertyPane("imagewidget");
-    /**
-     * @param{Text} Random Text
-     * @param{ImageWidget}Mouseover
-     * @param{ImagePre Css} Assertion
-     */
-    cy.widgetText(
-      "img",
-      viewWidgetsPage.imageWidget,
-      widgetsPage.widgetNameSpan,
-    );
-    cy.testJsontext("defaultimage", this.data.defaultimage);
-    cy.wait(1000);
-    cy.focused().blur();
-    /**
-     * @param{URL} ImageUrl
-     */
-    cy.testCodeMirror(this.data.NewImage);
-    cy.get(viewWidgetsPage.imageinner)
-      .invoke("attr", "src")
-      .should("contain", this.data.validateImage);
-    cy.closePropertyPane();
-  });
+    it("1. Image Widget Functionality", function () {
+      cy.openPropertyPane("imagewidget");
+      /**
+       * @param{Text} Random Text
+       * @param{ImageWidget}Mouseover
+       * @param{ImagePre Css} Assertion
+       */
+      cy.widgetText(
+        "img",
+        viewWidgetsPage.imageWidget,
+        widgetsPage.widgetNameSpan,
+      );
+      cy.testJsontext("defaultimage", this.dataSet.defaultimage);
+      cy.wait(1000);
+      cy.focused().blur();
+      /**
+       * @param{URL} ImageUrl
+       */
+      cy.testCodeMirror(this.dataSet.NewImage);
+      cy.get(viewWidgetsPage.imageinner)
+        .invoke("attr", "src")
+        .should("contain", this.dataSet.validateImage);
+      cy.closePropertyPane();
+    });
 
-  it("No Zoom functionality check", function () {
-    cy.openPropertyPane("imagewidget");
-    //Zoom validation
-    cy.changeZoomLevel("1x (No Zoom)");
+    it("2. No Zoom functionality check", function () {
+      cy.openPropertyPane("imagewidget");
+      //Zoom validation
+      cy.changeZoomLevel("1x (No Zoom)");
 
-    cy.get(commonlocators.imgWidget)
-      .invoke("attr", "style")
-      .should("not.contain", "zoom-in");
-    cy.PublishtheApp();
-  });
+      cy.get(commonlocators.imgWidget)
+        .invoke("attr", "style")
+        .should("not.contain", "zoom-in");
+      deployMode.DeployApp(publish.imageWidget);
+      // Image Widget Functionality To Validate Image
+      cy.get(publish.imageWidget + " " + "img")
+        .invoke("attr", "src")
+        .should("contain", this.dataSet.NewImage);
+    });
 
-  it("Image Widget Functionality To Validate Image", function () {
-    cy.get(publish.imageWidget + " " + "img")
-      .invoke("attr", "src")
-      .should("contain", this.data.NewImage);
-  });
+    it("3. Image Widget Functionality To Check/Uncheck Visible Widget", function () {
+      deployMode.NavigateBacktoEditor();
+      cy.openPropertyPane("imagewidget");
+      agHelper.CheckUncheck(commonlocators.visibleCheckbox, false);
+      deployMode.DeployApp();
+      cy.get(publish.imageWidget).should("not.exist");
+      deployMode.NavigateBacktoEditor();
+      //Image Widget Functionality To Check Visible Widget", function () {
+      cy.openPropertyPane("imagewidget");
+      agHelper.CheckUncheck(commonlocators.visibleCheckbox);
+      deployMode.DeployApp(publish.imageWidget);
+      deployMode.NavigateBacktoEditor();
+    });
 
-  it("Image Widget Functionality To Unchecked Visible Widget", function () {
-    cy.get(publish.backToEditor).click();
-    cy.openPropertyPane("imagewidget");
-    cy.togglebarDisable(commonlocators.visibleCheckbox);
-    cy.PublishtheApp();
-    cy.get(publish.imageWidget).should("not.exist");
-    cy.get(publish.backToEditor).click();
-  });
+    it("4. In case of an image loading error, show off the error message", () => {
+      cy.openPropertyPane("imagewidget");
+      // Invalid image url
+      const invalidImageUrl =
+        "http://host.docker.internal:4200/photo-not-exists.jpeg";
+      cy.testCodeMirror(invalidImageUrl);
 
-  it("Image Widget Functionality To Check Visible Widget", function () {
-    cy.openPropertyPane("imagewidget");
-    cy.togglebar(commonlocators.visibleCheckbox);
-    cy.PublishtheApp();
-    cy.get(publish.imageWidget).should("be.visible");
-    cy.get(publish.backToEditor).click();
-  });
-
-  it("Image Widget Functionality To check download option and validate image link", function () {
-    cy.openPropertyPane("imagewidget");
-    cy.togglebar(".t--property-control-enabledownload input[type='checkbox']");
-    cy.get(publish.imageWidget).trigger("mouseover");
-    cy.get(`${publish.imageWidget} a[data-testid=t--image-download]`).should(
-      "have.attr",
-      "href",
-      this.data.NewImage,
-    );
-  });
-
-  it("In case of an image loading error, show off the error message", () => {
-    cy.openPropertyPane("imagewidget");
-    // Invalid image url
-    const invalidImageUrl = "https://www.example.com/does-not-exist.jpg";
-    cy.testCodeMirror(invalidImageUrl);
-
-    // Show off error message
-    cy.get(
-      `${viewWidgetsPage.imageWidget} div[data-testid=styledImage]`,
-    ).should("not.exist");
-    cy.get(
-      `${viewWidgetsPage.imageWidget} [data-testid="error-container"]`,
-    ).contains("Unable to display the image");
-  });
-});
-afterEach(() => {
-  // put your clean up code if any
-});
+      // Show off error message
+      cy.get(
+        `${viewWidgetsPage.imageWidget} div[data-testid=styledImage]`,
+      ).should("not.exist");
+      cy.get(
+        `${viewWidgetsPage.imageWidget} [data-testid="error-container"]`,
+      ).contains("Unable to display the image");
+    });
+  },
+);

@@ -1,7 +1,7 @@
-import type { DataTree } from "entities/DataTree/dataTreeFactory";
-import { set } from "lodash";
+import type { DataTree } from "entities/DataTree/dataTreeTypes";
+import { isObject, set } from "lodash";
+import { klona } from "klona/json";
 import type { EvalProps } from "workers/common/DataTreeEvaluator";
-import { removeFunctions } from "@appsmith/workers/Evaluation/evaluationUtils";
 
 /**
  * This method loops through each entity object of dataTree and sets the entity config from prototype as object properties.
@@ -16,25 +16,26 @@ export function makeEntityConfigsAsObjProperties(
 ): DataTree {
   const { evalProps, sanitizeDataTree = true } = option;
   const newDataTree: DataTree = {};
+
   for (const entityName of Object.keys(dataTree)) {
     const entity = dataTree[entityName];
-    newDataTree[entityName] = Object.assign({}, entity);
+
+    newDataTree[entityName] = isObject(entity)
+      ? Object.assign({}, entity)
+      : entity;
   }
-  const dataTreeToReturn = sanitizeDataTree
-    ? JSON.parse(JSON.stringify(newDataTree))
-    : newDataTree;
+
+  const dataTreeToReturn = sanitizeDataTree ? klona(newDataTree) : newDataTree;
 
   if (!evalProps) return dataTreeToReturn;
 
-  const sanitizedEvalProps = removeFunctions(evalProps) as EvalProps;
-  for (const [entityName, entityEvalProps] of Object.entries(
-    sanitizedEvalProps,
-  )) {
+  for (const [entityName, entityEvalProps] of Object.entries(evalProps)) {
     if (!entityEvalProps.__evaluation__) continue;
+
     set(
       dataTreeToReturn[entityName],
       "__evaluation__",
-      entityEvalProps.__evaluation__,
+      klona({ errors: entityEvalProps.__evaluation__.errors }),
     );
   }
 

@@ -1,89 +1,157 @@
-import { Colors } from "constants/Colors";
-import { IconSize } from "design-system-old";
-import { PluginPackageName } from "entities/Action";
-import { get, isArray } from "lodash";
-import { ALLOWED_SEARCH_DATATYPE } from "pages/Editor/GeneratePage/components/constants";
-import { useCallback, useContext, useMemo } from "react";
+import type { AppState } from "ee/reducers";
+import { PluginPackageName } from "entities/Plugin";
+import { isArray } from "lodash";
+import { useContext, useMemo } from "react";
 import { useSelector } from "react-redux";
 import {
   getGsheetsColumns,
   getIsFetchingGsheetsColumns,
 } from "selectors/datasourceSelectors";
-import { getDatasourceTableColumns } from "selectors/entitiesSelector";
+import {
+  getDatasourceTableColumns,
+  getDatasourceTablePrimaryColumn,
+  getPluginPackageFromDatasourceId,
+} from "ee/selectors/entitiesSelector";
 import { WidgetQueryGeneratorFormContext } from "../..";
-import { DEFAULT_DROPDOWN_OPTION } from "../../constants";
+import { getisOneClickBindingConnectingForWidget } from "selectors/oneClickBindingSelectors";
+import { getWidget } from "sagas/selectors";
+import { useColumnDropdown } from "./useColumnDropdown";
 
-export function useColumns(alias: string) {
-  const { config, updateConfig } = useContext(WidgetQueryGeneratorFormContext);
+export function useColumns(alias: string, isSearcheable: boolean) {
+  const {
+    config,
+    excludePrimaryColumnFromQueryGeneration,
+    propertyName,
+    updateConfig,
+    widgetId,
+  } = useContext(WidgetQueryGeneratorFormContext);
+
+  const widget = useSelector((state: AppState) => getWidget(state, widgetId));
 
   const isLoading = useSelector(getIsFetchingGsheetsColumns);
 
   const columns = useSelector(
-    getDatasourceTableColumns(config.datasource.id, config.table.id),
+    getDatasourceTableColumns(config.datasource, config.table),
   );
 
   const sheetColumns = useSelector(
-    getGsheetsColumns(config.sheet.id + "_" + config.sheet.data.sheetURL),
+    getGsheetsColumns(config.sheet + "_" + config.table),
   );
 
-  const options = useMemo(() => {
+  let primaryColumn = useSelector(
+    getDatasourceTablePrimaryColumn(config.datasource, config.table),
+  );
+
+  // TODO(Balaji): Abstraction leak. remove when backend sends this data
+  if (!primaryColumn && config.datasourcePluginName === "MongoDB") {
+    primaryColumn = "_id";
+  }
+
+  const selectedDatasourcePluginPackageName = useSelector((state: AppState) =>
+    getPluginPackageFromDatasourceId(state, config.datasource),
+  );
+
+  const columnDropdownProps = {
+    alias,
+    columns,
+    config,
+    isSearcheable,
+    propertyName,
+    selectedDatasourcePluginPackageName,
+    sheetColumns,
+    updateConfig,
+    widget,
+  };
+
+  const { onClear, onSelect, options, selected } = useColumnDropdown({
+    ...columnDropdownProps,
+  });
+
+  const getType = (type: string) => {
+    switch (type) {
+      case "int4":
+      case "int2":
+      case "Integer":
+      case "Double":
+        return "number";
+      case "varchar":
+      case "text":
+      case "String":
+        return "string";
+      case "date":
+      case "timestamptz":
+        return "date";
+      case "Array":
+        return "array";
+      default:
+        return "string";
+    }
+  };
+
+  const columnList = useMemo(() => {
     if (
-      config.datasource.data.pluginPackageName ===
-        PluginPackageName.GOOGLE_SHEETS &&
+      selectedDatasourcePluginPackageName === PluginPackageName.GOOGLE_SHEETS &&
       isArray(sheetColumns?.value)
     ) {
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return sheetColumns.value.map((column: any) => {
         return {
-          ...column,
-          id: column.value,
-          icon: "column",
-          iconSize: IconSize.LARGE,
-          iconColor: Colors.GOLD,
+          name: column.value,
+          type: "string",
+          isSelected:
+            (column.name !== primaryColumn ||
+              !excludePrimaryColumnFromQueryGeneration) &&
+            (!config.selectedColumns ||
+              config.selectedColumns.includes(column.name)),
         };
       });
     } else if (isArray(columns)) {
-      return columns
-        .filter((column: any) => {
-          return (
-            column.type &&
-            ALLOWED_SEARCH_DATATYPE.includes(column.type.toLowerCase())
-          );
-        })
-        .map((column: any) => {
-          return {
-            id: column.name,
-            label: column.name,
-            value: column.name,
-            subText: column.type,
-            icon: "column",
-            iconSize: IconSize.LARGE,
-            iconColor: Colors.GOLD,
-          };
-        });
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return columns.map((column: any) => {
+        return {
+          name: column.name,
+          type: getType(column.type),
+          isSelected:
+            (column.name !== primaryColumn ||
+              !excludePrimaryColumnFromQueryGeneration) &&
+            (!config.selectedColumns ||
+              config.selectedColumns.includes(column.name)),
+        };
+      });
     } else {
       return [];
     }
-  }, [columns, sheetColumns, config]);
+  }, [columns, sheetColumns, config, selectedDatasourcePluginPackageName]);
 
-  const onSelect = useCallback(
-    (column, columnObj) => {
-      updateConfig(alias, columnObj);
-    },
-    [updateConfig, alias],
+  const selectedColumnsNames: string[] = useMemo(() => {
+    return columnList
+      .filter((column) => column.isSelected)
+      .map((column) => column.name);
+  }, [columnList]);
+
+  const isConnecting = useSelector(
+    getisOneClickBindingConnectingForWidget(widgetId),
   );
 
   return {
     error:
-      config.datasource.data.pluginPackageName ===
-        PluginPackageName.GOOGLE_SHEETS && sheetColumns?.error,
+      selectedDatasourcePluginPackageName === PluginPackageName.GOOGLE_SHEETS &&
+      sheetColumns?.error,
     options,
     isLoading,
     onSelect,
-    selected: get(config, alias, DEFAULT_DROPDOWN_OPTION),
+    selected,
     show:
-      (config.datasource.data.pluginPackageName !==
+      (selectedDatasourcePluginPackageName !==
         PluginPackageName.GOOGLE_SHEETS ||
-        config.sheet.id !== DEFAULT_DROPDOWN_OPTION.id) &&
-      config.table.id !== DEFAULT_DROPDOWN_OPTION.id,
+        !!config.sheet) &&
+      !!config.table,
+    primaryColumn,
+    columns: columnList,
+    disabled: isConnecting,
+    onClear,
+    selectedColumnsNames,
   };
 }

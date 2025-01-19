@@ -1,19 +1,31 @@
 import type { ReactNode } from "react";
 import React from "react";
 import { MenuIcons } from "icons/MenuIcons";
-import type { Plugin } from "api/PluginApi";
+import type { Plugin } from "entities/Plugin";
 import ImageAlt from "assets/images/placeholder-image.svg";
 import styled from "styled-components";
-import type { HTTP_METHOD } from "constants/ApiEditorConstants/CommonApiConstants";
-import { HTTP_METHODS_COLOR } from "constants/ApiEditorConstants/CommonApiConstants";
+import {
+  HTTP_METHODS_COLOR,
+  type HTTP_METHOD,
+} from "PluginActionEditor/constants/CommonApiConstants";
 import { PRIMARY_KEY, FOREIGN_KEY } from "constants/DatasourceEditorConstants";
-import { Icon } from "design-system";
-import { getAssetUrl } from "@appsmith/utils/airgapHelpers";
-import { importSvg } from "design-system-old";
+import { Icon } from "@appsmith/ads";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
+import { importSvg } from "@appsmith/ads-old";
+import WidgetFactory from "WidgetProvider/factory";
+import WidgetTypeIcon from "pages/Editor/Explorer/Widgets/WidgetIcon";
+import type { WidgetType } from "constants/WidgetConstants";
 
-const ApiIcon = importSvg(() => import("assets/icons/menu/api-colored.svg"));
-const CurlIcon = importSvg(() => import("assets/images/Curl-logo.svg"));
-const GraphqlIcon = importSvg(() => import("assets/images/Graphql-logo.svg"));
+const ApiIcon = importSvg(
+  async () => import("assets/icons/menu/api-colored.svg"),
+);
+const CurlIcon = importSvg(async () => import("assets/images/Curl-logo.svg"));
+const GraphqlIcon = importSvg(
+  async () => import("assets/images/Graphql-logo.svg"),
+);
+const AppsmithAISVG = importSvg(
+  async () => import("assets/images/appsmith-ai.svg"),
+);
 
 export const ENTITY_ICON_SIZE = 16;
 
@@ -30,26 +42,31 @@ export const defaultPageIcon = (
 export const hiddenPageIcon = <Icon name="eye-off" size="md" />;
 
 const WidgetIcon = MenuIcons.WIDGETS_ICON;
+
 export const widgetIcon = (
   <WidgetIcon height={ENTITY_ICON_SIZE} keepColors width={ENTITY_ICON_SIZE} />
 );
 
 const DBQueryIcon = MenuIcons.DATASOURCE_ICON_v2;
+
 export const dbQueryIcon = (
   <DBQueryIcon height={ENTITY_ICON_SIZE} keepColors width={ENTITY_ICON_SIZE} />
 );
 
 const JSIcon = MenuIcons.JS_ICON_V2;
+
 export const jsIcon = (
   <JSIcon height={ENTITY_ICON_SIZE} keepColors width={ENTITY_ICON_SIZE} />
 );
 
 const JSFileIcon = MenuIcons.JS_FILE_ICON;
+
 export const jsFileIcon = (
   <JSFileIcon height={ENTITY_ICON_SIZE} keepColors width={ENTITY_ICON_SIZE} />
 );
 
 const JSFunctionIcon = MenuIcons.JS_FUNCTION_ICON;
+
 export const jsFunctionIcon = (
   <JSFunctionIcon
     height={ENTITY_ICON_SIZE}
@@ -59,6 +76,7 @@ export const jsFunctionIcon = (
 );
 
 const QueryMainIcon = MenuIcons.QUERY_MAIN;
+
 export function QueryIcon() {
   return (
     <QueryMainIcon
@@ -70,6 +88,7 @@ export function QueryIcon() {
 }
 
 const DataSourceIcon = MenuIcons.DATASOURCES_ICON;
+
 export const datasourceIcon = (
   <DataSourceIcon
     color="var(--ads-v2-color-fg)"
@@ -78,7 +97,7 @@ export const datasourceIcon = (
   />
 );
 
-export const datasourceTableIcon = <Icon name="layout-left-2-line" size="md" />;
+export const datasourceTableIcon = <Icon name="layout-5-line" size="md" />;
 
 export const primaryKeyIcon = <Icon name="key-2-line" size="md" />;
 
@@ -107,7 +126,12 @@ export const getPluginIcon = (plugin?: Plugin) => {
       />
     );
   }
+
   return <PluginIcon alt="plugin-placeholder" src={ImageAlt} />;
+};
+
+export const getPluginEntityIcon = (plugin?: Plugin) => {
+  return <EntityIcon>{getPluginIcon(plugin)}</EntityIcon>;
 };
 
 const StyledTag = styled.div<{ color: string }>`
@@ -129,6 +153,7 @@ export function MethodTag(props: { type: keyof typeof HTTP_METHOD }) {
 }
 
 const CurrentPageIcon = MenuIcons.CURRENT_PAGE_ICON;
+
 export const currentPageIcon = (
   <CurrentPageIcon
     color="var(--ads-v2-color-fg)"
@@ -138,6 +163,7 @@ export const currentPageIcon = (
 );
 
 const SortIcon = MenuIcons.SORT_ICON;
+
 export const SortFileIcon = (
   <SortIcon
     color="var(--ads-v2-color-fg)"
@@ -150,11 +176,11 @@ export const SortFileIcon = (
  * Entity Icon components
  */
 
-type EntityTextIconProps = {
+interface EntityTextIconProps {
   children: React.ReactNode;
   textColor?: string;
   fontSize?: number;
-};
+}
 
 const EntityTextIconWrapper = styled.div<{ fontSize?: number; color?: string }>`
   color: ${({ color }) => (color ? color : "var(--ads-v2-color-fg)")};
@@ -202,6 +228,7 @@ const EntityIconWrapper = styled.div<{
   justify-content: center;
   text-align: center;
   border-radius: var(--ads-v2-border-radius);
+
   svg,
   img {
     height: 100% !important;
@@ -209,7 +236,7 @@ const EntityIconWrapper = styled.div<{
   }
 `;
 
-type EntityIconType = {
+interface EntityIconType {
   children: React.ReactNode;
   borderColor?: string;
   width?: string;
@@ -217,7 +244,7 @@ type EntityIconType = {
   noBorder?: boolean;
   noBackground?: boolean;
   bgColor?: string;
-};
+}
 
 function EntityIcon(props: EntityIconType): JSX.Element {
   return (
@@ -243,8 +270,8 @@ export { EntityIcon };
 // fontSize is set to 56% by default.
 export function ApiMethodIcon(
   type: keyof typeof HTTP_METHOD,
-  height = "18px",
-  width = "36px",
+  height = "16px",
+  width = "34px",
   fontSize = 52,
 ) {
   return (
@@ -279,6 +306,14 @@ export function CurlIconV2() {
   );
 }
 
+export function WorkflowIcon() {
+  return (
+    <EntityIcon>
+      <Icon name="workflows" size="lg" />
+    </EntityIcon>
+  );
+}
+
 // height and width are set to 18px by default. This is to maintain the current icon sizes.
 // fontSize is set to 56% by default.
 export function JsFileIconV2(
@@ -294,7 +329,7 @@ export function JsFileIconV2(
       noBorder={noBorder}
       width={width + "px"}
     >
-      <EntityIcon.textIcon fontSize={height * 3.05}>JS</EntityIcon.textIcon>
+      <Icon name="js-yellow" size="md" />
     </EntityIcon>
   );
 }
@@ -305,4 +340,34 @@ export function GraphQLIconV2() {
       <GraphqlIcon />
     </EntityIcon>
   );
+}
+
+export function AppsmithAIIcon() {
+  return (
+    <EntityIcon>
+      <AppsmithAISVG />
+    </EntityIcon>
+  );
+}
+
+export function ActionUrlIcon(url: string, height?: string, width?: string) {
+  return <img height={height} src={url} width={width} />;
+}
+
+export function DefaultModuleIcon() {
+  return (
+    <EntityIcon>
+      <Icon name="module" size="sm" />
+    </EntityIcon>
+  );
+}
+
+export function WidgetIconByType(widgetType: WidgetType) {
+  const { IconCmp } = WidgetFactory.getWidgetMethods(widgetType);
+
+  return IconCmp ? <IconCmp /> : <WidgetTypeIcon type={widgetType} />;
+}
+
+export function GlobeIcon() {
+  return <Icon name="global-line" size="md" />;
 }

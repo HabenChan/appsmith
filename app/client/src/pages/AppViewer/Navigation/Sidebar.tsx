@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from "react";
-import type {
-  ApplicationPayload,
-  Page,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ApplicationPayload } from "entities/Application";
+import type { Page } from "entities/Page";
 import { NAVIGATION_SETTINGS, SIDEBAR_WIDTH } from "constants/AppConstants";
 import { get } from "lodash";
 import { useDispatch, useSelector } from "react-redux";
@@ -13,18 +11,15 @@ import MenuItem from "./components/MenuItem";
 import ShareButton from "./components/ShareButton";
 import PrimaryCTA from "../PrimaryCTA";
 import { useHref } from "pages/Editor/utils";
-import { builderURL } from "RouteBuilder";
-import {
-  getCurrentPageId,
-  previewModeSelector,
-} from "selectors/editorSelectors";
+import { builderURL } from "ee/RouteBuilder";
+import { getCurrentBasePageId } from "selectors/editorSelectors";
 import type { User } from "constants/userConstants";
 import SidebarProfileComponent from "./components/SidebarProfileComponent";
 import CollapseButton from "./components/CollapseButton";
 import classNames from "classnames";
 import { useMouse } from "@mantine/hooks";
-import { getAppSidebarPinned } from "@appsmith/selectors/applicationSelectors";
-import { setIsAppSidebarPinned } from "@appsmith/actions/applicationActions";
+import { getAppSidebarPinned } from "ee/selectors/applicationSelectors";
+import { setIsAppSidebarPinned } from "ee/actions/applicationActions";
 import {
   StyledCtaContainer,
   StyledFooter,
@@ -32,18 +27,21 @@ import {
   StyledMenuContainer,
   StyledSidebar,
 } from "./Sidebar.styled";
-import { getCurrentThemeDetails } from "selectors/themeSelectors";
 import { getIsAppSettingsPaneWithNavigationTabOpen } from "selectors/appSettingsPaneSelectors";
-import NavigationLogo from "@appsmith/pages/AppViewer/NavigationLogo";
+import NavigationLogo from "ee/pages/AppViewer/NavigationLogo";
 import MenuItemContainer from "./components/MenuItemContainer";
 import BackToAppsButton from "./components/BackToAppsButton";
+import { IDE_HEADER_HEIGHT } from "@appsmith/ads";
+import { BOTTOM_BAR_HEIGHT } from "components/BottomBar/constants";
+import { selectCombinedPreviewMode } from "selectors/gitModSelectors";
 
-type SidebarProps = {
+interface SidebarProps {
   currentApplicationDetails?: ApplicationPayload;
   pages: Page[];
   currentWorkspaceId: string;
   currentUser: User | undefined;
-};
+  showUserSettings: boolean;
+}
 
 export function Sidebar(props: SidebarProps) {
   const selectedTheme = useSelector(getSelectedAppTheme);
@@ -75,14 +73,13 @@ export function Sidebar(props: SidebarProps) {
   const location = useLocation();
   const { pathname } = location;
   const [query, setQuery] = useState("");
-  const pageId = useSelector(getCurrentPageId);
-  const editorURL = useHref(builderURL, { pageId });
+  const basePageId = useSelector(getCurrentBasePageId);
+  const editorURL = useHref(builderURL, { basePageId });
   const dispatch = useDispatch();
   const isPinned = useSelector(getAppSidebarPinned);
   const [isOpen, setIsOpen] = useState(true);
   const { x } = useMouse();
-  const theme = useSelector(getCurrentThemeDetails);
-  const isPreviewMode = useSelector(previewModeSelector);
+  const isPreviewMode = useSelector(selectCombinedPreviewMode);
   const isAppSettingsPaneWithNavigationTabOpen = useSelector(
     getIsAppSettingsPaneWithNavigationTabOpen,
   );
@@ -93,6 +90,7 @@ export function Sidebar(props: SidebarProps) {
 
   // Mark default page as first page
   const appPages = pages;
+
   if (appPages.length > 1) {
     appPages.forEach((item, i) => {
       if (item.isDefault) {
@@ -128,10 +126,10 @@ export function Sidebar(props: SidebarProps) {
     const suffix = ")";
 
     if (isPreviewMode) {
-      prefix += theme.smallHeaderHeight;
+      prefix += `${IDE_HEADER_HEIGHT}px - ${BOTTOM_BAR_HEIGHT}px`;
     } else if (isAppSettingsPaneWithNavigationTabOpen) {
       // We deduct 64px as well since it is the margin coming from "m-8" class from tailwind
-      prefix += `${theme.smallHeaderHeight} - ${theme.bottomBarHeight} - 64px`;
+      prefix += `${IDE_HEADER_HEIGHT}px - ${BOTTOM_BAR_HEIGHT}px - 64px`;
     } else {
       prefix += "0px";
     }
@@ -196,7 +194,6 @@ export function Sidebar(props: SidebarProps) {
               key={page.pageId}
             >
               <MenuItem
-                isMinimal={isMinimal}
                 key={page.pageId}
                 navigationSetting={
                   currentApplicationDetails?.applicationDetail
@@ -210,40 +207,42 @@ export function Sidebar(props: SidebarProps) {
         })}
       </StyledMenuContainer>
 
-      <StyledFooter navColorStyle={navColorStyle} primaryColor={primaryColor}>
-        {currentApplicationDetails && (
-          <StyledCtaContainer>
-            <ShareButton
-              currentApplicationDetails={currentApplicationDetails}
-              currentWorkspaceId={currentWorkspaceId}
-              insideSidebar
-              isMinimal={isMinimal}
-            />
+      {props.showUserSettings && (
+        <StyledFooter navColorStyle={navColorStyle} primaryColor={primaryColor}>
+          {currentApplicationDetails && (
+            <StyledCtaContainer>
+              <ShareButton
+                currentApplicationDetails={currentApplicationDetails}
+                currentWorkspaceId={currentWorkspaceId}
+                insideSidebar
+                isMinimal={isMinimal}
+              />
 
-            <PrimaryCTA
-              className="t--back-to-editor"
-              insideSidebar
-              isMinimal={isMinimal}
-              navColorStyle={navColorStyle}
-              primaryColor={primaryColor}
-              url={editorURL}
-            />
+              <PrimaryCTA
+                className="t--back-to-editor"
+                insideSidebar
+                isMinimal={isMinimal}
+                navColorStyle={navColorStyle}
+                primaryColor={primaryColor}
+                url={editorURL}
+              />
 
-            <BackToAppsButton
-              currentApplicationDetails={currentApplicationDetails}
-              insideSidebar
-              isMinimal={isMinimal}
-            />
-          </StyledCtaContainer>
-        )}
+              <BackToAppsButton
+                currentApplicationDetails={currentApplicationDetails}
+                insideSidebar
+                isMinimal={isMinimal}
+              />
+            </StyledCtaContainer>
+          )}
 
-        <SidebarProfileComponent
-          currentUser={currentUser}
-          isMinimal={isMinimal}
-          navColorStyle={navColorStyle}
-          primaryColor={primaryColor}
-        />
-      </StyledFooter>
+          <SidebarProfileComponent
+            currentUser={currentUser}
+            isMinimal={isMinimal}
+            navColorStyle={navColorStyle}
+            primaryColor={primaryColor}
+          />
+        </StyledFooter>
+      )}
     </StyledSidebar>
   );
 }

@@ -12,49 +12,49 @@ export class DebuggerHelper {
   private agHelper = ObjectsRegistry.AggregateHelper;
   private commonLocators = ObjectsRegistry.CommonLocators;
 
-  // ActionExecutionResizerHeight -> in repo
-  private readonly bottomPaneHeight = 360;
-  // from design system
-  private readonly TAB_MIN_HEIGHT = 36;
-
   public readonly locators = {
     _debuggerIcon: ".t--debugger-count",
     _debuggerToggle: "[data-testid=t--debugger-toggle]",
     _debuggerDownStreamErrMsg: "[data-testid=t--debugger-downStreamErrorMsg]",
     _tabsContainer: ".t--debugger-tabs-container",
-    _closeButton: ".t--close-debugger",
+    _closeButton: "[data-testid=t--view-hide-button]",
     _logMessage: ".t--debugger-log-message",
     _logEntityLink: ".t--debugger-log-entity-link",
     _logState: ".t--debugger-log-state",
     _errorCount: ".t--debugger-count",
     _clearLogs: ".t--debugger-clear-logs",
-    _logMessageOccurence: ".t--debugger-log-message-occurence",
+    _logMessageOccurence: ".t--debugger-log-message-occurrence",
     _debuggerMessage: "[data-testid=t--debugger-log-message]",
     _contextMenuIcon: ".t--debugger-contextual-error-menu ",
     _contextMenuItem: ".t--debugger-contextual-menuitem",
     _debuggerLabel: "span.debugger-label",
-    _bottomPaneContainer: {
-      [PageType.API]: ".t--api-bottom-pane-container",
-      [PageType.Query]: ".t--query-bottom-pane-container",
-      [PageType.JsEditor]: ".t--js-editor-bottom-pane-container",
-      [PageType.DataSources]: ".t--datasource-bottom-pane-container",
-    },
+    _bottomPaneContainer: ".t--ide-bottom-view",
+    _ideBottomViewContainer: ".t--ide-bottom-view",
     _debuggerList: ".debugger-list",
     _debuggerFilter: "input[data-testid=t--debugger-search]",
     _debuggerSelectedTab: ".ads-v2-tabs__list-tab",
+    _helpButton: "[data-testid='t--help-button']",
+    _intercomOption: "#intercom-trigger",
+    _intercomConsentText: "[data-testid='t--intercom-consent-text']",
+    _logsTab: "[data-testid='t--tab-LOGS_TAB']",
+    _debuggerFilterClear:
+      "//input[@data-testid='t--debugger-search']/following-sibling::span",
+    _logsGroup: "[data-testid='t--log-filter']",
+    _logGroupOption: (option: string) =>
+      `[data-testid='t--log-filter-${option}']`,
+    _downStreamLogMessage: "[data-testid='t--response-error']",
   };
 
-  ClickDebuggerIcon(
-    index?: number,
-    force?: boolean,
-    waitTimeInterval?: number,
-  ) {
-    this.agHelper.GetNClick(
-      this.locators._debuggerIcon,
-      index,
-      force,
-      waitTimeInterval,
-    );
+  OpenDebugger() {
+    // Open opens if it is not open yet
+    cy.get("body").then(($body) => {
+      if ($body.find(this.locators._ideBottomViewContainer).length === 0) {
+        this.agHelper.GetNClick(this.locators._debuggerIcon, 0, false);
+      } else {
+        this.agHelper.GetNClick(this.commonLocators._errorTab, 0, true, 0);
+      }
+    });
+    this.AssertOpen();
   }
 
   ClickDebuggerToggle(expand = true, index = 0) {
@@ -80,11 +80,15 @@ export class DebuggerHelper {
     this.agHelper.GetNClick(this.commonLocators._responseTab);
   }
 
+  ClickLogsTab() {
+    this.agHelper.GetNClick(this.locators._logsTab);
+  }
+
   CloseBottomBar() {
     this.agHelper.GetNClick(this.locators._closeButton);
   }
 
-  AssertOpen(pageType: PageType) {
+  AssertOpen(pageType?: PageType) {
     switch (pageType) {
       case PageType.Canvas:
         this.agHelper.AssertElementExist(this.locators._tabsContainer);
@@ -93,24 +97,14 @@ export class DebuggerHelper {
       case PageType.JsEditor:
       case PageType.Query:
       case PageType.DataSources:
-        this.agHelper.AssertElementVisible(
-          this.locators._bottomPaneContainer[pageType],
+        this.agHelper.AssertElementVisibility(
+          this.locators._bottomPaneContainer,
         );
-        // this.agHelper.AssertHeight(
-        //   this.locators._bottomPaneContainer[pageType],
-        //   this.bottomPaneHeight,
-        // );
         break;
-      // case PageType.Query:
-      // case PageType.DataSources:
-      //   this.agHelper.AssertElementVisible(
-      //     this.locators._bottomPaneContainer[pageType],
-      //   );
-      //   // this.agHelper.AssertHeight(
-      //   //   this.locators._bottomPaneContainer[pageType],
-      //   //   this.bottomPaneHeight - 1, // -1 to offset error
-      //   // );
-      //   break;
+      default:
+        this.agHelper.AssertElementVisibility(
+          this.locators._ideBottomViewContainer,
+        );
     }
   }
 
@@ -123,43 +117,44 @@ export class DebuggerHelper {
     this.agHelper.AssertSelectedTab(this.locators._debuggerSelectedTab, "true");
   }
 
-  DoesConsoleLogExist(
-    text: string,
-    exists = true,
-    index?: number,
-    timeout?: number,
-  ) {
+  DoesConsoleLogExist(text: string, exists = true, entityName?: string) {
     this.agHelper.GetNAssertContains(
       this.locators._logMessage,
       text,
       exists ? "exist" : "not.exist",
-      index,
-      timeout,
     );
+    if (entityName) {
+      this.agHelper
+        .GetElement(this.locators._logMessage)
+        .contains(text)
+        .closest(".error")
+        .contains(this.locators._logEntityLink, entityName);
+    }
   }
 
   DebuggerLogsFilter(text: string) {
-    this.agHelper.RemoveCharsNType(this.locators._debuggerFilter, -1, text);
+    this.agHelper.SelectAllAndType(this.locators._debuggerFilter, text);
   }
 
   LogStateContains(text: string, index?: number) {
-    this.agHelper.GetNAssertContains(
-      this.locators._logState,
-      text,
-      "exist",
-      index,
-    );
+    this.agHelper.GetNAssertContains(this.locators._logState, text, "exist");
   }
 
   AssertErrorCount(count: number) {
-    this.agHelper.GetNAssertContains(this.locators._errorCount, count);
+    const assertion = count > 0 ? `Debug (${count})` : "Debug";
+    this.agHelper.GetNAssertContains(this.locators._errorCount, assertion);
+  }
+
+  changeLogsGroup(option: string) {
+    this.agHelper.GetNClick(this.locators._logsGroup);
+    this.agHelper.GetNClick(this.locators._logGroupOption(option));
   }
 
   ClearLogs() {
     this.agHelper.GetNClick(this.locators._clearLogs);
   }
 
-  Assert_Consecutive_Console_Log_Count(count: number) {
+  AssertConsecutiveConsoleLogCount(count: number) {
     count > 0
       ? this.agHelper.GetNAssertContains(
           this.locators._logMessageOccurence,
@@ -170,7 +165,7 @@ export class DebuggerHelper {
 
   AssertVisibleErrorMessagesCount(count: number) {
     if (count > 0) {
-      this.agHelper.AssertElementVisible(this.locators._debuggerMessage);
+      this.agHelper.AssertElementVisibility(this.locators._debuggerMessage);
       this.agHelper.AssertElementLength(this.locators._debuggerMessage, count);
     } else {
       this.agHelper.AssertElementAbsence(this.locators._debuggerMessage);
@@ -181,12 +176,17 @@ export class DebuggerHelper {
     this.agHelper.GetNClick(this.locators._debuggerMessage, index);
   }
 
-  ClicklogEntityLink(index?: number) {
+  ClicklogEntityLink(last = false, index?: number) {
+    if (last) {
+      this.agHelper.GetElement(this.locators._logEntityLink).last().click();
+      return;
+    }
+
     this.agHelper.GetNClick(this.locators._logEntityLink, index);
   }
 
   AssertContextMenuItemVisible() {
-    this.agHelper.AssertElementVisible(this.locators._contextMenuItem);
+    this.agHelper.AssertElementVisibility(this.locators._contextMenuItem);
   }
 
   AssertDebugError(
@@ -194,9 +194,10 @@ export class DebuggerHelper {
     message: string,
     shouldOpenDebugger = true,
     shouldToggleDebugger = true,
+    errorLabelIndex = 0,
   ) {
     if (shouldOpenDebugger) {
-      this.ClickDebuggerIcon();
+      this.OpenDebugger();
     }
     this.agHelper.GetNClick(this.commonLocators._errorTab, 0, true, 0);
 
@@ -205,7 +206,7 @@ export class DebuggerHelper {
     }
 
     this.agHelper
-      .GetText(this.locators._debuggerLabel, "text", 0)
+      .GetText(this.locators._debuggerLabel, "text", errorLabelIndex)
       .then(($text) => {
         expect($text).to.eq(label);
       });
@@ -225,5 +226,19 @@ export class DebuggerHelper {
       "not.exist",
       this.locators._debuggerList,
     );
+  }
+
+  AssertDownStreamLogError(message: string, shouldOpenDebugger = true) {
+    if (shouldOpenDebugger) {
+      this.OpenDebugger();
+    }
+
+    this.agHelper.GetNClick(this.commonLocators._responseTab, 0, true, 0);
+
+    this.agHelper
+      .GetText(this.locators._downStreamLogMessage, "text", 0)
+      .then(($text) => {
+        expect($text).to.contains(message);
+      });
   }
 }

@@ -1,41 +1,41 @@
 import { setLayoutConversionStateAction } from "actions/autoLayoutActions";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
-import type { Page } from "@appsmith/constants/ReduxActionConstants";
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
-import type { AppState } from "@appsmith/reducers";
-import { MAIN_CONTAINER_WIDGET_ID } from "constants/WidgetConstants";
-import CanvasWidgetsNormalizer from "normalizers/CanvasWidgetsNormalizer";
-import { AppPositioningTypes } from "reducers/entityReducers/pageListReducer";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { Page } from "entities/Page";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import type { AppState } from "ee/reducers";
+import { LayoutSystemTypes } from "layoutSystems/types";
 import type { SupportedLayouts } from "reducers/entityReducers/pageListReducer";
 import { CONVERSION_STATES } from "reducers/uiReducers/layoutConversionReducer";
 import type { PageWidgetsReduxState } from "reducers/uiReducers/pageWidgetsReducer";
 import { all, call, put, select, takeLatest } from "redux-saga/effects";
-import { getPageWidgets } from "selectors/entitiesSelector";
-import { convertNormalizedDSLToFixed } from "utils/DSLConversions/autoToFixedLayout";
-import convertToAutoLayout from "utils/DSLConversions/fixedToAutoLayout";
-import type { DSLWidget } from "widgets/constants";
+import { getPageWidgets } from "ee/selectors/entitiesSelector";
+import { convertNormalizedDSLToFixed } from "layoutSystems/common/DSLConversions/autoToFixedLayout";
+import convertToAutoLayout from "layoutSystems/common/DSLConversions/fixedToAutoLayout";
+import type { DSLWidget } from "WidgetProvider/constants";
 import {
   createSnapshotSaga,
   deleteApplicationSnapshotSaga,
 } from "./SnapshotSagas";
 import * as Sentry from "@sentry/react";
 import log from "loglevel";
-import { saveAllPagesSaga } from "./PageSagas";
-import { updateApplicationLayout } from "@appsmith/actions/applicationActions";
+import { saveAllPagesSaga } from "ee/sagas/PageSagas";
+import { updateApplicationLayout } from "ee/actions/applicationActions";
 import {
   getCurrentApplicationId,
   getPageList,
 } from "selectors/editorSelectors";
 import { updateApplicationLayoutType } from "./AutoLayoutUpdateSagas";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { nestDSL } from "@shared/dsl";
 
 /**
- * This method is used to convert from Auto layout to Fixed layout
+ * This method is used to convert from auto-layout to fixed layout
  * @param action
  */
 function* convertFromAutoToFixedSaga(action: ReduxAction<SupportedLayouts>) {
   let appId = "";
   let snapshotSaveSuccess = false;
+
   try {
     const pageList: Page[] = yield select(getPageList);
     const pageWidgetsList: PageWidgetsReduxState = yield select(getPageWidgets);
@@ -50,6 +50,7 @@ function* convertFromAutoToFixedSaga(action: ReduxAction<SupportedLayouts>) {
 
     AnalyticsUtil.logEvent("CONVERT_AUTO_TO_FIXED", {
       isNewApp: !notEmptyApp,
+      appId,
     });
     snapshotSaveSuccess = true;
 
@@ -60,7 +61,7 @@ function* convertFromAutoToFixedSaga(action: ReduxAction<SupportedLayouts>) {
 
     const pageLayouts = [];
 
-    //Convert all the pages into Fixed layout by iterating over the list
+    //Convert all the pages into fixed layout by iterating over the list
     for (const page of pageList) {
       const pageId = page?.pageId;
       const { dsl: normalizedDSL, layoutId } = pageWidgetsList[pageId];
@@ -70,10 +71,7 @@ function* convertFromAutoToFixedSaga(action: ReduxAction<SupportedLayouts>) {
         action.payload,
       );
 
-      const dsl: DSLWidget = CanvasWidgetsNormalizer.denormalize(
-        MAIN_CONTAINER_WIDGET_ID,
-        { canvasWidgets: fixedLayoutDSL },
-      );
+      const dsl = nestDSL(fixedLayoutDSL);
 
       pageLayouts.push({
         pageId,
@@ -87,18 +85,21 @@ function* convertFromAutoToFixedSaga(action: ReduxAction<SupportedLayouts>) {
     yield call(saveAllPagesSaga, pageLayouts);
     //Set type of fixed layout
     yield call(setLayoutTypePostConversion, action.payload);
-    yield call(updateApplicationLayoutType, AppPositioningTypes.FIXED);
+    yield call(updateApplicationLayoutType, LayoutSystemTypes.FIXED);
     //update conversion form state to success
     yield put(
       setLayoutConversionStateAction(CONVERSION_STATES.COMPLETED_SUCCESS),
     );
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (e: any) {
     let error: Error = e;
+
     if (error) {
-      error.message = `Layout Conversion Error - while Converting from Auto to Fixed Layout: ${error.message}`;
+      error.message = `Layout conversion error - while converting from auto-layout to fixed layout: ${error.message}`;
     } else {
       error = new Error(
-        "Layout Conversion Error - while Converting from Auto to Fixed Layout",
+        "Layout conversion error - while converting from auto-layout to fixed layout",
       );
     }
 
@@ -107,6 +108,7 @@ function* convertFromAutoToFixedSaga(action: ReduxAction<SupportedLayouts>) {
     if (snapshotSaveSuccess) {
       yield call(deleteApplicationSnapshotSaga);
     }
+
     //update conversion form state to error
     yield put(
       setLayoutConversionStateAction(CONVERSION_STATES.COMPLETED_ERROR, error),
@@ -120,12 +122,13 @@ function* convertFromAutoToFixedSaga(action: ReduxAction<SupportedLayouts>) {
 }
 
 /**
- * This method is used to convert from Fixed layout to Auto layout
+ * This method is used to convert from fixed layout to auto-layout
  * @param action
  */
 function* convertFromFixedToAutoSaga() {
   let appId = "";
   let snapshotSaveSuccess = false;
+
   try {
     const pageList: Page[] = yield select(getPageList);
     const pageWidgetsList: PageWidgetsReduxState = yield select(getPageWidgets);
@@ -154,10 +157,7 @@ function* convertFromFixedToAutoSaga() {
       const pageId = page?.pageId;
       const { dsl: normalizedDSL, layoutId } = pageWidgetsList[pageId];
 
-      const fixedDSL: DSLWidget = CanvasWidgetsNormalizer.denormalize(
-        MAIN_CONTAINER_WIDGET_ID,
-        { canvasWidgets: normalizedDSL },
-      );
+      const fixedDSL = nestDSL(normalizedDSL);
 
       const dsl: DSLWidget = convertToAutoLayout(fixedDSL);
 
@@ -171,26 +171,31 @@ function* convertFromFixedToAutoSaga() {
     }
 
     yield call(saveAllPagesSaga, pageLayouts);
-    yield call(updateApplicationLayoutType, AppPositioningTypes.AUTO);
+    yield call(updateApplicationLayoutType, LayoutSystemTypes.AUTO);
     //update conversion form state to success
     yield put(
       setLayoutConversionStateAction(CONVERSION_STATES.COMPLETED_SUCCESS),
     );
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (e: any) {
     let error: Error = e;
+
     if (error) {
-      error.message = `Layout Conversion Error - while Converting from Fixed to Auto Layout: ${error.message}`;
+      error.message = `Layout conversion error - while converting from fixed layout to auto-layout: ${error.message}`;
     } else {
       error = new Error(
-        "Layout Conversion Error - while Converting from Fixed to Auto Layout",
+        "Layout conversion error - while converting from fixed layout to auto-layout",
       );
     }
 
     log.error(error);
+
     //update conversion form state to error
     if (snapshotSaveSuccess) {
       yield call(deleteApplicationSnapshotSaga);
     }
+
     yield put(
       setLayoutConversionStateAction(CONVERSION_STATES.COMPLETED_ERROR, error),
     );

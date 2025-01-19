@@ -1,12 +1,12 @@
 import React from "react";
 import styled from "styled-components";
-import { Button } from "design-system";
+import { Button } from "@appsmith/ads";
 import PageUnavailableImage from "assets/images/invalid-page.png";
 import {
   PAGE_NOT_FOUND_ERROR,
   INVALID_URL_ERROR,
   createMessage,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import { useHistory } from "react-router-dom";
 
 const Wrapper = styled.div`
@@ -51,12 +51,13 @@ const Wrapper = styled.div`
   }
 `;
 
-type Props = {
+interface Props {
   goBackFn?: () => void; // custom function for returning to any declared route.
-};
+}
 
 function EntityNotFoundPane(props: Props) {
   const history = useHistory();
+
   return (
     <Wrapper>
       <img

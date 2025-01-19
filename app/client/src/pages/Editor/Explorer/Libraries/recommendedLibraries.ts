@@ -5,8 +5,18 @@ export default [
     author: "auth0",
     docsURL: "https://github.com/auth0/node-jsonwebtoken#readme",
     version: "8.5.1",
-    url: `/libraries/jsonwebtoken@8.5.1.js`,
+    url: "/libraries/jsonwebtoken@8.5.1.js",
     icon: "https://github.com/auth0.png?s=20",
+  },
+  {
+    name: "fast-xml-parser",
+    description:
+      "Validate XML, Parse XML to JS Object, or Build XML from JS Object without C/C++ based libraries and no callback.",
+    author: "NaturalIntelligence",
+    docsURL: "https://github.com/NaturalIntelligence/fast-xml-parser",
+    url: "https://cdnjs.cloudflare.com/ajax/libs/fast-xml-parser/4.3.2/fxparser.min.js",
+    version: "4.3.2",
+    icon: "https://img.jsdelivr.com/github.com/NaturalIntelligence.png",
   },
   {
     name: "jspdf",
@@ -46,6 +56,15 @@ export default [
       "https://github.com/LiosK/UUID.js/#uuidjs---rfc-compliant-uuid-generator-for-javascript",
     version: "4.2.12",
     icon: "https://github.com/LiosK.png?s=20",
+  },
+  {
+    name: "bcryptjs",
+    url: "https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js",
+    description: "A library to help you hash passwords",
+    author: "dcodeIO",
+    docsURL: "https://github.com/dcodeIO/bcrypt.js#bcryptjs",
+    version: "2.4.3",
+    icon: "https://github.com/dcodeIO.png?s=20",
   },
   {
     name: "Papa Parse 5",
@@ -112,16 +131,6 @@ export default [
     author: "dchester",
     docsURL: "https://github.com/dchester/jsonpath/#jsonpath",
     icon: "https://github.com/dchester.png?s=20",
-  },
-  {
-    name: "browser-image-compression",
-    url: "https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.0/dist/browser-image-compression.min.js",
-    version: "2.0.0",
-    author: "Donaldcwl",
-    docsURL:
-      "https://github.com/Donaldcwl/browser-image-compression/#browser-image-compression",
-    description: "Compress images in the browser",
-    icon: "https://github.com/Donaldcwl.png?s=20",
   },
   // We'll be enabling support for segment soon
   // {

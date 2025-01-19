@@ -1,9 +1,23 @@
 import React from "react";
 import styled from "styled-components";
-import AnalyticsUtil from "utils/AnalyticsUtil";
-import { ModalBody, ModalContent, Modal } from "design-system";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { ModalBody, ModalContent, Modal } from "@appsmith/ads";
 
 const StyledDocsSearchModal = styled(ModalContent)`
+  text-rendering: auto;
+  backface-visibility: hidden;
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: auto;
+  width: 500px;
+  margin-left: -250px;
+  margin-top: -200px;
+  transform: translate3d(0, 0, 0) !important;
+  &.modal-documentation,
+  &.modal-snippet {
+    width: 786px;
+    will-change: transform;
+    margin-left: -393px;
+  }
   .modal-snippet,
   .modal-documentation {
     overflow: hidden;
@@ -16,12 +30,12 @@ const StyledDocsSearchModal = styled(ModalContent)`
   }
 `;
 
-type Props = {
+interface Props {
   modalOpen: boolean;
   toggleShow: () => void;
   children: React.ReactNode;
   className?: string;
-};
+}
 
 function DocsSearchModal({
   children,
@@ -37,7 +51,11 @@ function DocsSearchModal({
       }}
       open={modalOpen}
     >
-      <StyledDocsSearchModal data-testid="t--global-search-modal">
+      <StyledDocsSearchModal
+        className={`${className}`}
+        data-testid="t--global-search-modal"
+      >
+        {/* @ts-expect-error Figure out how to pass string to constant className */}
         <ModalBody className={`${className}`}>{children}</ModalBody>
       </StyledDocsSearchModal>
     </Modal>

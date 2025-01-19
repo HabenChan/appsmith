@@ -9,10 +9,14 @@ import {
   TabBehaviour,
 } from "components/editorComponents/CodeEditor/EditorConfig";
 import LazyCodeEditor from "components/editorComponents/LazyCodeEditor";
+import { bindingHintHelper } from "components/editorComponents/CodeEditor/hintHelpers";
+import { slashCommandHintHelper } from "components/editorComponents/CodeEditor/commandsHelper";
+import type { EditorProps } from "components/editorComponents/CodeEditor";
 
 class CodeEditorControl extends BaseControl<ControlProps> {
   render() {
     const {
+      controlConfig,
       dataTreePath,
       evaluatedValue,
       expected,
@@ -23,14 +27,19 @@ class CodeEditorControl extends BaseControl<ControlProps> {
     const props: Partial<ControlProps> = {};
 
     if (dataTreePath) props.dataTreePath = dataTreePath;
+
     if (evaluatedValue) props.evaluatedValue = evaluatedValue;
+
     if (expected) props.expected = expected;
 
     return (
       <LazyCodeEditor
         additionalDynamicData={this.props.additionalAutoComplete}
+        hinting={[bindingHintHelper, slashCommandHintHelper]}
         input={{ value: propertyValue, onChange: this.onChange }}
+        maxHeight={controlConfig?.maxHeight as EditorProps["maxHeight"]}
         mode={EditorModes.TEXT_WITH_BINDING}
+        positionCursorInsideBinding
         size={EditorSize.EXTENDED}
         tabBehaviour={TabBehaviour.INDENT}
         theme={this.props.theme}
@@ -41,6 +50,8 @@ class CodeEditorControl extends BaseControl<ControlProps> {
     );
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onChange: EventOrValueHandler<ChangeEvent<any>> = (
     value: string | ChangeEvent,
   ) => {

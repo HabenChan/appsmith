@@ -12,6 +12,7 @@ import com.appsmith.external.models.ActionExecutionRequest;
 import com.appsmith.external.models.ActionExecutionResult;
 import com.appsmith.external.models.DatasourceConfiguration;
 import com.appsmith.external.models.DatasourceStructure;
+import com.appsmith.external.models.Endpoint;
 import com.appsmith.external.models.MustacheBindingToken;
 import com.appsmith.external.models.Param;
 import com.appsmith.external.models.PsParameterDTO;
@@ -26,6 +27,7 @@ import com.external.plugins.utils.OracleSpecificDataTypes;
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.ObjectUtils;
 import org.pf4j.Extension;
 import org.pf4j.PluginWrapper;
 import org.springframework.util.CollectionUtils;
@@ -58,6 +60,7 @@ import java.util.stream.IntStream;
 import static com.appsmith.external.constants.ActionConstants.ACTION_CONFIGURATION_BODY;
 import static com.appsmith.external.constants.CommonFieldName.BODY;
 import static com.appsmith.external.constants.CommonFieldName.PREPARED_STATEMENT;
+import static com.appsmith.external.constants.PluginConstants.PluginName.ORACLE_PLUGIN_NAME;
 import static com.appsmith.external.helpers.PluginUtils.OBJECT_TYPE;
 import static com.appsmith.external.helpers.PluginUtils.STRING_TYPE;
 import static com.appsmith.external.helpers.PluginUtils.getDataValueSafelyFromFormData;
@@ -67,7 +70,6 @@ import static com.appsmith.external.helpers.PluginUtils.setDataValueSafelyInForm
 import static com.appsmith.external.helpers.SmartSubstitutionHelper.replaceQuestionMarkWithDollarIndex;
 import static com.external.plugins.utils.OracleDatasourceUtils.JDBC_DRIVER;
 import static com.external.plugins.utils.OracleDatasourceUtils.createConnectionPool;
-import static com.external.plugins.utils.OracleDatasourceUtils.getConnectionFromConnectionPool;
 import static com.external.plugins.utils.OracleDatasourceUtils.logHikariCPStatus;
 import static com.external.plugins.utils.OracleExecuteUtils.closeConnectionPostExecution;
 import static com.external.plugins.utils.OracleExecuteUtils.isPLSQL;
@@ -79,25 +81,30 @@ import static org.apache.commons.lang3.StringUtils.isBlank;
 
 @Slf4j
 public class OraclePlugin extends BasePlugin {
+    public static final Long ORACLE_DEFAULT_PORT = 1521L;
+    public static final OracleDatasourceUtils oracleDatasourceUtils = new OracleDatasourceUtils();
 
     public OraclePlugin(PluginWrapper wrapper) {
         super(wrapper);
     }
+
     @Extension
     public static class OraclePluginExecutor implements SmartSubstitutionInterface, PluginExecutor<HikariDataSource> {
         public static final Scheduler scheduler = Schedulers.boundedElastic();
 
         @Override
         public Mono<HikariDataSource> datasourceCreate(DatasourceConfiguration datasourceConfiguration) {
+            log.debug(Thread.currentThread().getName() + ": datasourceCreate() called for Oracle plugin.");
             try {
                 Class.forName(JDBC_DRIVER);
             } catch (ClassNotFoundException e) {
-                return Mono.error(new AppsmithPluginException(OraclePluginError.ORACLE_PLUGIN_ERROR,
-                        OracleErrorMessages.ORACLE_JDBC_DRIVER_LOADING_ERROR_MSG, e.getMessage()));
+                return Mono.error(new AppsmithPluginException(
+                        OraclePluginError.ORACLE_PLUGIN_ERROR,
+                        OracleErrorMessages.ORACLE_JDBC_DRIVER_LOADING_ERROR_MSG,
+                        e.getMessage()));
             }
 
-            return Mono
-                    .fromCallable(() -> {
+            return Mono.fromCallable(() -> {
                         log.debug(Thread.currentThread().getName() + ": Connecting to Oracle db");
                         return createConnectionPool(datasourceConfiguration);
                     })
@@ -111,33 +118,39 @@ public class OraclePlugin extends BasePlugin {
 
         @Override
         public Set<String> validateDatasource(DatasourceConfiguration datasourceConfiguration) {
+            log.debug(Thread.currentThread().getName() + ": validateDatasource() called for Oracle plugin.");
             return OracleDatasourceUtils.validateDatasource(datasourceConfiguration);
         }
 
         @Override
-        public Mono<ActionExecutionResult> execute(HikariDataSource connection,
-                                                   DatasourceConfiguration datasourceConfiguration,
-                                                   ActionConfiguration actionConfiguration) {
+        public Mono<ActionExecutionResult> execute(
+                HikariDataSource connection,
+                DatasourceConfiguration datasourceConfiguration,
+                ActionConfiguration actionConfiguration) {
             return Mono.error(
                     new AppsmithPluginException(OraclePluginError.QUERY_EXECUTION_FAILED, "Unsupported Operation"));
         }
 
         @Override
-        public Mono<ActionExecutionResult> executeParameterized(HikariDataSource connectionPool,
-                                                                ExecuteActionDTO executeActionDTO,
-                                                                DatasourceConfiguration datasourceConfiguration,
-                                                                ActionConfiguration actionConfiguration) {
+        public Mono<ActionExecutionResult> executeParameterized(
+                HikariDataSource connectionPool,
+                ExecuteActionDTO executeActionDTO,
+                DatasourceConfiguration datasourceConfiguration,
+                ActionConfiguration actionConfiguration) {
+
+            log.debug(Thread.currentThread().getName() + ": executeParameterized() called for Oracle plugin.");
             final Map<String, Object> formData = actionConfiguration.getFormData();
             String query = getDataValueSafelyFromFormData(formData, BODY, STRING_TYPE, null);
             // Check for query parameter before performing the probably expensive fetch connection from the pool op.
             if (isBlank(query)) {
-                return Mono.error(new AppsmithPluginException(AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR,
+                return Mono.error(new AppsmithPluginException(
+                        AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR,
                         OracleErrorMessages.MISSING_QUERY_ERROR_MSG));
             }
 
             Boolean isPreparedStatement = TRUE;
-            Object preparedStatementObject = getDataValueSafelyFromFormData(formData, PREPARED_STATEMENT,
-                    OBJECT_TYPE, TRUE);
+            Object preparedStatementObject =
+                    getDataValueSafelyFromFormData(formData, PREPARED_STATEMENT, OBJECT_TYPE, TRUE);
             if (preparedStatementObject instanceof Boolean) {
                 isPreparedStatement = (Boolean) preparedStatementObject;
             } else if (preparedStatementObject instanceof String) {
@@ -167,45 +180,58 @@ public class OraclePlugin extends BasePlugin {
                 updatedQuery = removeSemicolonFromQuery(updatedQuery);
             }
             setDataValueSafelyInFormData(formData, BODY, updatedQuery);
-            return executeCommon(connectionPool, datasourceConfiguration, actionConfiguration, TRUE,
-                    mustacheKeysInOrder, executeActionDTO);
+            return executeCommon(
+                    connectionPool,
+                    datasourceConfiguration,
+                    actionConfiguration,
+                    TRUE,
+                    mustacheKeysInOrder,
+                    executeActionDTO);
         }
 
-        private Mono<ActionExecutionResult> executeCommon(HikariDataSource connectionPool,
-                                                          DatasourceConfiguration datasourceConfiguration,
-                                                          ActionConfiguration actionConfiguration,
-                                                          Boolean preparedStatement,
-                                                          List<MustacheBindingToken> mustacheValuesInOrder,
-                                                          ExecuteActionDTO executeActionDTO) {
+        private Mono<ActionExecutionResult> executeCommon(
+                HikariDataSource connectionPool,
+                DatasourceConfiguration datasourceConfiguration,
+                ActionConfiguration actionConfiguration,
+                Boolean preparedStatement,
+                List<MustacheBindingToken> mustacheValuesInOrder,
+                ExecuteActionDTO executeActionDTO) {
 
+            log.debug(Thread.currentThread().getName() + ": executeCommon() called for Oracle plugin.");
             final Map<String, Object> requestData = new HashMap<>();
             requestData.put("preparedStatement", TRUE.equals(preparedStatement) ? true : false);
 
             final Map<String, Object> formData = actionConfiguration.getFormData();
             String query = getDataValueSafelyFromFormData(formData, BODY, STRING_TYPE, null);
             if (isBlank(query)) {
-                return Mono.error(new AppsmithPluginException(AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR,
+                return Mono.error(new AppsmithPluginException(
+                        AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR,
                         OracleErrorMessages.MISSING_QUERY_ERROR_MSG));
             }
 
             Map<String, Object> psParams = preparedStatement ? new LinkedHashMap<>() : null;
             String transformedQuery = preparedStatement ? replaceQuestionMarkWithDollarIndex(query) : query;
-            List<RequestParamDTO> requestParams = List.of(new RequestParamDTO(ACTION_CONFIGURATION_BODY,
-                    transformedQuery, null, null, psParams));
+            List<RequestParamDTO> requestParams =
+                    List.of(new RequestParamDTO(ACTION_CONFIGURATION_BODY, transformedQuery, null, null, psParams));
 
             return Mono.fromCallable(() -> {
                         Connection connectionFromPool;
 
-                        try {   
-                            connectionFromPool = getConnectionFromConnectionPool(connectionPool);
+                        try {
+                            connectionFromPool = oracleDatasourceUtils.getConnectionFromHikariConnectionPool(
+                                    connectionPool, ORACLE_PLUGIN_NAME);
                         } catch (SQLException | StaleConnectionException e) {
-                            // The function can throw either StaleConnectionException or SQLException. The underlying hikari
+                            // The function can throw either StaleConnectionException or SQLException. The underlying
+                            // hikari
                             // library throws SQLException in case the pool is closed or there is an issue initializing
                             // the connection pool which can also be translated in our world to StaleConnectionException
                             // and should then trigger the destruction and recreation of the pool.
-                            log.debug("Exception Occurred while getting connection from pool" + e.getMessage());
+                            log.error("Exception Occurred while getting connection from pool" + e.getMessage());
                             e.printStackTrace(System.out);
-                            return Mono.error(e instanceof StaleConnectionException ? e : new StaleConnectionException());
+                            return Mono.error(
+                                    e instanceof StaleConnectionException
+                                            ? e
+                                            : new StaleConnectionException(e.getMessage()));
                         }
 
                         List<Map<String, Object>> rowsList = new ArrayList<>(50);
@@ -217,8 +243,8 @@ public class OraclePlugin extends BasePlugin {
                         boolean isResultSet;
 
                         // Log HikariCP status
-                        logHikariCPStatus(MessageFormat.format("Before executing Oracle query [{0}]", query),
-                                connectionPool);
+                        logHikariCPStatus(
+                                MessageFormat.format("Before executing Oracle query [{0}]", query), connectionPool);
 
                         try {
                             if (FALSE.equals(preparedStatement)) {
@@ -229,34 +255,42 @@ public class OraclePlugin extends BasePlugin {
                                 preparedQuery = connectionFromPool.prepareStatement(query);
 
                                 List<Map.Entry<String, String>> parameters = new ArrayList<>();
-                                preparedQuery = (PreparedStatement) smartSubstitutionOfBindings(preparedQuery,
-                                        mustacheValuesInOrder,
-                                        executeActionDTO.getParams(),
-                                        parameters);
+                                preparedQuery = (PreparedStatement) smartSubstitutionOfBindings(
+                                        preparedQuery, mustacheValuesInOrder, executeActionDTO.getParams(), parameters);
 
                                 IntStream.range(0, parameters.size())
-                                        .forEachOrdered(i ->
-                                                psParams.put(
-                                                        getPSParamLabel(i+1),
-                                                        new PsParameterDTO(parameters.get(i).getKey(),parameters.get(i).getValue())));
+                                        .forEachOrdered(i -> psParams.put(
+                                                getPSParamLabel(i + 1),
+                                                new PsParameterDTO(
+                                                        parameters.get(i).getKey(),
+                                                        parameters.get(i).getValue())));
 
                                 requestData.put("ps-parameters", parameters);
                                 isResultSet = preparedQuery.execute();
                                 resultSet = preparedQuery.getResultSet();
                             }
 
-                            populateRowsAndColumns(rowsList, columnsList, resultSet, isResultSet, preparedStatement,
-                                    statement, preparedQuery);
+                            populateRowsAndColumns(
+                                    rowsList,
+                                    columnsList,
+                                    resultSet,
+                                    isResultSet,
+                                    preparedStatement,
+                                    statement,
+                                    preparedQuery);
                         } catch (SQLException e) {
-                            log.debug(Thread.currentThread().getName() + ": In the OraclePlugin, got action execution error");
-                            log.debug(e.getMessage());
-                            return Mono.error(new AppsmithPluginException(OraclePluginError.QUERY_EXECUTION_FAILED,
-                                    OracleErrorMessages.QUERY_EXECUTION_FAILED_ERROR_MSG, e.getMessage(),
+                            log.error(Thread.currentThread().getName()
+                                    + ": In the OraclePlugin, got action execution error");
+                            log.error(e.getMessage());
+                            return Mono.error(new AppsmithPluginException(
+                                    OraclePluginError.QUERY_EXECUTION_FAILED,
+                                    OracleErrorMessages.QUERY_EXECUTION_FAILED_ERROR_MSG,
+                                    e.getMessage(),
                                     "SQLSTATE: " + e.getSQLState()));
                         } finally {
                             // Log HikariCP status
-                            logHikariCPStatus(MessageFormat.format("After executing Oracle query [{0}]", query),
-                                    connectionPool);
+                            logHikariCPStatus(
+                                    MessageFormat.format("After executing Oracle query [{0}]", query), connectionPool);
 
                             closeConnectionPostExecution(resultSet, statement, preparedQuery, connectionFromPool);
                         }
@@ -265,7 +299,8 @@ public class OraclePlugin extends BasePlugin {
                         result.setBody(objectMapper.valueToTree(rowsList));
                         result.setMessages(populateHintMessages(columnsList));
                         result.setIsExecutionSuccess(true);
-                        log.debug(Thread.currentThread().getName() + ": In the OraclePlugin, got action execution result");
+                        log.debug(Thread.currentThread().getName()
+                                + ": In the OraclePlugin, got action execution result");
                         return Mono.just(result);
                     })
                     .flatMap(obj -> obj)
@@ -293,8 +328,9 @@ public class OraclePlugin extends BasePlugin {
         }
 
         @Override
-        public Mono<DatasourceStructure> getStructure(HikariDataSource connectionPool,
-                                                      DatasourceConfiguration datasourceConfiguration) {
+        public Mono<DatasourceStructure> getStructure(
+                HikariDataSource connectionPool, DatasourceConfiguration datasourceConfiguration) {
+            log.debug(Thread.currentThread().getName() + ": getStructure() called for Oracle plugin.");
             return OracleDatasourceUtils.getStructure(connectionPool, datasourceConfiguration);
         }
 
@@ -303,27 +339,31 @@ public class OraclePlugin extends BasePlugin {
 
             List<String> identicalColumns = getIdenticalColumns(columnNames);
             if (!CollectionUtils.isEmpty(identicalColumns)) {
-                messages.add("Your OracleSQL query result may not have all the columns because duplicate column " +
-                        "names were found for the column(s): " + String.join(", ", identicalColumns) + ". You may use" +
-                        " the SQL keyword 'as' to rename the duplicate column name(s) and resolve this issue.");
+                messages.add("Your OracleSQL query result may not have all the columns because duplicate column "
+                        + "names were found for the column(s): "
+                        + String.join(", ", identicalColumns) + ". You may use"
+                        + " the SQL keyword 'as' to rename the duplicate column name(s) and resolve this issue.");
             }
 
             return messages;
         }
 
         @Override
-        public Object substituteValueInInput(int index,
-                                             String binding,
-                                             String value,
-                                             Object input,
-                                             List<Map.Entry<String, String>> insertedParams,
-                                             Object... args) throws AppsmithPluginException {
+        public Object substituteValueInInput(
+                int index,
+                String binding,
+                String value,
+                Object input,
+                List<Map.Entry<String, String>> insertedParams,
+                Object... args)
+                throws AppsmithPluginException {
 
             PreparedStatement preparedStatement = (PreparedStatement) input;
             Param param = (Param) args[0];
             DataType valueType;
-            valueType = DataTypeServiceUtils.getAppsmithType(param.getClientDataType(), value,
-                    OracleSpecificDataTypes.pluginSpecificTypes).type();
+            valueType = DataTypeServiceUtils.getAppsmithType(
+                            param.getClientDataType(), value, OracleSpecificDataTypes.pluginSpecificTypes)
+                    .type();
             Map.Entry<String, String> parameter = new AbstractMap.SimpleEntry<>(value, valueType.toString());
             insertedParams.add(parameter);
 
@@ -387,13 +427,33 @@ public class OraclePlugin extends BasePlugin {
                     // set in the commented part of
                     // the query. Ignore the exception
                 } else {
-                    throw new AppsmithPluginException(AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR,
+                    throw new AppsmithPluginException(
+                            AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR,
                             String.format(OracleErrorMessages.QUERY_PREPARATION_FAILED_ERROR_MSG, value, binding),
                             e.getMessage());
                 }
             }
 
             return preparedStatement;
+        }
+
+        @Override
+        public Mono<String> getEndpointIdentifierForRateLimit(DatasourceConfiguration datasourceConfiguration) {
+            log.debug(Thread.currentThread().getName()
+                    + ": getEndpointIdentifierForRateLimit() called for Oracle plugin.");
+            List<Endpoint> endpoints = datasourceConfiguration.getEndpoints();
+            String identifier = "";
+            // When hostname and port both are available, both will be used as identifier
+            // When port is not present, default port along with hostname will be used
+            // This ensures rate limiting will only be applied if hostname is present
+            if (endpoints.size() > 0) {
+                String hostName = endpoints.get(0).getHost();
+                Long port = endpoints.get(0).getPort();
+                if (!isBlank(hostName)) {
+                    identifier = hostName + "_" + ObjectUtils.defaultIfNull(port, ORACLE_DEFAULT_PORT);
+                }
+            }
+            return Mono.just(identifier);
         }
     }
 }

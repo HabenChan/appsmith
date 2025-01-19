@@ -1,30 +1,75 @@
-import React from "react";
-import { Dropdown } from "design-system-old";
-import { DROPDOWN_TRIGGER_DIMENSION } from "../../constants";
-import { SelectWrapper } from "../../styles";
+import React, { memo, useContext } from "react";
+import { ErrorMessage, Label, LabelWrapper, SelectWrapper } from "../../styles";
 import { useTableOrSpreadsheet } from "./useTableOrSpreadsheet";
+import { Select, Option, Tooltip } from "@appsmith/ads";
+import { DropdownOption } from "../DatasourceDropdown/DropdownOption";
+import type { DefaultOptionType } from "rc-select/lib/Select";
+import { ColumnSelectorModal } from "../ColumnSelectorModal";
+import { WidgetQueryGeneratorFormContext } from "components/editorComponents/WidgetQueryGeneratorForm/index";
 
 function TableOrSpreadsheetDropdown() {
-  const { error, isLoading, label, onSelect, options, selected, show } =
-    useTableOrSpreadsheet();
+  const {
+    disabled,
+    error,
+    isLoading,
+    label,
+    labelText,
+    onSelect,
+    options,
+    selected,
+    show,
+  } = useTableOrSpreadsheet();
+
+  const { showEditFieldsModal } = useContext(WidgetQueryGeneratorFormContext);
 
   if (show) {
     return (
       <SelectWrapper className="space-y-2">
-        {label}
-        <Dropdown
-          data-testid="t--table-dropdown"
-          dropdownMaxHeight={"300px"}
-          errorMsg={error}
-          fillOptions
-          height={DROPDOWN_TRIGGER_DIMENSION.HEIGHT}
+        <LabelWrapper>
+          <Tooltip content={labelText}>
+            <Label>{label}</Label>
+          </Tooltip>
+          {showEditFieldsModal && (
+            <ColumnSelectorModal isDisabled={!selected} />
+          )}
+        </LabelWrapper>
+        <Select
+          data-testid="t--one-click-binding-table-selector"
+          dropdownStyle={{
+            minWidth: "350px",
+            maxHeight: "300px",
+          }}
+          isDisabled={disabled}
           isLoading={isLoading}
-          onSelect={onSelect}
-          options={options}
-          selected={selected}
-          showLabelOnly
-          width={DROPDOWN_TRIGGER_DIMENSION.WIDTH}
-        />
+          isValid={!error}
+          onSelect={(value: string, selectedOption: DefaultOptionType) => {
+            const option = options.find(
+              (d: DefaultOptionType) => d.id === selectedOption.key,
+            );
+
+            if (option) {
+              onSelect(value, option);
+            }
+          }}
+          showSearch
+          value={selected}
+          virtual={false}
+        >
+          {options.map((option) => {
+            return (
+              <Option
+                data-testid="t--one-click-binding-table-selector--table"
+                key={option.id}
+                value={option.value}
+              >
+                <DropdownOption label={option.label} />
+              </Option>
+            );
+          })}
+        </Select>
+        <ErrorMessage data-testid="t--one-click-binding-table-selector--error">
+          {error}
+        </ErrorMessage>
       </SelectWrapper>
     );
   } else {
@@ -32,4 +77,4 @@ function TableOrSpreadsheetDropdown() {
   }
 }
 
-export default TableOrSpreadsheetDropdown;
+export default memo(TableOrSpreadsheetDropdown);

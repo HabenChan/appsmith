@@ -1,9 +1,7 @@
-import type {
-  ApplicationPayload,
-  Page,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ApplicationPayload } from "entities/Application";
+import type { Page } from "entities/Page";
 
-export type NavigationProps = {
+export interface NavigationProps {
   pages: Page[];
   currentApplicationDetails?: ApplicationPayload;
-};
+}

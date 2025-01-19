@@ -1,14 +1,14 @@
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import { select, takeLatest } from "redux-saga/effects";
 import localStorage from "utils/localStorage";
 import type { ThemeMode } from "selectors/themeSelectors";
 import { getCurrentThemeDetails } from "selectors/themeSelectors";
 import { trimTrailingSlash } from "utils/helpers";
 
-export type BackgroundTheme = {
+export interface BackgroundTheme {
   colors: { homepageBackground: string; appBackground: string };
-};
+}
 
 export function changeAppBackground(currentTheme: BackgroundTheme) {
   if (
@@ -26,6 +26,7 @@ export function changeAppBackground(currentTheme: BackgroundTheme) {
 
 export function* setThemeSaga(actionPayload: ReduxAction<ThemeMode>) {
   const theme: BackgroundTheme = yield select(getCurrentThemeDetails);
+
   changeAppBackground(theme);
   yield localStorage.setItem("THEME", actionPayload.payload);
 }

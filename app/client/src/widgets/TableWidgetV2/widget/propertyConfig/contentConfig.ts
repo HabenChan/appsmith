@@ -1,15 +1,20 @@
 import {
   createMessage,
   TABLE_WIDGET_TOTAL_RECORD_TOOLTIP,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import type { PropertyPaneConfig } from "constants/PropertyControlConstants";
 import { ValidationTypes } from "constants/WidgetValidation";
 import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
 import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
 import type { TableWidgetProps } from "widgets/TableWidgetV2/constants";
+import {
+  ALLOW_TABLE_WIDGET_SERVER_SIDE_FILTERING,
+  CUSTOM_LOADING_STATE_ENABLED,
+} from "../../constants";
 import { InlineEditingSaveOptions } from "widgets/TableWidgetV2/constants";
 import { composePropertyUpdateHook } from "widgets/WidgetUtils";
 import {
+  tableDataValidation,
   totalRecordsCountValidation,
   uniqueColumnNameValidation,
   updateColumnOrderHook,
@@ -18,6 +23,7 @@ import {
   updateInlineEditingSaveOptionHook,
 } from "../propertyUtils";
 import panelConfig from "./PanelConfig";
+import Widget from "../index";
 
 export default [
   {
@@ -28,21 +34,34 @@ export default [
           "Takes in an array of objects to display rows in the table. Bind data from an API using {{}}",
         propertyName: "tableData",
         label: "Table data",
-        controlType: "INPUT_TEXT",
+        controlType: "ONE_CLICK_BINDING_CONTROL",
+        controlConfig: {
+          searchableColumn: true,
+        },
         placeholderText: '[{ "name": "John" }]',
         inputType: "ARRAY",
         isBindProperty: true,
         isTriggerProperty: false,
+        isJSConvertible: true,
         validation: {
-          type: ValidationTypes.OBJECT_ARRAY,
+          type: ValidationTypes.FUNCTION,
           params: {
-            default: [],
+            fn: tableDataValidation,
+            expected: {
+              type: "Array",
+              example: `[{ "name": "John" }]`,
+              autocompleteDataType: AutocompleteDataType.ARRAY,
+            },
           },
         },
         evaluationSubstitutionType: EvaluationSubstitutionType.SMART_SUBSTITUTE,
+        shouldSwitchToNormalMode: (
+          isDynamic: boolean,
+          isToggleDisabled: boolean,
+          triggerFlag?: boolean,
+        ) => triggerFlag && isDynamic && !isToggleDisabled,
       },
       {
-        helpText: "Columns",
         propertyName: "primaryColumns",
         controlType: "PRIMARY_COLUMNS_V2",
         label: "Columns",
@@ -83,6 +102,7 @@ export default [
         helpText: "Choose the save experience to save the edited cell",
         label: "Update mode",
         controlType: "ICON_TABS",
+        defaultValue: InlineEditingSaveOptions.ROW_LEVEL,
         fullWidth: true,
         isBindProperty: true,
         isTriggerProperty: false,
@@ -124,6 +144,12 @@ export default [
         validation: { type: ValidationTypes.TEXT },
       },
     ],
+    // Added this prop to indicate that data section needs to be expanded by default
+    // Rest all sections needs to be collapsed
+    // We already have a isDefaultOpen prop configured to keep a section expanded or not
+    // but introducing new prop so that we can control is based on flag
+    // Once we decide to keep this feature, we can go back to using isDefaultOpen and removeexpandedByDefault
+    expandedByDefault: true,
   },
   {
     sectionName: "Pagination",
@@ -192,6 +218,7 @@ export default [
         dependencies: ["serverSidePaginationEnabled"],
       },
     ],
+    expandedByDefault: false,
   },
   {
     sectionName: "Search & filters",
@@ -215,6 +242,28 @@ export default [
         isTriggerProperty: false,
         hidden: (props: TableWidgetProps) => !props.isVisibleSearch,
         dependencies: ["isVisibleSearch"],
+      },
+      {
+        propertyName: "enableServerSideFiltering",
+        label: "Server side filtering",
+        helpText: "Filters all the results on the server side",
+        controlType: "SWITCH",
+        isBindProperty: false,
+        isTriggerProperty: false,
+        defaultValue: false,
+        hidden: () =>
+          !Widget.getFeatureFlag(ALLOW_TABLE_WIDGET_SERVER_SIDE_FILTERING),
+      },
+      {
+        propertyName: "onTableFilterUpdate",
+        label: "onTableFilterUpdate",
+        helpText: "when table filter is modified by the user",
+        controlType: "ACTION_SELECTOR",
+        isJSConvertible: true,
+        isBindProperty: true,
+        isTriggerProperty: true,
+        hidden: (props: TableWidgetProps) => !props.enableServerSideFiltering,
+        dependencies: ["enableServerSideFiltering"],
       },
       {
         propertyName: "defaultSearchText",
@@ -250,6 +299,7 @@ export default [
         validation: { type: ValidationTypes.BOOLEAN },
       },
     ],
+    expandedByDefault: false,
   },
   {
     sectionName: "Row selection",
@@ -317,6 +367,7 @@ export default [
         isTriggerProperty: true,
       },
     ],
+    expandedByDefault: false,
   },
   {
     sectionName: "Sorting",
@@ -348,6 +399,7 @@ export default [
         dependencies: ["isSortable"],
       },
     ],
+    expandedByDefault: false,
   },
   {
     sectionName: "Adding a row",
@@ -424,6 +476,7 @@ export default [
         },
       },
     ],
+    expandedByDefault: false,
   },
   {
     sectionName: "General",
@@ -444,12 +497,34 @@ export default [
         propertyName: "animateLoading",
         label: "Animate loading",
         controlType: "SWITCH",
-        helpText: "Controls the loading of the widget",
+        helpText: "Controls the animation loading of the widget",
         defaultValue: true,
         isJSConvertible: true,
         isBindProperty: true,
         isTriggerProperty: false,
         validation: { type: ValidationTypes.BOOLEAN },
+      },
+      {
+        propertyName: "customIsLoading",
+        label: `Custom loading state`,
+        controlType: "SWITCH",
+        helpText: "Defines a custom value for the loading state",
+        defaultValue: false,
+        isBindProperty: true,
+        isTriggerProperty: false,
+        validation: { type: ValidationTypes.BOOLEAN },
+        hidden: () => !Widget.getFeatureFlag(CUSTOM_LOADING_STATE_ENABLED),
+      },
+      {
+        propertyName: "customIsLoadingValue",
+        label: "isLoading value",
+        controlType: "INPUT_TEXT",
+        defaultValue: "",
+        isBindProperty: true,
+        isTriggerProperty: false,
+        validation: { type: ValidationTypes.BOOLEAN },
+        hidden: (props: TableWidgetProps) => !props.customIsLoading,
+        dependencies: ["customIsLoading"],
       },
       {
         propertyName: "isVisibleDownload",
@@ -488,5 +563,6 @@ export default [
         dependencies: ["isVisibleDownload"],
       },
     ],
+    expandedByDefault: false,
   },
 ] as PropertyPaneConfig[];

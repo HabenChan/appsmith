@@ -61,8 +61,8 @@ export const PopoverStyles = createGlobalStyle<{
     }
 
     .${props.portalClassName}  .${Classes.INPUT}:focus, .${
-    props.portalClassName
-  }  .${Classes.INPUT}:active {
+      props.portalClassName
+    }  .${Classes.INPUT}:active {
       border: 1px solid ${props.accentColor} !important;
       box-shadow:  0px 0px 0px 3px ${lightenColor(
         props.accentColor,
@@ -100,6 +100,7 @@ export const getSelectedISDCode = (code?: string): DropdownOption => {
         return item.code === code;
       })
     : undefined;
+
   if (!selectedCountry) {
     selectedCountry = {
       name: "United States",
@@ -107,6 +108,7 @@ export const getSelectedISDCode = (code?: string): DropdownOption => {
       code: "US",
     };
   }
+
   return {
     label: `${selectedCountry.name} (${selectedCountry.dial_code})`,
     searchText: selectedCountry.name,
@@ -141,9 +143,11 @@ export default function ISDCodeDropdown(props: ISDCodeDropdownProps) {
       <Icon className="dropdown" name="down-arrow" size={IconSize.XXS} />
     </DropdownTriggerIconWrapper>
   );
+
   if (props.disabled) {
     return dropdownTrigger;
   }
+
   return (
     <>
       <Dropdown

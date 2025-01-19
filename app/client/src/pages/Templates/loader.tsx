@@ -2,7 +2,11 @@ import React from "react";
 import PageLoadingBar from "pages/common/PageLoadingBar";
 import { retryPromise } from "utils/AppsmithUtils";
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 class TemplatesListLoader extends React.PureComponent<any, { Page: any }> {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(props: any) {
     super(props);
 
@@ -13,7 +17,7 @@ class TemplatesListLoader extends React.PureComponent<any, { Page: any }> {
 
   componentDidMount() {
     retryPromise(
-      () => import(/* webpackChunkName: "templates" */ "./index"),
+      async () => import(/* webpackChunkName: "templates" */ "./index"),
     ).then((module) => {
       this.setState({ Page: module.default });
     });

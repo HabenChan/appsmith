@@ -1,15 +1,15 @@
-import type { AppState } from "@appsmith/reducers";
-import type FeatureFlags from "entities/FeatureFlags";
+import type { AppState } from "ee/reducers";
+import type { FeatureFlags } from "ee/entities/FeatureFlag";
 import type {
   CodeEditorHistory,
   CursorPosition,
   EvaluatedPopupState,
   PropertyPanelContext,
   PropertyPanelState,
-} from "reducers/uiReducers/editorContextReducer";
-import { isSubEntities } from "reducers/uiReducers/editorContextReducer";
+} from "ee/reducers/uiReducers/editorContextReducer";
+import { isSubEntities } from "ee/reducers/uiReducers/editorContextReducer";
 import { createSelector } from "reselect";
-import { selectFeatureFlags } from "selectors/usersSelectors";
+import { selectFeatureFlags } from "ee/selectors/featureFlagsSelectors";
 
 export const getFocusableInputField = (state: AppState) =>
   state.ui.editorContext.focusedInputField;
@@ -60,6 +60,7 @@ export const getSelectedPropertyTabIndex = createSelector(
       propertyPanelContext.selectedPropertyTabIndex !== undefined
     )
       return propertyPanelContext.selectedPropertyTabIndex;
+
     return selectedPropertyTabIndex;
   },
 );
@@ -71,6 +72,7 @@ export const getCodeEditorLastCursorPosition = createSelector(
     key: string | undefined,
   ): CursorPosition | undefined => {
     if (key === undefined) return;
+
     return codeEditorHistory[key]?.cursorPosition;
   },
 );
@@ -112,6 +114,7 @@ const getPanelContext = (
     key: options.key,
   };
 };
+
 export const getPropertySectionState = createSelector(
   [getAllPropertySectionState, getPanelContext],
   (
@@ -122,8 +125,10 @@ export const getPropertySectionState = createSelector(
     },
   ): boolean | undefined => {
     const { key, propertyPanelContext } = options;
+
     if (propertyPanelContext?.propertySectionState)
       return propertyPanelContext.propertySectionState[key];
+
     return propertySectionState[key];
   },
 );
@@ -141,6 +146,7 @@ export const getEntityCollapsibleState = createSelector(
   ): boolean | undefined => {
     if (isSubEntities(entityName))
       return subEntityCollapsibleStates[entityName];
+
     return entityCollapsibleStates[entityName];
   },
 );

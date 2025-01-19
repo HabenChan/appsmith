@@ -1,20 +1,23 @@
-import type { DataTree } from "entities/DataTree/dataTreeFactory";
-import { ENTITY_TYPE } from "entities/DataTree/dataTreeFactory";
-import { PluginType } from "entities/Action";
+import type { ActionEntity } from "ee/entities/DataTree/types";
+import type { DataTree } from "entities/DataTree/dataTreeTypes";
+import { ENTITY_TYPE } from "ee/entities/DataTree/types";
+import { PluginType } from "entities/Plugin";
 import type { EvalContext } from "workers/Evaluation/evaluate";
 import { createEvaluationContext } from "workers/Evaluation/evaluate";
 import { MessageType } from "utils/MessageUtil";
 import {
-  addDataTreeToContext,
+  getDataTreeContext,
   addPlatformFunctionsToEvalContext,
-} from "@appsmith/workers/Evaluation/Actions";
+} from "ee/workers/Evaluation/Actions";
 import TriggerEmitter, { BatchKey } from "../fns/utils/TriggerEmitter";
-import type { ActionEntity } from "entities/DataTree/types";
 
 jest.mock("lodash/uniqueId");
 
 describe("Add functions", () => {
   const workerEventMock = jest.fn();
+
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   self.postMessage = (payload: any) => {
     workerEventMock(payload);
   };
@@ -42,6 +45,7 @@ describe("Add functions", () => {
   };
   const evalContext = createEvaluationContext({
     dataTree,
+    configTree: {},
     isTriggerBased: true,
     context: {},
   });
@@ -62,6 +66,7 @@ describe("Add functions", () => {
   it("action.clear works", () => {
     expect(evalContext.action1.clear()).resolves.toBe({});
     const arg = workerEventMock.mock.calls[0][0];
+
     expect(arg).toEqual(
       messageCreator("PROCESS_TRIGGER", {
         data: {
@@ -77,6 +82,7 @@ describe("Add functions", () => {
           triggerMeta: {
             source: {},
             triggerPropertyName: undefined,
+            onPageLoad: false,
           },
         },
         method: "PROCESS_TRIGGER",
@@ -109,6 +115,7 @@ describe("Add functions", () => {
           triggerMeta: {
             source: {},
             triggerPropertyName: undefined,
+            onPageLoad: false,
           },
         },
         method: "PROCESS_TRIGGER",
@@ -119,6 +126,7 @@ describe("Add functions", () => {
   it("showAlert works", () => {
     const message = "Alert message";
     const style = "info";
+
     expect(evalContext.showAlert(message, style)).resolves.toBe({});
     expect(workerEventMock).lastCalledWith(
       messageCreator("PROCESS_TRIGGER", {
@@ -136,6 +144,7 @@ describe("Add functions", () => {
           triggerMeta: {
             source: {},
             triggerPropertyName: undefined,
+            onPageLoad: false,
           },
         },
         method: "PROCESS_TRIGGER",
@@ -162,6 +171,7 @@ describe("Add functions", () => {
           triggerMeta: {
             source: {},
             triggerPropertyName: undefined,
+            onPageLoad: false,
           },
         },
         method: "PROCESS_TRIGGER",
@@ -171,6 +181,7 @@ describe("Add functions", () => {
 
   it("closeModal works", () => {
     const modalName = "Modal 1";
+
     expect(evalContext.closeModal(modalName)).resolves.toBe({});
     expect(workerEventMock).lastCalledWith(
       messageCreator("PROCESS_TRIGGER", {
@@ -187,6 +198,7 @@ describe("Add functions", () => {
           triggerMeta: {
             source: {},
             triggerPropertyName: undefined,
+            onPageLoad: false,
           },
         },
         method: "PROCESS_TRIGGER",
@@ -199,6 +211,7 @@ describe("Add functions", () => {
     const value = "thing";
     const persist = false;
     const mockStoreUpdates = jest.fn();
+
     TriggerEmitter.on(BatchKey.process_store_updates, mockStoreUpdates);
     expect(evalContext.storeValue(key, value, persist)).resolves.toStrictEqual(
       {},
@@ -221,6 +234,7 @@ describe("Add functions", () => {
   it("removeValue works", () => {
     const key = "some";
     const mockStoreUpdates = jest.fn();
+
     TriggerEmitter.on(BatchKey.process_store_updates, mockStoreUpdates);
     expect(evalContext.removeValue(key)).resolves.toStrictEqual({});
     expect(mockStoreUpdates).toBeCalledWith({
@@ -237,6 +251,7 @@ describe("Add functions", () => {
 
   it("clearStore works", async () => {
     const mockStoreUpdates = jest.fn();
+
     TriggerEmitter.on(BatchKey.process_store_updates, mockStoreUpdates);
     expect(evalContext.clearStore()).resolves.toStrictEqual({});
     expect(mockStoreUpdates).toBeCalledWith({
@@ -272,6 +287,7 @@ describe("Add functions", () => {
           triggerMeta: {
             source: {},
             triggerPropertyName: undefined,
+            onPageLoad: false,
           },
         },
         method: "PROCESS_TRIGGER",
@@ -281,6 +297,7 @@ describe("Add functions", () => {
 
   it("copyToClipboard works", () => {
     const data = "file";
+
     expect(evalContext.copyToClipboard(data)).resolves.toBe({});
     expect(workerEventMock).lastCalledWith(
       messageCreator("PROCESS_TRIGGER", {
@@ -298,6 +315,7 @@ describe("Add functions", () => {
           triggerMeta: {
             source: {},
             triggerPropertyName: undefined,
+            onPageLoad: false,
           },
         },
         method: "PROCESS_TRIGGER",
@@ -322,12 +340,14 @@ describe("Add functions", () => {
             payload: {
               widgetName,
               resetChildren,
+              metaUpdates: [],
             },
           },
           eventType: undefined,
           triggerMeta: {
             source: {},
             triggerPropertyName: undefined,
+            onPageLoad: false,
           },
         },
         method: "PROCESS_TRIGGER",
@@ -396,22 +416,6 @@ const dataTree = {
     backgroundColor: "",
     borderColor: "",
   },
-  pageList: [
-    {
-      pageName: "Page1",
-      pageId: "63349fb5d39f215f89b8245e",
-      isDefault: false,
-      isHidden: false,
-      slug: "page1",
-    },
-    {
-      pageName: "Page2",
-      pageId: "637cc6b4a3664a7fe679b7b0",
-      isDefault: true,
-      isHidden: false,
-      slug: "page2",
-    },
-  ],
   appsmith: {
     store: {},
     geolocation: {
@@ -538,14 +542,19 @@ const dataTree = {
   },
 };
 
+const configTree = {};
+
 describe("Test addDataTreeToContext method", () => {
   const evalContext: EvalContext = {};
+
   beforeAll(() => {
-    addDataTreeToContext({
-      EVAL_CONTEXT: evalContext,
+    const EVAL_CONTEXT = getDataTreeContext({
       dataTree: dataTree as unknown as DataTree,
+      configTree,
       isTriggerBased: true,
     });
+
+    Object.assign(evalContext, EVAL_CONTEXT);
     addPlatformFunctionsToEvalContext(evalContext);
   });
 

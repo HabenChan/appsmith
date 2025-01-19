@@ -7,10 +7,16 @@ describe("Mongo Form to Native conversion works", () => {
 
     _.dataSources.CreateDataSource("Mongo", true, true);
     _.dataSources.CreateQueryAfterDSSaved();
-    _.agHelper.TypeDynamicInputValueNValidate(
-      "listingAndReviews",
-      formControls.mongoCollection,
-    );
+    _.assertHelper.AssertNetworkStatus("@trigger");
+    _.dataSources.EnterJSContext({
+      fieldLabel: "Collection",
+      fieldValue: "listingAndReviews",
+    });
+    // _.dataSources.ValidateNSelectDropdown(
+    //   "Collection",
+    //   "",
+    //   "listingAndReviews",
+    // );
 
     _.agHelper.TypeDynamicInputValueNValidate(
       "{beds : {$lte: 2}}",
@@ -27,33 +33,24 @@ describe("Mongo Form to Native conversion works", () => {
       formControls.mongoFindProjection,
     );
 
-    _.dataSources.ValidateNSelectDropdown(
-      "Commands",
-      "Find document(s)",
-      "Raw",
-    );
+    _.dataSources.ValidateNSelectDropdown("Command", "Find document(s)", "Raw");
 
     _.agHelper.VerifyCodeInputValue(formControls.rawBody, expectedOutput);
 
     // then we test to check if the conversion is only done once.
     // and then we ensure that upon switching between another command and Raw, the Template menu does not show up.
 
-    _.dataSources.ValidateNSelectDropdown(
-      "Commands",
-      "Raw",
-      "Find document(s)",
-    );
+    _.dataSources.ValidateNSelectDropdown("Command", "Raw", "Find document(s)");
 
-    _.agHelper.TypeDynamicInputValueNValidate(
-      "modifyCollection",
-      formControls.mongoCollection,
-    );
+    cy.wait(500);
 
-    _.dataSources.ValidateNSelectDropdown(
-      "Commands",
-      "Find document(s)",
-      "Raw",
-    );
+    _.agHelper.EnterValue("modifyCollection", {
+      propFieldName: "",
+      directInput: false,
+      inputFieldName: "Collection",
+    });
+
+    _.dataSources.ValidateNSelectDropdown("Command", "Find document(s)", "Raw");
 
     // make sure template menu no longer reappears
     _.agHelper.AssertElementAbsence(_.dataSources._templateMenu);

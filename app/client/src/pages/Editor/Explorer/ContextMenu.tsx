@@ -9,16 +9,17 @@ import {
   MenuSubTrigger,
   MenuSubContent,
   Tooltip,
-} from "design-system";
+  MenuSeparator,
+} from "@appsmith/ads";
 import {
   createMessage,
   ENTITY_MORE_ACTIONS_TOOLTIP,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import { AddButtonWrapper, EntityClassNames } from "./Entity";
 import styled from "styled-components";
 
-export type TreeDropdownOption = {
-  label: string;
+export interface TreeDropdownOption {
+  label: React.ReactNode;
   value: string;
   children?: TreeDropdownOption[];
   className?: string;
@@ -26,18 +27,21 @@ export type TreeDropdownOption = {
   confirmDelete?: boolean;
   intent?: string;
   disabled?: boolean;
-};
+  type?: "menu-item" | "menu-divider";
+  tooltipText?: string;
+}
 type Setter = (value: TreeDropdownOption, defaultVal?: string) => void;
 
-type TreeDropdownProps = {
+interface TreeDropdownProps {
   toggle?: React.ReactNode;
   optionTree: TreeDropdownOption[];
   className?: string;
+  triggerId?: string;
   setConfirmDelete?: (val: boolean) => void;
-};
+}
 
 const StyledMenuSubContent = styled(MenuSubContent)`
-  max-height: 200px;
+  max-height: 350px;
 `;
 
 export default function TreeDropdown(props: TreeDropdownProps) {
@@ -47,12 +51,13 @@ export default function TreeDropdown(props: TreeDropdownProps) {
   const handleSelect = (option: TreeDropdownOption) => {
     if (option.onSelect) {
       // MenuTrigger takes focus after the Menu closes. For an input to be focused for e.g
-      // edit name we have to take focus back from it.
+      // Rename we have to take focus back from it.
       // Without this the input takes focus first post which the Menu closes post which MenuTrigger
       // takes back focus.
       setTimeout(() => {
-        option.onSelect && option.onSelect(option);
+        option.onSelect?.(option);
       }, 0);
+
       if (option.value === "delete" && !option.confirmDelete) {
         handleOpenChange(true);
       } else {
@@ -75,7 +80,7 @@ export default function TreeDropdown(props: TreeDropdownProps) {
   function renderTreeOption(option: TreeDropdownOption) {
     if (option.children) {
       return (
-        <MenuSub>
+        <MenuSub key={option.value}>
           <MenuSubTrigger>{option.label}</MenuSubTrigger>
           <StyledMenuSubContent width="220px">
             {option.children.map(renderTreeOption)}
@@ -84,21 +89,34 @@ export default function TreeDropdown(props: TreeDropdownProps) {
       );
     }
 
+    if (option.type === "menu-divider") {
+      return <MenuSeparator />;
+    }
+
     return (
-      <MenuItem
-        className={`${option.intent === "danger" ? "error-menuitem" : ""} ${
-          option.className
-        }`}
-        disabled={option.disabled}
-        onClick={(e) => {
-          handleSelect(option);
-          e.stopPropagation();
-        }}
+      <Tooltip
+        content={option.tooltipText}
+        isDisabled={!option.tooltipText}
+        key={option.value}
+        placement="top"
       >
-        {option.label}
-      </MenuItem>
+        <MenuItem
+          className={`${option.intent === "danger" ? "error-menuitem" : ""} ${
+            option.className
+          }`}
+          disabled={option.disabled}
+          key={option.value}
+          onClick={(e) => {
+            handleSelect(option);
+            e.stopPropagation();
+          }}
+        >
+          {option.label}
+        </MenuItem>
+      </Tooltip>
     );
   }
+
   const list = optionTree.map(renderTreeOption);
   const menuItems = (
     <MenuContent
@@ -128,6 +146,7 @@ export default function TreeDropdown(props: TreeDropdownProps) {
           >
             <Button
               className={props.className}
+              id={props.triggerId}
               isIconButton
               kind="tertiary"
               startIcon="more-vertical-control"

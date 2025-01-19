@@ -47,16 +47,16 @@
         {
           "label": "Connection mode",
           "configProperty": "datasourceConfiguration.connection.mode",
-          "controlType": "DROP_DOWN",
+          "controlType": "SEGMENTED_CONTROL",
           "initialValue": "READ_WRITE",
           "options": [
             {
-              "label": "Read only",
-              "value": "READ_ONLY"
-            },
-            {
               "label": "Read / Write",
               "value": "READ_WRITE"
+            },
+            {
+              "label": "Read only",
+              "value": "READ_ONLY"
             }
           ],
           "hidden": {
@@ -107,11 +107,13 @@
               "configProperty": "datasourceConfiguration.endpoints[*].port",
               "dataType": "NUMBER",
               "controlType": "KEYVALUE_ARRAY",
+              "initialValue": ["27017"],
               "hidden": {
                 "path": "datasourceConfiguration.properties[0].value",
                 "comparison": "EQUALS",
                 "value": "Yes"
-              }
+              },
+              "placeholderText": "27017"
             }
           ]
         },

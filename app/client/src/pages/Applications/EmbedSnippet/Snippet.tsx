@@ -1,11 +1,8 @@
 import React from "react";
 import copy from "copy-to-clipboard";
-import {
-  createMessage,
-  IN_APP_EMBED_SETTING,
-} from "@appsmith/constants/messages";
+import { createMessage, IN_APP_EMBED_SETTING } from "ee/constants/messages";
 import styled from "styled-components";
-import { Icon, Text, toast } from "design-system";
+import { Icon, Text, toast } from "@appsmith/ads";
 
 const StyledText = styled(Text)``;
 
@@ -19,15 +16,15 @@ const EmbedSnippetContainer = styled.div`
   gap: 1.5rem;
 `;
 
-type EmbedCodeSnippetProps = {
+interface EmbedCodeSnippetProps {
   snippet: string;
   isAppSettings?: boolean;
-};
+}
 
-type SnippetProps = {
+interface SnippetProps {
   onCopy: () => void;
   snippet: string;
-};
+}
 
 function AppSettings(props: SnippetProps) {
   return (

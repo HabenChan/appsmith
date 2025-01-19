@@ -1,7 +1,6 @@
 import type {
   DataTreeEvaluationProps,
-  DependencyMap,
-  EvalError,
+  EvalError as TEvalError,
   EvaluationError,
 } from "utils/DynamicBindingUtils";
 import {
@@ -10,34 +9,39 @@ import {
   getEntityDynamicBindingPathList,
   getEntityId,
   getEntityName,
-  getEntityType,
   getEvalErrorPath,
   getEvalValuePath,
   isChildPropertyPath,
   isDynamicValue,
-  isPathADynamicBinding,
   isPathDynamicTrigger,
   PropertyEvaluationErrorType,
 } from "utils/DynamicBindingUtils";
-import type { WidgetTypeConfigMap } from "utils/WidgetFactory";
+import type { WidgetTypeConfigMap } from "WidgetProvider/factory";
+import type {
+  WidgetEntity,
+  WidgetEntityConfig,
+  ActionEntity,
+  JSActionEntityConfig,
+  PrivateWidgets,
+  ActionEntityConfig,
+  DataTreeEntityConfig,
+} from "ee/entities/DataTree/types";
 import type {
   DataTree,
   DataTreeEntity,
-  WidgetEntity,
   ConfigTree,
-  WidgetEntityConfig,
-  DataTreeEntityConfig,
   UnEvalTree,
-} from "entities/DataTree/dataTreeFactory";
-import type {
-  ActionEntity,
-  JSActionEntity,
-  JSActionEntityConfig,
-} from "entities/DataTree/types";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
-import type { PrivateWidgets } from "entities/DataTree/types";
-import { ENTITY_TYPE } from "entities/DataTree/types";
-import type { DataTreeDiff } from "@appsmith/workers/Evaluation/evaluationUtils";
+} from "entities/DataTree/dataTreeTypes";
+import {
+  EvaluationSubstitutionType,
+  ENTITY_TYPE,
+} from "ee/entities/DataTree/types";
+import type { DataTreeDiff } from "ee/workers/Evaluation/evaluationUtils";
+import {
+  convertMicroDiffToDeepDiff,
+  getAllPathsBasedOnDiffPaths,
+  isPropertyAnEntityAction,
+} from "ee/workers/Evaluation/evaluationUtils";
 
 import {
   addDependantsOfNestedPropertyPaths,
@@ -54,12 +58,15 @@ import {
   trimDependantChangePaths,
   overrideWidgetProperties,
   getAllPaths,
-  isValidEntity,
   isNewEntity,
   getStaleMetaStateIds,
   convertJSFunctionsToString,
   DataTreeDiffEvent,
-} from "@appsmith/workers/Evaluation/evaluationUtils";
+  resetValidationErrorsForEntityProperty,
+  isAPathDynamicBindingPath,
+  isAnyJSAction,
+  isNotEntity,
+} from "ee/workers/Evaluation/evaluationUtils";
 import {
   difference,
   flatten,
@@ -77,14 +84,19 @@ import {
 
 import type { Diff } from "deep-diff";
 import { applyChange, diff } from "deep-diff";
-import toposort from "toposort";
 import {
   EXECUTION_PARAM_KEY,
   EXECUTION_PARAM_REFERENCE_REGEX,
   THIS_DOT_PARAMS_KEY,
 } from "constants/AppsmithActionConstants/ActionConstants";
-import type { EvalResult, EvaluateContext } from "workers/Evaluation/evaluate";
-import evaluateSync, { evaluateAsync } from "workers/Evaluation/evaluate";
+import {
+  evaluateSync,
+  resetWorkerGlobalScope,
+  type EvalResult,
+  type EvaluateContext,
+  evaluateAsync,
+  setEvalContext,
+} from "workers/Evaluation/evaluate";
 import { substituteDynamicBindingWithValues } from "workers/Evaluation/evaluationSubstitution";
 import { Severity } from "entities/AppsmithConsole";
 import { error as logError } from "loglevel";
@@ -95,7 +107,8 @@ import type {
   ValidationConfig,
 } from "constants/PropertyControlConstants";
 import { klona } from "klona/full";
-import type { EvalMetaUpdates } from "@appsmith/workers/common/DataTreeEvaluator/types";
+import { klona as klonaJSON } from "klona/json";
+import type { EvalMetaUpdates } from "ee/workers/common/DataTreeEvaluator/types";
 import {
   updateDependencyMap,
   createDependencyMap,
@@ -107,35 +120,55 @@ import {
   updateEvalTreeWithJSCollectionState,
 } from "workers/Evaluation/JSObject";
 import {
-  addRootcauseToAsyncInvocationErrors,
   getFixedTimeDifference,
+  getIsNewWidgetAdded,
+  getOnlyAffectedJSObjects,
   replaceThisDotParams,
 } from "./utils";
 import { isJSObjectFunction } from "workers/Evaluation/JSObject/utils";
 import {
-  getValidatedTree,
   validateActionProperty,
   validateAndParseWidgetProperty,
+  validateWidgetProperty,
 } from "./validationUtils";
 import { errorModifier } from "workers/Evaluation/errorModifier";
 import JSObjectCollection from "workers/Evaluation/JSObject/Collection";
 import userLogs from "workers/Evaluation/fns/overrides/console";
 import ExecutionMetaData from "workers/Evaluation/fns/utils/ExecutionMetaData";
+import DependencyMap from "entities/DependencyMap";
+import { DependencyMapUtils } from "entities/DependencyMap/DependencyMapUtils";
+import { isWidgetActionOrJsObject } from "ee/entities/DataTree/utils";
+import DataStore from "workers/Evaluation/dataStore";
+import { updateTreeWithData } from "workers/Evaluation/dataStore/utils";
+import microDiff from "microdiff";
+import {
+  profileAsyncFn,
+  profileFn,
+} from "instrumentation/generateWebWorkerTraces";
+import generateOverrideContext from "ee/workers/Evaluation/generateOverrideContext";
+import appComputationCache from "../AppComputationCache";
+import {
+  EComputationCacheName,
+  type ICacheProps,
+} from "../AppComputationCache/types";
+import { getDataTreeContext } from "ee/workers/Evaluation/Actions";
+import { WorkerEnv } from "workers/Evaluation/handlers/workerEnv";
+import type { WebworkerSpanData, Attributes } from "instrumentation/types";
+import type { AffectedJSObjects } from "actions/EvaluationReduxActionTypes";
 
 type SortedDependencies = Array<string>;
-export type EvalProps = {
+export interface EvalProps {
   [entityName: string]: DataTreeEvaluationProps;
-};
+}
 
 export default class DataTreeEvaluator {
-  /**
-   * dependencyMap: Maintains map of <PATH, list of paths that re-evaluates on the evaluation of the PATH>
-   */
-  dependencyMap: DependencyMap = {};
+  dependencyMap: DependencyMap = new DependencyMap();
   sortedDependencies: SortedDependencies = [];
-  inverseDependencyMap: DependencyMap = {};
+  dependencies: Record<string, string[]> = {};
+  inverseDependencies: Record<string, string[]> = {};
   widgetConfigMap: WidgetTypeConfigMap = {};
   evalTree: DataTree = {};
+  configTree: ConfigTree = {};
 
   /**
    * This contains raw evaluated value without any validation or parsing.
@@ -146,27 +179,12 @@ export default class DataTreeEvaluator {
   privateWidgets: PrivateWidgets = {};
   oldUnEvalTree: UnEvalTree = {};
   oldConfigTree: ConfigTree = {};
-  errors: EvalError[] = [];
+  errors: TEvalError[] = [];
   logs: unknown[] = [];
   console = userLogs;
   allActionValidationConfig?: {
     [actionId: string]: ActionValidationConfigMap;
   };
-  triggerFieldDependencyMap: DependencyMap = {};
-  /**  Keeps track of all invalid references in bindings throughout the Application
-   * Eg. For binding {{unknownEntity.name + Api1.name}} in Button1.text, where Api1 is present in dataTree but unknownEntity is not,
-   * the map has a key-value pair of
-   * {
-   *  "Button1.text": [unknownEntity.name]
-   * }
-   */
-  invalidReferencesMap: DependencyMap = {};
-  /**
-   * Maintains dependency of paths to re-validate on evaluation of particular property path.
-   */
-  validationDependencyMap: DependencyMap = {};
-  sortedValidationDependencies: SortedDependencies = [];
-  inverseValidationDependencyMap: DependencyMap = {};
 
   /**
    * Sanitized eval values and errors
@@ -174,6 +192,15 @@ export default class DataTreeEvaluator {
   evalProps: EvalProps = {};
   undefinedEvalValuesMap: Record<string, boolean> = {};
 
+  prevState = {};
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setPrevState(state: any) {
+    this.prevState = state;
+  }
+  getPrevState() {
+    return this.prevState;
+  }
   public hasCyclicalDependency = false;
   constructor(
     widgetConfigMap: WidgetTypeConfigMap,
@@ -189,8 +216,20 @@ export default class DataTreeEvaluator {
     return this.evalTree;
   }
 
+  getEvalProps() {
+    return this.evalProps;
+  }
+
   setEvalTree(evalTree: DataTree) {
     this.evalTree = evalTree;
+  }
+
+  getConfigTree() {
+    return this.configTree;
+  }
+
+  setConfigTree(configTree: ConfigTree) {
+    if (configTree) this.configTree = configTree;
   }
 
   getUnParsedEvalTree() {
@@ -209,14 +248,16 @@ export default class DataTreeEvaluator {
    * Method to create all data required for linting and
    * evaluation of the first tree
    */
-  setupFirstTree(
+  async setupFirstTree(
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     unEvalTree: any,
     configTree: ConfigTree,
-  ): {
-    jsUpdates: Record<string, JSUpdate>;
-    evalOrder: string[];
-    lintOrder: string[];
-  } {
+    webworkerTelemetry: Record<string, WebworkerSpanData | Attributes> = {},
+    cacheProps: ICacheProps,
+  ) {
+    this.setConfigTree(configTree);
+
     const totalFirstTreeSetupStartTime = performance.now();
     // cloneDeep will make sure not to omit key which has value as undefined.
     const firstCloneStartTime = performance.now();
@@ -228,54 +269,70 @@ export default class DataTreeEvaluator {
     //save current state of js collection action and variables to be added to uneval tree
     //save functions in resolveFunctions (as functions) to be executed as functions are not allowed in evalTree
     //and functions are saved in dataTree as strings
+    const parseJSActionsStartTime = performance.now();
+    const parsedCollections = profileFn(
+      "SetupFirstTree.parseJSActions",
+      undefined,
+      webworkerTelemetry,
+      () => {
+        return parseJSActions(this, localUnEvalTree);
+      },
+    );
+    const parseJSActionsEndTime = performance.now();
 
-    const parsedCollections = parseJSActions(this, localUnEvalTree);
     jsUpdates = parsedCollections.jsUpdates;
     localUnEvalTree = getUpdatedLocalUnEvalTreeAfterJSUpdates(
       jsUpdates,
       localUnEvalTree,
       configTree,
     );
+    const localUnEvalTreeJSCollection = getJSEntities(localUnEvalTree);
+    const stringifiedLocalUnEvalTreeJSCollection = convertJSFunctionsToString(
+      localUnEvalTreeJSCollection,
+      configTree,
+    );
+    const unEvalTreeWithStrigifiedJSFunctions = Object.assign(
+      {},
+      localUnEvalTree,
+      stringifiedLocalUnEvalTreeJSCollection,
+    );
     const allKeysGenerationStartTime = performance.now();
-    // set All keys
-    this.allKeys = getAllPaths(localUnEvalTree);
+
+    this.allKeys = await appComputationCache.fetchOrCompute({
+      cacheProps,
+      cacheName: EComputationCacheName.ALL_KEYS,
+      computeFn: () => getAllPaths(unEvalTreeWithStrigifiedJSFunctions),
+    });
+
     const allKeysGenerationEndTime = performance.now();
 
     const createDependencyMapStartTime = performance.now();
-    // Create dependency map
-    const {
-      dependencyMap,
-      invalidReferencesMap,
-      triggerFieldDependencyMap,
-      validationDependencyMap,
-    } = createDependencyMap(this, localUnEvalTree, configTree);
+
+    const { dependencies, inverseDependencies } = await profileAsyncFn(
+      "createDependencyMap",
+      async () =>
+        createDependencyMap(
+          this,
+          localUnEvalTree,
+          configTree,
+          cacheProps,
+          webworkerTelemetry,
+        ),
+      webworkerTelemetry,
+    );
+
     const createDependencyMapEndTime = performance.now();
 
-    this.dependencyMap = dependencyMap;
-    this.triggerFieldDependencyMap = triggerFieldDependencyMap;
-    this.invalidReferencesMap = invalidReferencesMap;
-    this.validationDependencyMap = validationDependencyMap;
+    this.dependencies = dependencies;
+    this.inverseDependencies = inverseDependencies;
+
     const sortDependenciesStartTime = performance.now();
-    // Sort
+
     this.sortedDependencies = this.sortDependencies(this.dependencyMap);
-    this.sortedValidationDependencies = this.sortDependencies(
-      validationDependencyMap,
-    );
     const sortDependenciesEndTime = performance.now();
 
-    const inverseDependencyGenerationStartTime = performance.now();
-    // Inverse
-    this.inverseDependencyMap = this.getInverseDependencyTree({
-      dependencyMap,
-      sortedDependencies: this.sortedDependencies,
-    });
-    this.inverseValidationDependencyMap = this.getInverseDependencyTree({
-      dependencyMap: validationDependencyMap,
-      sortedDependencies: this.sortedValidationDependencies,
-    });
-    const inverseDependencyGenerationEndTime = performance.now();
-
     const secondCloneStartTime = performance.now();
+
     this.oldUnEvalTree = klona(localUnEvalTree);
     this.oldConfigTree = configTree;
     const secondCloneEndTime = performance.now();
@@ -303,17 +360,91 @@ export default class DataTreeEvaluator {
         sortDependenciesEndTime,
         sortDependenciesStartTime,
       ),
-      inverseDependency: getFixedTimeDifference(
-        inverseDependencyGenerationEndTime,
-        inverseDependencyGenerationStartTime,
+      parseJSActions: getFixedTimeDifference(
+        parseJSActionsEndTime,
+        parseJSActionsStartTime,
       ),
     };
-    this.logs.push({ timeTakenForSetupFirstTree });
+
+    this.logs.push({
+      timeTakenForSetupFirstTree,
+      dependencies: this.dependencies,
+      inverseDependencies: this.inverseDependencies,
+    });
+
     return {
       jsUpdates,
       evalOrder: this.sortedDependencies,
-      lintOrder: this.sortedDependencies,
     };
+  }
+
+  /**
+   * Mutates the dataTree.
+   * Validates all the nodes of the tree to make sure all the values are as expected according to the validation config
+   *
+   * For example :- If Button.isDisabled is set to false in propertyPane then it would be passed as "false" in unEvalTree and validateTree method makes sure to convert it to boolean.
+   * @param tree
+   * @param option
+   * @param configTree
+   * @returns
+   */
+  validatedTree(
+    dataTree: DataTree,
+    option: {
+      evalProps: EvalProps;
+    },
+    configTree: ConfigTree,
+  ) {
+    const unParsedEvalTree = this.getUnParsedEvalTree();
+    const { evalProps } = option;
+
+    for (const [entityName, entity] of Object.entries(dataTree)) {
+      if (!isWidget(entity)) continue;
+
+      const entityConfig = configTree[entityName] as WidgetEntityConfig;
+      const validationPathsMap = Object.entries(entityConfig.validationPaths);
+
+      for (const [propertyPath, validationConfig] of validationPathsMap) {
+        const fullPropertyPath = `${entityName}.${propertyPath}`;
+
+        const value = get(
+          unParsedEvalTree,
+          fullPropertyPath,
+          get(entity, propertyPath),
+        );
+        // Pass it through parse
+        const { isValid, messages, parsed } = validateWidgetProperty(
+          validationConfig,
+          value,
+          entity,
+          propertyPath,
+        );
+
+        set(entity, propertyPath, parsed);
+
+        resetValidationErrorsForEntityProperty({
+          evalProps,
+          fullPropertyPath,
+        });
+
+        if (!isValid) {
+          const evalErrors: EvaluationError[] =
+            messages?.map((message) => ({
+              errorType: PropertyEvaluationErrorType.VALIDATION,
+              errorMessage: message ?? {},
+              severity: Severity.ERROR,
+              raw: value,
+            })) ?? [];
+
+          addErrorToEntityProperty({
+            errors: evalErrors,
+            evalProps,
+            fullPropertyPath,
+            configTree,
+          });
+        }
+      }
+    }
   }
 
   evalAndValidateFirstTree(): {
@@ -323,38 +454,41 @@ export default class DataTreeEvaluator {
   } {
     const evaluationStartTime = performance.now();
 
+    const evaluationOrder = this.sortedDependencies;
+
+    const unEvalTreeClone = klonaJSON(this.oldUnEvalTree);
     // Evaluate
     const { evalMetaUpdates, evaluatedTree, staleMetaIds } = this.evaluateTree(
-      this.oldUnEvalTree,
-      this.sortedDependencies,
+      unEvalTreeClone,
+      evaluationOrder,
       undefined,
       this.oldConfigTree,
     );
-    const evaluationEndTime = performance.now();
-    const validationStartTime = performance.now();
-    // Validate Widgets
-    this.setEvalTree(
-      getValidatedTree(
-        evaluatedTree,
-        {
-          evalProps: this.evalProps,
-        },
-        this.oldConfigTree,
-      ),
+
+    /**
+     * We need to re-validate all widgets only in case of first tree
+     * Widget fields with custom validation functions can depend on other properties of the widget,
+     * which aren't evaluated/validated yet, thereby store incorrect validation errors in the previous step
+     */
+    this.validatedTree(
+      evaluatedTree,
+      {
+        evalProps: this.evalProps,
+      },
+      this.oldConfigTree,
     );
 
-    const validationEndTime = performance.now();
+    const evaluationEndTime = performance.now();
+
+    this.setEvalTree(evaluatedTree);
 
     const timeTakenForEvalAndValidateFirstTree = {
       evaluation: getFixedTimeDifference(
         evaluationEndTime,
         evaluationStartTime,
       ),
-      validation: getFixedTimeDifference(
-        validationEndTime,
-        validationStartTime,
-      ),
     };
+
     this.logs.push({ timeTakenForEvalAndValidateFirstTree });
 
     return {
@@ -364,75 +498,103 @@ export default class DataTreeEvaluator {
     };
   }
 
-  updateLocalUnEvalTree(unevalTree: DataTree, configTree: ConfigTree) {
+  /**
+   *  TODO: This is a temporary fix to update unevalTree with JSObjectCollection state.
+   * In ideal scenario, the unevalTree should be updated with JSObjectCollection state in the dataTreeFactory itself. We will need to try to send
+   * {
+   * "JsObject1": {
+   *    function1: "function() { return 1; }",
+   *    "function1.data": {},
+   *    function2: "function() { return 2; }",
+   *    "function2.data": {},
+   *  }
+   * }
+   *  */
+  updateUnEvalTreeJSFunction(unevalTree: DataTree, configTree: ConfigTree) {
     //add functions and variables to unevalTree
     const unEvalJSCollection = JSObjectCollection.getUnEvalState();
-    Object.keys(unEvalJSCollection).forEach((update) => {
-      const updates = unEvalJSCollection[update];
-      if (!!unevalTree[update]) {
+
+    Object.keys(unEvalJSCollection).forEach((entityName) => {
+      const entity = unevalTree[entityName];
+
+      if (!isJSAction(entity)) return;
+
+      const updates = unEvalJSCollection[entityName];
+
+      if (unevalTree[entityName]) {
         Object.keys(updates).forEach((key) => {
-          const data = get(unevalTree, `${update}.${key}.data`, undefined);
-          if (isJSObjectFunction(unevalTree, update, key, configTree)) {
-            set(unevalTree, `${update}.${key}`, new String(updates[key]));
-            set(unevalTree, `${update}.${key}.data`, data);
+          const data = get(unevalTree, `${entityName}.${key}.data`, undefined);
+
+          if (isJSObjectFunction(unevalTree, entityName, key, configTree)) {
+            set(unevalTree, `${entityName}.${key}`, new String(updates[key]));
+            set(unevalTree, `${entityName}.${key}.data`, data);
           } else {
-            set(unevalTree, `${update}.${key}`, updates[key]);
+            set(unevalTree, `${entityName}.${key}`, updates[key]);
           }
         });
       }
     });
+
+    return unevalTree;
   }
 
   /**
-   * Method to create all data required for linting and
-   * evaluation of the updated tree
+   *
+   * In this method, we find the updatedJSobjects then parse the updated jsObject body and update the resolved functions and variable accordingly.
+   * getUpdatedLocalUnEvalTreeAfterJSUpdates- We update the unevalTree with the updated jsObject properties.
    */
-
-  setupUpdateTree(
-    unEvalTree: any,
-    configTree: ConfigTree,
-  ): {
-    unEvalUpdates: DataTreeDiff[];
-    evalOrder: string[];
-    lintOrder: string[];
-    jsUpdates: Record<string, JSUpdate>;
-    nonDynamicFieldValidationOrder: string[];
-    pathsToClearErrorsFor: any[];
-    isNewWidgetAdded: boolean;
-  } {
-    const totalUpdateTreeSetupStartTime = performance.now();
-
-    let localUnEvalTree = Object.assign({}, unEvalTree);
-    let jsUpdates: Record<string, JSUpdate> = {};
-    const diffCheckTimeStartTime = performance.now();
-    //update uneval tree from previously saved current state of collection
-    this.updateLocalUnEvalTree(localUnEvalTree, configTree);
+  generateJSObjectUpdates({
+    affectedJSObjects = { isAllAffected: false, ids: [] },
+    configTree,
+    unEvalTree,
+    webworkerTelemetry,
+  }: {
+    unEvalTree: UnEvalTree;
+    configTree: ConfigTree;
+    webworkerTelemetry: Record<string, WebworkerSpanData | Attributes>;
+    affectedJSObjects: AffectedJSObjects;
+  }) {
     //get difference in js collection body to be parsed
     const oldUnEvalTreeJSCollections = getJSEntities(this.oldUnEvalTree);
-    const localUnEvalTreeJSCollection = getJSEntities(localUnEvalTree);
+    const localUnEvalTreeJSCollection = getJSEntities(unEvalTree);
+    const jsDifferences = profileFn(
+      "SetupUpdateTree.Diff1",
+      undefined,
+      webworkerTelemetry,
+      () =>
+        convertMicroDiffToDeepDiff(
+          microDiff(
+            getOnlyAffectedJSObjects(
+              oldUnEvalTreeJSCollections,
+              affectedJSObjects,
+            ),
+            getOnlyAffectedJSObjects(
+              localUnEvalTreeJSCollection,
+              affectedJSObjects,
+            ),
+          ) || [],
+        ),
+    );
 
-    const jsDifferences: Diff<
-      Record<string, JSActionEntity>,
-      Record<string, JSActionEntity>
-    >[] = diff(oldUnEvalTreeJSCollections, localUnEvalTreeJSCollection) || [];
     const jsTranslatedDiffs = flatten(
       jsDifferences.map((diff) =>
-        translateDiffEventToDataTreeDiffEvent(diff, localUnEvalTree),
+        translateDiffEventToDataTreeDiffEvent(diff, unEvalTree),
       ),
     );
+
     //save parsed functions in resolveJSFunctions, update current state of js collection
-    const parsedCollections = parseJSActions(
-      this,
-      localUnEvalTree,
-      this.oldUnEvalTree,
-      jsTranslatedDiffs,
+    const { jsUpdates } = profileFn(
+      "SetupUpdateTree.parseJSActions",
+      undefined,
+      webworkerTelemetry,
+      () =>
+        parseJSActions(this, unEvalTree, this.oldUnEvalTree, jsTranslatedDiffs),
     );
 
-    jsUpdates = parsedCollections.jsUpdates;
     //update local data tree if js body has updated (remove/update/add js functions or variables)
-    localUnEvalTree = getUpdatedLocalUnEvalTreeAfterJSUpdates(
+    const updatedUnEvalTree = getUpdatedLocalUnEvalTreeAfterJSUpdates(
       jsUpdates,
-      localUnEvalTree,
+      unEvalTree,
       configTree,
     );
 
@@ -445,93 +607,125 @@ export default class DataTreeEvaluator {
       configTree,
     );
 
-    const oldUnEvalTreeWithStrigifiedJSFunctions = Object.assign(
+    const oldUnEvalTreeWithStringifiedJSFunctions = Object.assign(
       {},
       this.oldUnEvalTree,
       stringifiedOldUnEvalTreeJSCollections,
     );
 
-    const localUnEvalTreeWithStrigifiedJSFunctions = Object.assign(
+    const unEvalTreeWithStringifiedJSFunctions = Object.assign(
       {},
-      localUnEvalTree,
+      updatedUnEvalTree,
       stringifiedLocalUnEvalTreeJSCollection,
     );
 
-    const differences: Diff<DataTree, DataTree>[] =
-      diff(
-        oldUnEvalTreeWithStrigifiedJSFunctions,
-        localUnEvalTreeWithStrigifiedJSFunctions,
-      ) || [];
+    return {
+      oldUnEvalTreeWithStringifiedJSFunctions,
+      unEvalTreeWithStringifiedJSFunctions,
+      jsUpdates,
+      updatedUnEvalTree,
+    };
+  }
+
+  /**
+   * Method to create all data required for linting and
+   * evaluation of the updated tree
+   */
+
+  setupUpdateTree(
+    unEvalTree: UnEvalTree,
+    configTree: ConfigTree,
+    webworkerTelemetry: Record<string, WebworkerSpanData | Attributes> = {},
+    affectedJSObjects: AffectedJSObjects = { isAllAffected: false, ids: [] },
+  ): {
+    unEvalUpdates: DataTreeDiff[];
+    evalOrder: string[];
+    jsUpdates: Record<string, JSUpdate>;
+    removedPaths: Array<{ entityId: string; fullpath: string }>;
+    isNewWidgetAdded: boolean;
+  } {
+    this.setConfigTree(configTree);
+
+    const localUnEvalTree = Object.assign({}, unEvalTree);
+    const updatedUnEvalTreeJSFunction = this.updateUnEvalTreeJSFunction(
+      localUnEvalTree,
+      configTree,
+    );
+
+    const {
+      jsUpdates,
+      oldUnEvalTreeWithStringifiedJSFunctions,
+      unEvalTreeWithStringifiedJSFunctions,
+      updatedUnEvalTree: updatedUnEvalTreeJSObjects,
+    } = this.generateJSObjectUpdates({
+      unEvalTree: updatedUnEvalTreeJSFunction,
+      configTree,
+      webworkerTelemetry,
+      affectedJSObjects,
+    });
+
+    const differences = profileFn(
+      "unEvalTreeWithStringifiedJSFunctionsDiff",
+      undefined,
+      webworkerTelemetry,
+      () =>
+        diff(
+          oldUnEvalTreeWithStringifiedJSFunctions,
+          unEvalTreeWithStringifiedJSFunctions,
+        ) || [],
+    );
+
     // Since eval tree is listening to possible events that don't cause differences
     // We want to check if no diffs are present and bail out early
     if (differences.length === 0) {
       return {
-        pathsToClearErrorsFor: [],
+        removedPaths: [],
         unEvalUpdates: [],
         evalOrder: [],
-        lintOrder: [],
         jsUpdates: {},
-        nonDynamicFieldValidationOrder: [],
         isNewWidgetAdded: false,
       };
     }
-    let isNewWidgetAdded = false;
+
+    DataStore.update(differences);
 
     //find all differences which can lead to updating of dependency map
     const translatedDiffs = flatten(
       differences.map((diff) =>
-        translateDiffEventToDataTreeDiffEvent(diff, localUnEvalTree),
+        translateDiffEventToDataTreeDiffEvent(diff, updatedUnEvalTreeJSObjects),
       ),
     );
 
-    /** We need to know if a new widget was added so that we do not fire ENTITY_BINDING_SUCCESS event */
-    for (let i = 0; i < translatedDiffs.length; i++) {
-      const diffEvent = translatedDiffs[i];
-      if (diffEvent.event === DataTreeDiffEvent.NEW) {
-        const entity = localUnEvalTree[diffEvent.payload.propertyPath];
+    // TODO => Optimize using dataTree diff
 
-        if (isWidget(entity)) {
-          isNewWidgetAdded = true;
-
-          break;
-        }
-      }
-    }
-
-    const diffCheckTimeStopTime = performance.now();
-    this.logs.push({
-      differences,
-      translatedDiffs,
-    });
-    const updateDependencyStartTime = performance.now();
+    this.allKeys = profileFn("getAllPaths", undefined, webworkerTelemetry, () =>
+      getAllPathsBasedOnDiffPaths(
+        unEvalTreeWithStringifiedJSFunctions,
+        translatedDiffs,
+        this.allKeys,
+      ),
+    );
     // Find all the paths that have changed as part of the difference and update the
     // global dependency map if an existing dynamic binding has now become legal
     const {
+      dependencies,
       dependenciesOfRemovedPaths,
-      extraPathsToLint,
-      pathsToClearErrorsFor,
+      inverseDependencies,
       removedPaths,
-    } = updateDependencyMap({
-      configTree,
-      dataTreeEvalRef: this,
-      translatedDiffs,
-      unEvalDataTree: localUnEvalTree,
+    } = profileFn("updateDependencyMap", undefined, webworkerTelemetry, () => {
+      return updateDependencyMap({
+        configTree,
+        dataTreeEvalRef: this,
+        translatedDiffs,
+        unEvalDataTree: updatedUnEvalTreeJSObjects,
+      });
     });
-    const updateDependencyEndTime = performance.now();
 
-    this.updateEvalTreeWithChanges({ differences });
-
-    const findDifferenceTime = getFixedTimeDifference(
-      diffCheckTimeStopTime,
-      diffCheckTimeStartTime,
-    );
-
-    const updateDependencyMapTime = getFixedTimeDifference(
-      updateDependencyEndTime,
-      updateDependencyStartTime,
-    );
+    this.dependencies = dependencies;
+    this.inverseDependencies = inverseDependencies;
 
     const pathsChangedSet = new Set<string[]>();
+
     for (const diff of differences) {
       if (isArray(diff.path)) {
         pathsChangedSet.add(diff.path);
@@ -540,199 +734,160 @@ export default class DataTreeEvaluator {
 
     const updatedValuePaths = [...pathsChangedSet];
 
+    this.updateEvalTreeWithChanges({ differences });
+
+    const setupUpdateTreeOutput = profileFn(
+      "setupTree",
+      undefined,
+      webworkerTelemetry,
+      () => {
+        return this.setupTree(updatedUnEvalTreeJSObjects, updatedValuePaths, {
+          dependenciesOfRemovedPaths,
+          removedPaths,
+          translatedDiffs,
+        });
+      },
+    );
+
+    this.logs.push({
+      differences,
+      translatedDiffs,
+    });
+
     return {
-      ...this.setupTree(localUnEvalTree, updatedValuePaths, {
-        totalUpdateTreeSetupStartTime,
-        dependenciesOfRemovedPaths,
-        removedPaths,
-        extraPathsToLint,
-        translatedDiffs,
-        pathsToClearErrorsFor,
-        findDifferenceTime,
-        updateDependencyMapTime,
-        configTree,
-        isNewWidgetAdded,
-      }),
+      ...setupUpdateTreeOutput,
       jsUpdates,
     };
   }
 
   getEvaluationOrder({
-    configTree,
-    localUnEvalTree,
     pathsToSkipFromEval,
     subTreeSortOrder,
+    unEvalTree,
   }: {
-    localUnEvalTree: DataTree;
+    unEvalTree: DataTree;
     pathsToSkipFromEval: string[];
     subTreeSortOrder: string[];
-    configTree: ConfigTree;
   }) {
     // Remove anything from the sort order that is not a dynamic leaf since only those need evaluation
     const evaluationOrder: string[] = [];
-    let nonDynamicFieldValidationOrderSet = new Set<string>();
 
     for (const fullPath of subTreeSortOrder) {
       if (pathsToSkipFromEval.includes(fullPath)) continue;
 
-      if (!isDynamicLeaf(localUnEvalTree, fullPath, configTree)) {
-        /**
-         * Store fullPath in nonDynamicFieldValidationOrderSet,
-         * if the non dynamic value changes to trigger revalidation.
-         */
-        if (this.inverseValidationDependencyMap[fullPath]) {
-          nonDynamicFieldValidationOrderSet = new Set([
-            ...nonDynamicFieldValidationOrderSet,
-            fullPath,
-          ]);
-        }
-        continue;
-      }
+      if (!isDynamicLeaf(unEvalTree, fullPath, this.getConfigTree())) continue;
 
-      const unEvalPropValue = get(localUnEvalTree, fullPath);
+      const unEvalPropValue = get(unEvalTree, fullPath);
       const evalPropValue = get(this.evalTree, fullPath);
+
       evaluationOrder.push(fullPath);
+
       if (isFunction(evalPropValue)) continue;
+
       // Set all values from unEvalTree to the evalTree to run evaluation for unevaluated values.
       set(this.evalTree, fullPath, unEvalPropValue);
     }
 
-    return { evaluationOrder, nonDynamicFieldValidationOrderSet };
+    return { evaluationOrder };
   }
 
   setupTree(
-    localUnEvalTree: UnEvalTree,
+    updatedUnEvalTree: UnEvalTree,
     updatedValuePaths: string[][],
     extraParams: {
-      totalUpdateTreeSetupStartTime?: any;
       dependenciesOfRemovedPaths?: string[];
-      removedPaths?: string[];
-      extraPathsToLint?: string[];
+      removedPaths?: Array<{ entityId: string; fullpath: string }>;
       translatedDiffs?: DataTreeDiff[];
-      pathsToClearErrorsFor?: any[];
       pathsToSkipFromEval?: string[];
-      findDifferenceTime?: string;
-      updateDependencyMapTime?: string;
-      configTree: ConfigTree;
-      isNewWidgetAdded: boolean;
     },
   ) {
     const {
       dependenciesOfRemovedPaths = [],
-      extraPathsToLint = [],
-      removedPaths = [],
-      totalUpdateTreeSetupStartTime = performance.now(),
-      translatedDiffs = [],
-      pathsToClearErrorsFor = [],
       pathsToSkipFromEval = [],
-      findDifferenceTime = "0",
-      updateDependencyMapTime = "0",
-      configTree,
-      isNewWidgetAdded,
+      removedPaths = [],
+      translatedDiffs = [],
     } = extraParams;
 
-    updateEvalTreeWithJSCollectionState(this.evalTree, this.oldUnEvalTree);
+    updateEvalTreeWithJSCollectionState(this.evalTree);
 
     const calculateSortOrderStartTime = performance.now();
-    const subTreeSortOrder: string[] = this.calculateSubTreeSortOrder(
+    const subTreeSortOrder = this.calculateSubTreeSortOrder(
       updatedValuePaths,
       dependenciesOfRemovedPaths,
       removedPaths,
-      localUnEvalTree,
-      configTree,
+      updatedUnEvalTree,
     );
     const calculateSortOrderEndTime = performance.now();
 
-    const { evaluationOrder, nonDynamicFieldValidationOrderSet } =
-      this.getEvaluationOrder({
-        localUnEvalTree,
-        pathsToSkipFromEval,
-        subTreeSortOrder,
-        configTree,
-      });
+    const { evaluationOrder } = this.getEvaluationOrder({
+      unEvalTree: updatedUnEvalTree,
+      pathsToSkipFromEval,
+      subTreeSortOrder,
+    });
 
     this.logs.push({
       sortedDependencies: this.sortedDependencies,
-      inverse: this.inverseDependencyMap,
-      updatedDependencyMap: this.dependencyMap,
+      inverseDependencies: this.inverseDependencies,
+      updatedDependencies: this.dependencies,
       evaluationOrder: evaluationOrder,
-      triggerFieldDependencyMap: this.triggerFieldDependencyMap,
     });
 
     // Remove any deleted paths from the eval tree
     removedPaths.forEach((removedPath) => {
-      unset(this.evalTree, removedPath);
+      unset(this.evalTree, removedPath.fullpath);
     });
 
     const cloneStartTime = performance.now();
+
     // TODO: For some reason we are passing some reference which are getting mutated.
     // Need to check why big api responses are getting split between two eval runs
-    this.oldUnEvalTree = klona(localUnEvalTree);
-    this.oldConfigTree = Object.assign({}, configTree);
+    this.oldUnEvalTree = klona(updatedUnEvalTree);
+    this.oldConfigTree = Object.assign({}, this.getConfigTree());
     const cloneEndTime = performance.now();
 
-    const totalUpdateTreeSetupEndTime = performance.now();
-
     const timeTakenForSetupUpdateTree = {
-      total: getFixedTimeDifference(
-        totalUpdateTreeSetupEndTime,
-        totalUpdateTreeSetupStartTime,
-      ),
-      updateDependencyMap: updateDependencyMapTime,
       calculateSubTreeSortOrder: getFixedTimeDifference(
         calculateSortOrderEndTime,
         calculateSortOrderStartTime,
       ),
-      findDifferences: findDifferenceTime,
       clone: getFixedTimeDifference(cloneEndTime, cloneStartTime),
     };
 
     this.logs.push({ timeTakenForSetupUpdateTree });
 
+    const isNewWidgetAdded = getIsNewWidgetAdded(
+      translatedDiffs,
+      updatedUnEvalTree,
+    );
+
     return {
       unEvalUpdates: translatedDiffs,
       evalOrder: evaluationOrder,
-      lintOrder: union(evaluationOrder, extraPathsToLint),
-      nonDynamicFieldValidationOrder: Array.from(
-        nonDynamicFieldValidationOrderSet,
-      ),
-      pathsToClearErrorsFor,
+      removedPaths,
       isNewWidgetAdded,
     };
   }
 
   setupUpdateTreeWithDifferences(
     updatedValuePaths: string[][],
+    pathsToSkipFromEval: string[] = [],
   ): ReturnType<typeof DataTreeEvaluator.prototype.setupUpdateTree> {
-    const localUnEvalTree = Object.assign({}, this.oldUnEvalTree);
+    const updatedUnEvalTree = Object.assign({}, this.oldUnEvalTree);
+
     // skipped update local unEvalTree
     if (updatedValuePaths.length === 0) {
       return {
         unEvalUpdates: [],
         evalOrder: [],
-        lintOrder: [],
         jsUpdates: {},
-        nonDynamicFieldValidationOrder: [],
-        pathsToClearErrorsFor: [],
+        removedPaths: [],
         isNewWidgetAdded: false,
       };
     }
 
-    /**
-     *  Only evaluate the dependents of the updatedValue and
-     *  skip the evaluation of updatedValue itself.
-     *
-     *  Example:
-     *  if "JSObject.myVar1" is updated
-     *  then => only re-evaluate values dependent on "JSObject.myVar1"
-     */
-    const pathsToSkipFromEval = updatedValuePaths.map((path) => path.join("."));
-
     return {
-      ...this.setupTree(localUnEvalTree, updatedValuePaths, {
+      ...this.setupTree(updatedUnEvalTree, updatedValuePaths, {
         pathsToSkipFromEval,
-        configTree: this.oldConfigTree,
-        isNewWidgetAdded: false,
       }),
       jsUpdates: {},
     };
@@ -740,17 +895,18 @@ export default class DataTreeEvaluator {
 
   evalAndValidateSubTree(
     evaluationOrder: string[],
-    nonDynamicFieldValidationOrder: string[],
     configTree: ConfigTree,
     unevalUpdates: DataTreeDiff[],
     metaWidgetIds: string[] = [],
   ): {
     evalMetaUpdates: EvalMetaUpdates;
     staleMetaIds: string[];
+    contextTree: DataTree;
   } {
     const evaluationStartTime = performance.now();
 
     const {
+      contextTree,
       evalMetaUpdates,
       evaluatedTree: newEvalTree,
       staleMetaIds,
@@ -758,7 +914,6 @@ export default class DataTreeEvaluator {
       this.evalTree,
       evaluationOrder,
       {
-        skipRevalidation: false,
         isFirstTree: false,
         unevalUpdates,
         metaWidgets: metaWidgetIds,
@@ -766,51 +921,47 @@ export default class DataTreeEvaluator {
       configTree,
     );
     const evaluationEndTime = performance.now();
-    const reValidateStartTime = performance.now();
-    this.reValidateTree(
-      nonDynamicFieldValidationOrder,
-      newEvalTree,
-      configTree,
-    );
-    const reValidateEndTime = performance.now();
+
     this.setEvalTree(newEvalTree);
+
     const timeTakenForEvalAndValidateSubTree = {
       evaluation: getFixedTimeDifference(
         evaluationEndTime,
         evaluationStartTime,
       ),
-      revalidation: getFixedTimeDifference(
-        reValidateEndTime,
-        reValidateStartTime,
-      ),
     };
+
     this.logs.push({ timeTakenForEvalAndValidateSubTree });
+
     return {
       evalMetaUpdates,
       staleMetaIds,
+      contextTree,
     };
   }
 
   getCompleteSortOrder(
     changes: Array<string>,
-    inverseMap: DependencyMap,
+    inverseMap: Record<string, string[]>,
   ): Array<string> {
     let finalSortOrder: Array<string> = [];
     let computeSortOrder = true;
     // Initialize parents with the current sent of property paths that need to be evaluated
     let parents = changes;
     let subSortOrderArray: Array<string>;
+    let visitedNodes: string[] = [];
+
     while (computeSortOrder) {
       // Get all the nodes that would be impacted by the evaluation of the nodes in parents array in sorted order
       subSortOrderArray = this.getEvaluationSortOrder(parents, inverseMap);
-
+      visitedNodes = union(visitedNodes, parents);
       // Add all the sorted nodes in the final list
-      finalSortOrder = [...finalSortOrder, ...subSortOrderArray];
+      finalSortOrder = union(finalSortOrder, subSortOrderArray);
 
       parents = getImmediateParentsOfPropertyPaths(subSortOrderArray);
       // If we find parents of the property paths in the sorted array, we should continue finding all the nodes dependent
       // on the parents
-      computeSortOrder = parents.length > 0;
+      computeSortOrder = difference(parents, visitedNodes).length > 0;
     }
 
     // Remove duplicates from this list. Since we explicitly walk down the tree and implicitly (by fetching parents) walk
@@ -820,6 +971,7 @@ export default class DataTreeEvaluator {
     // if a property path evaluation gets triggered by diff top order changes
     // this could lead to incorrect sort order in spite of the bfs traversal
     const sortOrderPropertyPaths: string[] = [];
+
     this.sortedDependencies.forEach((path) => {
       if (uniqueKeysInSortOrder.has(path)) {
         sortOrderPropertyPaths.push(path);
@@ -835,8 +987,10 @@ export default class DataTreeEvaluator {
 
     //Trim this list to now remove the property paths which are simply entity names
     const finalSortOrderArray: Array<string> = [];
+
     completeSortOrder.forEach((propertyPath) => {
       const lastIndexOfDot = propertyPath.lastIndexOf(".");
+
       // Only do this for property paths and not the entity themselves
       if (lastIndexOfDot !== -1) {
         finalSortOrderArray.push(propertyPath);
@@ -848,10 +1002,11 @@ export default class DataTreeEvaluator {
 
   getEvaluationSortOrder(
     changes: Array<string>,
-    inverseMap: DependencyMap,
+    inverseMap: Record<string, string[]>,
   ): Array<string> {
     const sortOrder: Array<string> = [...changes];
     let iterator = 0;
+
     while (iterator < sortOrder.length) {
       // Find all the nodes who are to be evaluated when sortOrder[iterator] changes
       const newNodes = inverseMap[sortOrder[iterator]];
@@ -868,15 +1023,19 @@ export default class DataTreeEvaluator {
           }
         });
       }
+
       iterator++;
     }
+
     return sortOrder;
   }
 
   getPrivateWidgets(dataTree: DataTree): PrivateWidgets {
     let privateWidgets: PrivateWidgets = {};
+
     Object.keys(dataTree).forEach((entityName) => {
       const entity = dataTree[entityName];
+
       if (isWidget(entity) && !isEmpty(entity.privateWidgets)) {
         privateWidgets = {
           ...privateWidgets,
@@ -884,20 +1043,18 @@ export default class DataTreeEvaluator {
         };
       }
     });
+
     return privateWidgets;
   }
 
   evaluateTree(
-    oldUnevalTree: DataTree,
-    sortedDependencies: Array<string>,
+    unEvalTree: DataTree,
+    evaluationOrder: Array<string>,
     options: {
-      skipRevalidation: boolean;
       isFirstTree: boolean;
       unevalUpdates: DataTreeDiff[];
-
       metaWidgets: string[];
     } = {
-      skipRevalidation: true,
       isFirstTree: true,
       unevalUpdates: [],
       metaWidgets: [],
@@ -907,229 +1064,346 @@ export default class DataTreeEvaluator {
     evaluatedTree: DataTree;
     evalMetaUpdates: EvalMetaUpdates;
     staleMetaIds: string[];
+    contextTree: DataTree;
   } {
-    const tree = klona(oldUnevalTree);
-    errorModifier.updateAsyncFunctions(tree);
+    resetWorkerGlobalScope();
+
+    const safeTree = klonaJSON(unEvalTree);
+    const dataStore = DataStore.getDataStore();
+    const dataStoreClone = klonaJSON(dataStore);
+
+    updateTreeWithData(safeTree, dataStoreClone);
+    updateTreeWithData(unEvalTree, dataStore);
+
+    /**
+     * contextTree is a mutable dataTree, it gets passed as a context for each evaluation
+     * and gets updated both, with evaluated values and mutations.
+     *
+     * SafeTree is free of mutations because we make sure to only set evaluated values into it.
+     */
+    const contextTree = unEvalTree;
+
+    errorModifier.updateAsyncFunctions(
+      contextTree,
+      this.getConfigTree(),
+      this.dependencyMap,
+    );
+
     const evalMetaUpdates: EvalMetaUpdates = [];
-    const { isFirstTree, metaWidgets, skipRevalidation, unevalUpdates } =
-      options;
+    const { isFirstTree, metaWidgets, unevalUpdates } = options;
     let staleMetaIds: string[] = [];
+
+    const allNewEntityDiffSet = new Set(
+      unevalUpdates
+        .filter((v) => v.event === DataTreeDiffEvent.NEW)
+        .map((v) => v.payload.propertyPath),
+    );
+    let evalContextCache;
+
+    if (WorkerEnv.flags.release_evaluation_scope_cache) {
+      evalContextCache = getDataTreeContext({
+        dataTree: contextTree,
+        configTree: oldConfigTree,
+        isTriggerBased: false,
+      });
+    }
+
     try {
-      const evaluatedTree = sortedDependencies.reduce(
-        (currentTree: DataTree, fullPropertyPath: string) => {
-          const { entityName, propertyPath } =
-            getEntityNameAndPropertyPath(fullPropertyPath);
-          const entity = currentTree[entityName] as WidgetEntity | ActionEntity;
-          let unEvalPropertyValue = get(currentTree as any, fullPropertyPath);
-          const entityConfig = oldConfigTree[entityName];
+      for (const fullPropertyPath of evaluationOrder) {
+        const { entityName, propertyPath } =
+          getEntityNameAndPropertyPath(fullPropertyPath);
+        const entity = contextTree[entityName];
+        const entityConfig = oldConfigTree[entityName];
 
-          const isADynamicBindingPath =
-            (isAction(entity) || isWidget(entity) || isJSAction(entity)) &&
-            isPathADynamicBinding(entityConfig, propertyPath);
-          const isATriggerPath =
-            isWidget(entity) &&
-            isPathDynamicTrigger(
-              entityConfig as WidgetEntityConfig,
-              propertyPath,
-            );
-          let evalPropertyValue;
-          const requiresEval =
-            isADynamicBindingPath &&
-            !isATriggerPath &&
-            (isDynamicValue(unEvalPropertyValue) || isJSAction(entity));
-          if (propertyPath) {
-            set(this.evalProps, getEvalErrorPath(fullPropertyPath), []);
-          }
+        if (!isWidgetActionOrJsObject(entity)) continue;
 
-          if (requiresEval) {
-            const evaluationSubstitutionType =
-              entityConfig.reactivePaths[propertyPath] ||
-              EvaluationSubstitutionType.TEMPLATE;
+        // Skip evaluations for actions in JSObjects
+        if (isPropertyAnEntityAction(entity, propertyPath, entityConfig)) {
+          continue;
+        }
 
-            const contextData: EvaluateContext = {};
-            if (isAction(entity)) {
-              // Add empty object for this.params to avoid undefined errors
-              contextData.globalContext = {
-                [THIS_DOT_PARAMS_KEY]: {},
-              };
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let unEvalPropertyValue = get(contextTree as any, fullPropertyPath);
 
-              unEvalPropertyValue = replaceThisDotParams(unEvalPropertyValue);
-            }
-            try {
-              evalPropertyValue = this.getDynamicValue(
-                unEvalPropertyValue,
-                currentTree,
-                oldConfigTree,
-                evaluationSubstitutionType,
-                contextData,
-                undefined,
-                fullPropertyPath,
-              );
-            } catch (error) {
-              this.errors.push({
-                type: EvalErrorTypes.EVAL_PROPERTY_ERROR,
-                message: (error as Error).message,
-                context: {
-                  propertyPath: fullPropertyPath,
-                },
-              });
-              evalPropertyValue = undefined;
-            }
-          } else {
-            evalPropertyValue = unEvalPropertyValue;
-          }
+        const isADynamicBindingPath = isAPathDynamicBindingPath(
+          entity,
+          entityConfig,
+          propertyPath,
+        );
 
-          this.updateUndefinedEvalValuesMap(
-            this.undefinedEvalValuesMap,
-            evalPropertyValue,
-            fullPropertyPath,
+        const isATriggerPath =
+          isWidget(entity) &&
+          isPathDynamicTrigger(
+            entityConfig as WidgetEntityConfig,
+            propertyPath,
           );
+        let evalPropertyValue;
+        const requiresEval =
+          isADynamicBindingPath &&
+          !isATriggerPath &&
+          (isDynamicValue(unEvalPropertyValue) || isJSAction(entity));
 
-          if (isWidget(entity) && !isATriggerPath) {
+        if (propertyPath) {
+          set(this.evalProps, getEvalErrorPath(fullPropertyPath), []);
+        }
+
+        if (requiresEval) {
+          const evaluationSubstitutionType =
+            entityConfig.reactivePaths[propertyPath] ||
+            EvaluationSubstitutionType.TEMPLATE;
+
+          const contextData: EvaluateContext = {};
+
+          if (isAction(entity)) {
+            // Add empty object for this.params to avoid undefined errors
+            contextData.globalContext = {
+              [THIS_DOT_PARAMS_KEY]: {},
+            };
+
+            unEvalPropertyValue = replaceThisDotParams(unEvalPropertyValue);
+          }
+
+          try {
+            evalPropertyValue = this.getDynamicValue(
+              unEvalPropertyValue,
+              contextTree,
+              oldConfigTree,
+              evaluationSubstitutionType,
+              contextData,
+              undefined,
+              fullPropertyPath,
+              evalContextCache,
+            );
+          } catch (error) {
+            this.errors.push({
+              type: EvalErrorTypes.EVAL_PROPERTY_ERROR,
+              message: (error as Error).message,
+              context: {
+                propertyPath: fullPropertyPath,
+              },
+            });
+            evalPropertyValue = undefined;
+          }
+        } else {
+          evalPropertyValue = unEvalPropertyValue;
+        }
+
+        this.updateUndefinedEvalValuesMap(
+          this.undefinedEvalValuesMap,
+          evalPropertyValue,
+          fullPropertyPath,
+        );
+
+        const entityType = entity.ENTITY_TYPE;
+
+        if (!propertyPath) continue;
+
+        switch (entityType) {
+          case ENTITY_TYPE.WIDGET: {
+            if (isATriggerPath) continue;
+
             const isNewWidget =
-              isFirstTree || isNewEntity(unevalUpdates, entityName);
-            if (propertyPath) {
-              const parsedValue = validateAndParseWidgetProperty({
-                fullPropertyPath,
-                widget: entity,
-                currentTree,
-                configTree: oldConfigTree,
-                evalPropertyValue,
-                unEvalPropertyValue,
-                evalProps: this.evalProps,
-              });
+              isFirstTree || isNewEntity(allNewEntityDiffSet, entityName);
 
-              this.setParsedValue({
-                currentTree,
-                configTree: oldConfigTree,
-                entity,
-                evalMetaUpdates,
-                fullPropertyPath,
-                parsedValue,
-                propertyPath,
-                evalPropertyValue,
-                isNewWidget,
-              });
+            const widgetEntity = entity as WidgetEntity;
 
-              if (!skipRevalidation) {
-                this.reValidateWidgetDependentProperty({
-                  fullPropertyPath,
-                  widget: entity,
-                  currentTree,
-                  configTree: oldConfigTree,
-                });
-              }
-              staleMetaIds = staleMetaIds.concat(
-                getStaleMetaStateIds({
-                  entity,
-                  entityConfig: entityConfig as WidgetEntityConfig,
-                  propertyPath,
-                  isNewWidget,
-                  metaWidgets,
-                }),
-              );
+            let parsedValue = validateAndParseWidgetProperty({
+              fullPropertyPath,
+              widget: widgetEntity,
+              configTree: oldConfigTree,
+              evalPropertyValue,
+              unEvalPropertyValue,
+              evalProps: this.evalProps,
+            });
 
-              return currentTree;
-            }
-            return set(currentTree, fullPropertyPath, evalPropertyValue);
-          } else if (isATriggerPath) {
-            return currentTree;
-          } else if (isAction(entity)) {
-            if (this.allActionValidationConfig) {
-              const configProperty = propertyPath.replace(
-                "config",
-                "actionConfiguration",
-              );
-              const validationConfig =
-                !!this.allActionValidationConfig[entity.actionId] &&
-                this.allActionValidationConfig[entity.actionId][configProperty];
-              if (!!validationConfig && !isEmpty(validationConfig)) {
-                this.validateActionProperty(
-                  fullPropertyPath,
-                  entity,
-                  currentTree,
-                  evalPropertyValue,
-                  unEvalPropertyValue,
-                  validationConfig,
-                  oldConfigTree,
-                );
-              }
-            }
+            parsedValue = this.getParsedValueForWidgetProperty({
+              currentTree: contextTree,
+              configTree: oldConfigTree,
+              entity: widgetEntity,
+              evalMetaUpdates,
+              fullPropertyPath,
+              parsedValue,
+              propertyPath,
+              isNewWidget,
+              safeTree,
+            });
 
-            if (!propertyPath) return currentTree;
+            // setting evalPropertyValue in unParsedEvalTree
             set(
-              this.evalProps,
-              getEvalValuePath(fullPropertyPath),
+              this.getUnParsedEvalTree(),
+              fullPropertyPath,
               evalPropertyValue,
             );
-            set(currentTree, fullPropertyPath, evalPropertyValue);
-            return currentTree;
-          } else if (isJSAction(entity)) {
+
+            set(contextTree, fullPropertyPath, parsedValue);
+            set(safeTree, fullPropertyPath, klonaJSON(parsedValue));
+
+            if (
+              WorkerEnv.flags.release_evaluation_scope_cache &&
+              evalContextCache
+            ) {
+              set(evalContextCache, fullPropertyPath, klonaJSON(parsedValue));
+            }
+
+            staleMetaIds = staleMetaIds.concat(
+              getStaleMetaStateIds({
+                entity: widgetEntity,
+                entityConfig: entityConfig as WidgetEntityConfig,
+                propertyPath,
+                isNewWidget,
+                metaWidgets,
+              }),
+            );
+            break;
+          }
+          case ENTITY_TYPE.ACTION: {
+            const actionEntity = entity as ActionEntity;
+
+            const configProperty = propertyPath.replace(
+              "config",
+              "actionConfiguration",
+            );
+            const validationConfig =
+              this.allActionValidationConfig?.[actionEntity.actionId]?.[
+                configProperty
+              ];
+
+            this.validateActionProperty(
+              fullPropertyPath,
+              actionEntity,
+              contextTree,
+              evalPropertyValue,
+              unEvalPropertyValue,
+              oldConfigTree,
+              validationConfig,
+            );
+
+            if (!propertyPath) continue;
+
+            /**
+             * Perf optimization very specific to handling actions
+             * Fields like Api1.data doesn't get evaluated since it is not in dynamicBindingPathList
+             * Action validation only captures validation error and doesn't transform the evaluated values.
+             * This means that the values we are looking to set back in the 2 dataTrees are already there.
+             */
+            if (!requiresEval) continue;
+
+            set(contextTree, fullPropertyPath, evalPropertyValue);
+            set(safeTree, fullPropertyPath, klonaJSON(evalPropertyValue));
+
+            if (
+              WorkerEnv.flags.release_evaluation_scope_cache &&
+              evalContextCache
+            ) {
+              set(
+                evalContextCache,
+                fullPropertyPath,
+                klonaJSON(evalPropertyValue),
+              );
+            }
+
+            break;
+          }
+          case ENTITY_TYPE.JSACTION: {
             const variableList =
               (entityConfig as JSActionEntityConfig).variables || [];
 
-            if (variableList.indexOf(propertyPath) > -1) {
-              const prevEvaluatedValue = get(
-                this.evalProps,
-                getEvalValuePath(fullPropertyPath, {
-                  isPopulated: true,
-                  fullPath: true,
-                }),
-              );
+            if (variableList.indexOf(propertyPath) === -1) break;
 
-              const prevUnEvalValue = JSObjectCollection.getPrevUnEvalState({
-                fullPath: fullPropertyPath,
-              });
+            const prevEvaluatedValue = get(
+              this.evalProps,
+              getEvalValuePath(fullPropertyPath, {
+                isPopulated: true,
+                fullPath: true,
+              }),
+            );
 
-              const hasUnEvalValueModified = !isEqual(
-                prevUnEvalValue,
-                unEvalPropertyValue,
-              );
+            const prevUnEvalValue = JSObjectCollection.getPrevUnEvalState({
+              fullPath: fullPropertyPath,
+            });
 
-              const evalValue =
-                !hasUnEvalValueModified && prevEvaluatedValue
-                  ? prevEvaluatedValue
-                  : evalPropertyValue;
-              set(
-                this.evalProps,
-                getEvalValuePath(fullPropertyPath, {
-                  isPopulated: true,
-                  fullPath: true,
-                }),
-                evalValue,
-              );
-              set(currentTree, fullPropertyPath, evalValue);
+            const hasUnEvalValueModified = !isEqual(
+              prevUnEvalValue,
+              unEvalPropertyValue,
+            );
+
+            const skipVariableValueAssignment =
+              !hasUnEvalValueModified && prevEvaluatedValue;
+
+            const evalValue = skipVariableValueAssignment
+              ? prevEvaluatedValue
+              : evalPropertyValue;
+
+            /** Variables defined in a JS object are not reactive.
+             * Their evaluated values need to be reset only when the variable is modified by the user.
+             * When uneval value of a js variable hasn't changed, it means that the previously evaluated values are in both trees already  */
+            if (!skipVariableValueAssignment) {
+              const valueForSafeTree = klonaJSON(evalValue);
+
+              set(contextTree, fullPropertyPath, evalValue);
+              set(safeTree, fullPropertyPath, valueForSafeTree);
+
+              if (
+                WorkerEnv.flags.release_evaluation_scope_cache &&
+                evalContextCache
+              ) {
+                set(
+                  evalContextCache,
+                  fullPropertyPath,
+                  klonaJSON(evalPropertyValue),
+                );
+              }
+
               JSObjectCollection.setVariableValue(evalValue, fullPropertyPath);
               JSObjectCollection.setPrevUnEvalState({
                 fullPath: fullPropertyPath,
                 unEvalValue: unEvalPropertyValue,
               });
+            }
 
-              this.updateUndefinedEvalValuesMap(
-                this.undefinedEvalValuesMap,
-                evalPropertyValue,
+            break;
+          }
+          default:
+            set(contextTree, fullPropertyPath, evalPropertyValue);
+            set(safeTree, fullPropertyPath, klonaJSON(evalPropertyValue));
+
+            if (
+              WorkerEnv.flags.release_evaluation_scope_cache &&
+              evalContextCache
+            ) {
+              set(
+                evalContextCache,
                 fullPropertyPath,
+                klonaJSON(evalPropertyValue),
               );
             }
-            return currentTree;
-          } else {
-            return set(currentTree, fullPropertyPath, evalPropertyValue);
-          }
-        },
-        tree,
-      );
-
-      return {
-        evaluatedTree,
-        evalMetaUpdates,
-        staleMetaIds: staleMetaIds,
-      };
+        }
+      }
     } catch (error) {
+      staleMetaIds = [];
       this.errors.push({
         type: EvalErrorTypes.EVAL_TREE_ERROR,
         message: (error as Error).message,
       });
-      return { evaluatedTree: tree, evalMetaUpdates, staleMetaIds: [] };
+    } finally {
+      // Restore the dataStore since it was a part of contextTree and prone to mutation.
+      DataStore.replaceDataStore(dataStoreClone);
+
+      // The below statement restores the execution context for async tasks are probably queued.
+      setEvalContext({
+        dataTree: contextTree,
+        configTree: oldConfigTree,
+        isDataField: false,
+        isTriggerBased: true,
+      });
+
+      return {
+        evaluatedTree: safeTree,
+        contextTree: contextTree,
+        evalMetaUpdates,
+        staleMetaIds,
+      };
     }
   }
 
@@ -1156,57 +1430,52 @@ export default class DataTreeEvaluator {
 
   sortDependencies(
     dependencyMap: DependencyMap,
-    diffs?: (DataTreeDiff | DataTreeDiff[])[],
+    diffs?: DataTreeDiff[],
   ): Array<string> {
-    /**
-     * dependencyTree : Array<[Node, dependentNode]>
-     */
-    const dependencyTree: Array<[string, string]> = [];
-    Object.keys(dependencyMap).forEach((key: string) => {
-      if (dependencyMap[key].length) {
-        dependencyMap[key].forEach((dep) => dependencyTree.push([key, dep]));
-      } else {
-        // Set no dependency
-        dependencyTree.push([key, ""]);
-      }
-    });
+    const result = DependencyMapUtils.sortDependencies(dependencyMap);
 
-    try {
-      return toposort(dependencyTree)
-        .reverse()
-        .filter((d) => !!d);
-    } catch (error) {
-      // Cyclic dependency found. Extract all node and entity type
-      const cyclicNodes = (error as Error).message.match(
-        new RegExp('Cyclic dependency, node was:"(.*)"'),
-      );
-
-      const node = cyclicNodes?.length ? cyclicNodes[1] : "";
-
+    if (result.success) {
+      return result.sortedDependencies;
+    } else {
+      const node = result.cyclicNode;
       let entityType = "UNKNOWN";
       const entityName = node.split(".")[0];
-      const entity = get(this.oldUnEvalTree, entityName);
+      const entity = get(this.oldUnEvalTree, entityName) as DataTreeEntity;
       const entityConfig = get(this.oldConfigTree, entityName);
+
       if (entity && isWidget(entity)) {
         entityType = entity.type;
       } else if (entity && isAction(entity)) {
-        entityType = entityConfig.pluginType;
+        const actionEntityConfig = entityConfig as ActionEntityConfig;
+
+        entityType = actionEntityConfig.pluginType;
       } else if (entity && isJSAction(entity)) {
         entityType = entity.ENTITY_TYPE;
       }
+
+      const dependencies = dependencyMap.dependencies;
+
+      // We are only interested in logging potential system-generated cyclic dependency errors to Sentry
+      // If a cyclic dependency error occurs without a user editing a dynamic field, that is a potential system-generated cyclic dependency error
+
+      const logToSentry = !diffs
+        ? false
+        : !diffs.some((val) => val.event === DataTreeDiffEvent.EDIT);
+
       this.errors.push({
         type: EvalErrorTypes.CYCLICAL_DEPENDENCY_ERROR,
         message: "Cyclic dependency found while evaluating.",
         context: {
           node,
           entityType,
-          dependencyMap,
+          dependencyMap: dependencies,
           diffs,
+          logToSentry,
         },
       });
-      logError("CYCLICAL DEPENDENCY MAP", dependencyMap);
+      logError("CYCLICAL DEPENDENCY MAP", dependencies);
       this.hasCyclicalDependency = true;
-      throw new CrashingError((error as Error).message);
+      throw new CrashingError((result.error as Error).message);
     }
   }
 
@@ -1216,24 +1485,31 @@ export default class DataTreeEvaluator {
     configTree: ConfigTree,
     evaluationSubstitutionType: EvaluationSubstitutionType,
     contextData?: EvaluateContext,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     callBackData?: Array<any>,
     fullPropertyPath?: string,
+    evalContextCache?: EvaluateContext,
   ) {
     // Get the {{binding}} bound values
     let entity: DataTreeEntity | undefined = undefined;
     let entityConfig: DataTreeEntityConfig | undefined = undefined;
     let propertyPath: string;
+
     if (fullPropertyPath) {
       const entityName = fullPropertyPath.split(".")[0];
+
       propertyPath = fullPropertyPath.split(".")[1];
       entity = data[entityName];
       entityConfig = configTree[entityName];
     }
+
     // Get the {{binding}} bound values
     const { jsSnippets, stringSegments } = getDynamicBindings(
       dynamicBinding,
       entity,
     );
+
     if (stringSegments.length) {
       // Get the Data Tree value of those "binding "paths
       const values = jsSnippets.map((jsSnippet, index) => {
@@ -1241,44 +1517,47 @@ export default class DataTreeEvaluator {
           entity && isJSAction(entity) && propertyPath === "body"
             ? jsSnippet.replace(/export default/g, "")
             : jsSnippet;
-        if (jsSnippet) {
-          if (entity && entityConfig && !propertyPath.includes("body")) {
-            ExecutionMetaData.setExecutionMetaData({
-              triggerMeta: {
-                source: {
-                  id: getEntityId(entity) || "",
-                  entityType: getEntityType(entity) || ENTITY_TYPE.WIDGET,
-                  name: getEntityName(entity, entityConfig) || "",
-                },
-                triggerPropertyName: fullPropertyPath?.split(".")[1] || "",
-              },
-            });
-          }
 
-          const { errors: evalErrors, result } = this.evaluateDynamicBoundValue(
-            toBeSentForEval,
-            data,
-            !!entity && isJSAction(entity),
-            contextData,
-            callBackData,
-          );
-          if (fullPropertyPath && evalErrors.length) {
-            addErrorToEntityProperty({
-              errors: addRootcauseToAsyncInvocationErrors(
-                fullPropertyPath,
-                configTree,
-                evalErrors,
-              ),
-              evalProps: this.evalProps,
-              fullPropertyPath,
-              dataTree: data,
-              configTree,
-            });
-          }
-          return result;
-        } else {
-          return stringSegments[index];
+        if (!jsSnippet) return stringSegments[index];
+
+        if (entity && entityConfig && !propertyPath.includes("body")) {
+          ExecutionMetaData.setExecutionMetaData({
+            triggerMeta: {
+              source: {
+                id: getEntityId(entity) || "",
+                entityType: entity.ENTITY_TYPE,
+                name: getEntityName(entity, entityConfig) || "",
+              },
+              triggerPropertyName: fullPropertyPath?.split(".")[1] || "",
+              onPageLoad: false,
+            },
+          });
         }
+
+        const { errors: evalErrors, result } = this.evaluateDynamicBoundValue(
+          toBeSentForEval,
+          data,
+          !!entity && isAnyJSAction(entity),
+          contextData,
+          callBackData,
+          evalContextCache,
+        );
+
+        if (fullPropertyPath && evalErrors.length) {
+          addErrorToEntityProperty({
+            errors: errorModifier.addRootcauseToAsyncInvocationErrors(
+              fullPropertyPath,
+              configTree,
+              evalErrors,
+              this.dependencyMap,
+            ),
+            evalProps: this.evalProps,
+            fullPropertyPath,
+            configTree,
+          });
+        }
+
+        return result;
       });
 
       // We don't need to substitute template of the result if only one binding exists
@@ -1289,6 +1568,7 @@ export default class DataTreeEvaluator {
       ) {
         return values[0];
       }
+
       try {
         // else return a combined value according to the evaluation type
         return substituteDynamicBindingWithValues(
@@ -1313,27 +1593,32 @@ export default class DataTreeEvaluator {
             ],
             evalProps: this.evalProps,
             fullPropertyPath,
-            dataTree: data,
             configTree,
           });
         }
-        return undefined;
       }
     }
-    return undefined;
   }
 
   async evaluateTriggers(
     userScript: string,
     dataTree: DataTree,
+    configTree: ConfigTree,
     callbackData: Array<unknown>,
     context?: EvaluateContext,
   ) {
+    const isDynamic = isDynamicValue(userScript);
     const { jsSnippets } = getDynamicBindings(userScript);
 
     return evaluateAsync(
-      jsSnippets[0] || userScript,
+      /**
+       * jsSnippets[0] will be "" when a JS Object's function is run manually or when an empty action for a trigger field is configured.
+       * Eg. Button1.onClick = "{{}}"
+       * isDynamic will be false for JSObject's function run but will be true for action bindings.
+       */
+      isDynamic ? jsSnippets[0] : userScript,
       dataTree,
+      configTree,
       context,
       callbackData,
     );
@@ -1346,9 +1631,13 @@ export default class DataTreeEvaluator {
     data: DataTree,
     isJSObject: boolean,
     contextData?: EvaluateContext,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     callbackData?: Array<any>,
+    evalContextCache?: EvaluateContext,
   ): EvalResult {
     let evalResponse: EvalResult;
+
     ExecutionMetaData.setExecutionMetaData({
       enableJSVarUpdateTracking: false,
       enableJSFnPostProcessors: false,
@@ -1360,6 +1649,8 @@ export default class DataTreeEvaluator {
         isJSObject,
         contextData,
         callbackData,
+        {},
+        evalContextCache,
       );
     } catch (error) {
       evalResponse = {
@@ -1381,19 +1672,20 @@ export default class DataTreeEvaluator {
       enableJSVarUpdateTracking: true,
       enableJSFnPostProcessors: true,
     });
+
     return evalResponse;
   }
 
-  setParsedValue({
+  getParsedValueForWidgetProperty({
     configTree,
     currentTree,
     entity,
     evalMetaUpdates,
-    evalPropertyValue,
     fullPropertyPath,
     isNewWidget,
     parsedValue,
     propertyPath,
+    safeTree,
   }: {
     currentTree: DataTree;
     configTree: ConfigTree;
@@ -1403,7 +1695,7 @@ export default class DataTreeEvaluator {
     isNewWidget: boolean;
     parsedValue: unknown;
     propertyPath: string;
-    evalPropertyValue: unknown;
+    safeTree?: DataTree;
   }) {
     const overwriteObj = overrideWidgetProperties({
       entity,
@@ -1414,67 +1706,14 @@ export default class DataTreeEvaluator {
       evalMetaUpdates,
       fullPropertyPath,
       isNewWidget,
+      safeTree,
     });
 
     if (overwriteObj && overwriteObj.overwriteParsedValue) {
       parsedValue = overwriteObj.newValue;
     }
-    // setting parseValue in dataTree
-    set(currentTree, fullPropertyPath, parsedValue);
-    // setting evalPropertyValue in unParsedEvalTree
-    set(this.getUnParsedEvalTree(), fullPropertyPath, evalPropertyValue);
-  }
 
-  reValidateWidgetDependentProperty({
-    configTree,
-    currentTree,
-    fullPropertyPath,
-    widget,
-  }: {
-    fullPropertyPath: string;
-    widget: WidgetEntity;
-    currentTree: DataTree;
-    configTree: ConfigTree;
-  }) {
-    if (this.inverseValidationDependencyMap[fullPropertyPath]) {
-      const pathsToRevalidate =
-        this.inverseValidationDependencyMap[fullPropertyPath];
-      pathsToRevalidate.forEach((fullPath) => {
-        validateAndParseWidgetProperty({
-          fullPropertyPath: fullPath,
-          widget,
-          currentTree,
-          configTree,
-          // we supply non-transformed evaluated value
-          evalPropertyValue: get(this.getUnParsedEvalTree(), fullPath),
-          unEvalPropertyValue: get(
-            this.oldUnEvalTree,
-            fullPath,
-          ) as unknown as string,
-          evalProps: this.evalProps,
-        });
-      });
-    }
-  }
-
-  reValidateTree(
-    nonDynamicFieldValidationOrder: string[],
-    currentTree: DataTree,
-    configTree: ConfigTree,
-  ) {
-    nonDynamicFieldValidationOrder.forEach((fullPropertyPath) => {
-      const { entityName, propertyPath } =
-        getEntityNameAndPropertyPath(fullPropertyPath);
-      const entity = currentTree[entityName];
-      if (isWidget(entity) && !isPathDynamicTrigger(entity, propertyPath)) {
-        this.reValidateWidgetDependentProperty({
-          widget: entity,
-          fullPropertyPath,
-          currentTree,
-          configTree,
-        });
-      }
-    });
+    return parsedValue;
   }
 
   // validates the user input saved as action property based on a validationConfig
@@ -1482,64 +1721,61 @@ export default class DataTreeEvaluator {
     fullPropertyPath: string,
     action: ActionEntity,
     currentTree: DataTree,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     evalPropertyValue: any,
     unEvalPropertyValue: string,
-    validationConfig: ValidationConfig,
     configTree: ConfigTree,
+    validationConfig?: ValidationConfig,
   ) {
-    if (evalPropertyValue && validationConfig) {
-      // runs VALIDATOR function and returns errors
-      const { isValid, messages } = validateActionProperty(
-        validationConfig,
-        evalPropertyValue,
-      );
-      if (!isValid) {
-        const evalErrors: EvaluationError[] =
-          messages?.map((message) => {
-            return {
-              raw: unEvalPropertyValue,
-              errorMessage: message || { name: "", text: "" },
-              errorType: PropertyEvaluationErrorType.VALIDATION,
-              severity: Severity.ERROR,
-            };
-          }) ?? [];
-        // saves error in dataTree at fullPropertyPath
-        // Later errors can consumed by the forms and debugger
-        addErrorToEntityProperty({
-          errors: evalErrors,
-          evalProps: this.evalProps,
-          fullPropertyPath,
-          dataTree: currentTree,
-          configTree,
-        });
-      }
-    }
-  }
+    if (!evalPropertyValue || isEmpty(validationConfig)) return;
 
-  /**
-   * Update the entity config set as prototype according to latest unEvalTree changes else code would consume stale configs.
-   *
-   * Example scenario: On addition of a JS binding to widget, it's dynamicBindingPathList changes and needs to be updated.
-   */
-  updateConfigForModifiedEntity(unEvalTree: DataTree, entityName: string) {
-    const unEvalEntity = unEvalTree[entityName];
-    // skip entity if entity is not present in the evalTree or is not a valid entity
-    if (!this.evalTree[entityName] || !isValidEntity(this.evalTree[entityName]))
-      return;
-    const entityConfig = Object.getPrototypeOf(unEvalEntity);
-    const newEntityObject = Object.create(entityConfig);
-    this.evalTree[entityName] = Object.assign(newEntityObject, {
-      ...this.evalTree[entityName],
+    // runs VALIDATOR function and returns errors
+    const { isValid, messages } = validateActionProperty(
+      validationConfig,
+      evalPropertyValue,
+    );
+
+    if (isValid) return;
+
+    resetValidationErrorsForEntityProperty({
+      evalProps: this.evalProps,
+      fullPropertyPath,
+    });
+    const evalErrors: EvaluationError[] =
+      messages?.map((message) => {
+        return {
+          raw: unEvalPropertyValue,
+          errorMessage: message || { name: "", text: "" },
+          errorType: PropertyEvaluationErrorType.VALIDATION,
+          severity: Severity.ERROR,
+        };
+      }) ?? [];
+
+    // saves error in dataTree at fullPropertyPath
+    // Later errors can consumed by the forms and debugger
+    addErrorToEntityProperty({
+      errors: evalErrors,
+      evalProps: this.evalProps,
+      fullPropertyPath,
+      configTree,
     });
   }
 
+  /**
+   *
+   * Apply the changes to the eval tree. After this, the evaltree will have unevaluated values for the paths that are getting evaluated. To skip this step, we need to pick unevaluated values during evaluation
+   */
   updateEvalTreeWithChanges({
     differences,
   }: {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     differences: Diff<any, any>[];
   }) {
     for (const d of differences) {
       if (!Array.isArray(d.path) || d.path.length === 0) continue; // Null check for typescript
+
       // Apply the changes into the evalTree so that it gets the latest changes
       applyChange(this.evalTree, undefined, d);
     }
@@ -1548,15 +1784,19 @@ export default class DataTreeEvaluator {
   calculateSubTreeSortOrder(
     updatedValuePaths: string[][],
     dependenciesOfRemovedPaths: Array<string>,
-    removedPaths: Array<string>,
+    removedPaths: Array<{ entityId: string; fullpath: string }>,
     unEvalTree: DataTree,
-    configTree: ConfigTree,
-  ) {
+  ): string[] {
     const changePaths: Set<string> = new Set(dependenciesOfRemovedPaths);
-    for (const path of updatedValuePaths) {
-      changePaths.add(convertPathToString(path));
+    const configTree = this.getConfigTree();
+
+    for (const pathArray of updatedValuePaths) {
+      const fullPropertyPath = convertPathToString(pathArray);
+
+      changePaths.add(fullPropertyPath);
+
       // If this is a property path change, simply add for evaluation and move on
-      if (!isDynamicLeaf(unEvalTree, convertPathToString(path), configTree)) {
+      if (!isDynamicLeaf(unEvalTree, fullPropertyPath, configTree)) {
         // A parent level property has been added or deleted
         /**
          * We want to add all pre-existing dynamic and static bindings in dynamic paths of this entity to get evaluated and validated.
@@ -1566,37 +1806,31 @@ export default class DataTreeEvaluator {
          * - This function gets called with a diff {path:["Api1"]}
          * We want to add `Api.data` to changedPaths so that `Table1.tableData` can be discovered below.
          */
-        const entityName = path[0];
+        const entityName = pathArray[0];
         const entityConfig = configTree[entityName];
         const entity = unEvalTree[entityName];
-        if (!entity) {
+
+        if (!entity || isNotEntity(entity)) {
           continue;
         }
-        if (!isAction(entity) && !isWidget(entity) && !isJSAction(entity)) {
-          continue;
-        }
-        let entityDynamicBindingPaths: string[] = [];
+
+        const entityDynamicBindingPathsSet = new Set<string>();
+
         if (isAction(entity)) {
-          const entityDynamicBindingPathList =
-            getEntityDynamicBindingPathList(entityConfig);
-          entityDynamicBindingPaths = entityDynamicBindingPathList.map(
-            (path) => {
-              return path.key;
-            },
-          );
+          getEntityDynamicBindingPathList(entityConfig).forEach((path) => {
+            entityDynamicBindingPathsSet.add(path.key);
+          });
         }
-        const parentPropertyPath = convertPathToString(path);
-        Object.keys(entityConfig.reactivePaths).forEach((relativePath) => {
-          const childPropertyPath = `${entityName}.${relativePath}`;
+
+        Object.keys(entityConfig.reactivePaths).forEach((reactivePath) => {
+          const childPropertyPath = `${entityName}.${reactivePath}`;
+
           // Check if relative path has dynamic binding
-          if (
-            entityDynamicBindingPaths &&
-            entityDynamicBindingPaths.length &&
-            entityDynamicBindingPaths.includes(relativePath)
-          ) {
+          if (entityDynamicBindingPathsSet.has(reactivePath)) {
             changePaths.add(childPropertyPath);
           }
-          if (isChildPropertyPath(parentPropertyPath, childPropertyPath)) {
+
+          if (isChildPropertyPath(fullPropertyPath, childPropertyPath)) {
             changePaths.add(childPropertyPath);
           }
         });
@@ -1610,58 +1844,42 @@ export default class DataTreeEvaluator {
     // is a nested property of Table1.selectedRow
     const changePathsWithNestedDependants = addDependantsOfNestedPropertyPaths(
       Array.from(changePaths),
-      this.inverseDependencyMap,
+      this.inverseDependencies,
     );
 
     const trimmedChangedPaths = trimDependantChangePaths(
       changePathsWithNestedDependants,
-      this.dependencyMap,
+      this.dependencies,
     );
 
     // Now that we have all the root nodes which have to be evaluated, recursively find all the other paths which
     // would get impacted because they are dependent on the said root nodes and add them in order
     const completeSortOrder = this.getCompleteSortOrder(
       trimmedChangedPaths,
-      this.inverseDependencyMap,
+      this.inverseDependencies,
     );
 
     // Remove any paths that do not exist in the data tree anymore
-    return difference(completeSortOrder, removedPaths);
-  }
-
-  getInverseDependencyTree(
-    params = {
-      dependencyMap: this.dependencyMap,
-      sortedDependencies: this.sortedDependencies,
-    },
-  ): DependencyMap {
-    const { dependencyMap, sortedDependencies } = params;
-    const inverseDependencyMap: DependencyMap = {};
-    sortedDependencies.forEach((propertyPath) => {
-      const incomingEdges: Array<string> = dependencyMap[propertyPath];
-      if (incomingEdges) {
-        incomingEdges.forEach((edge) => {
-          const node = inverseDependencyMap[edge];
-          if (node) {
-            node.push(propertyPath);
-          } else {
-            inverseDependencyMap[edge] = [propertyPath];
-          }
-        });
-      }
-    });
-    return inverseDependencyMap;
+    return difference(
+      completeSortOrder,
+      removedPaths.map((removedPath) => removedPath.fullpath),
+    );
   }
 
   evaluateActionBindings(
     bindings: string[],
     executionParams?: Record<string, unknown> | string,
   ) {
+    const dataTree = klonaJSON(this.evalTree);
     // We might get execution params as an object or as a string.
     // If the user has added a proper object (valid case) it will be an object
     // If they have not added any execution params or not an object
     // it would be a string (invalid case)
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let evaluatedExecutionParams: Record<string, any> = {};
+    let overrideContext: Record<string, unknown>;
+
     if (executionParams && isObject(executionParams)) {
       evaluatedExecutionParams = this.getDynamicValue(
         `{{${JSON.stringify(executionParams)}}}`,
@@ -1669,6 +1887,12 @@ export default class DataTreeEvaluator {
         this.oldConfigTree,
         EvaluationSubstitutionType.TEMPLATE,
       );
+
+      overrideContext = generateOverrideContext({
+        bindings,
+        executionParams,
+        dataTree,
+      });
     }
 
     return bindings.map((binding) => {
@@ -1679,9 +1903,10 @@ export default class DataTreeEvaluator {
         EXECUTION_PARAM_REFERENCE_REGEX,
         EXECUTION_PARAM_KEY,
       );
+
       return this.getDynamicValue(
         `{{${replacedBinding}}}`,
-        this.evalTree,
+        dataTree,
         this.oldConfigTree,
         EvaluationSubstitutionType.TEMPLATE,
         // params can be accessed via "this.params" or "executionParams"
@@ -1692,6 +1917,7 @@ export default class DataTreeEvaluator {
           globalContext: {
             [EXECUTION_PARAM_KEY]: evaluatedExecutionParams,
           },
+          overrideContext,
         },
       );
     });

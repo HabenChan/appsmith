@@ -14,7 +14,7 @@ import { replayHighlightClass } from "globalStyles/portals";
 import _ from "lodash";
 import { generateReactKey } from "utils/generators";
 import { emitInteractionAnalyticsEvent } from "utils/AppsmithUtils";
-import { Tooltip } from "design-system";
+import { Tooltip } from "@appsmith/ads";
 
 const IconSelectContainerStyles = createGlobalStyle<{
   targetWidth: number | undefined;
@@ -103,6 +103,7 @@ const StyledMenuItem = styled(MenuItem)`
 export interface IconSelectControlProps extends ControlProps {
   propertyValue?: IconName;
   defaultIconName?: IconName;
+  hideNoneIcon?: boolean;
 }
 
 export interface IconSelectControlState {
@@ -111,11 +112,11 @@ export interface IconSelectControlState {
 }
 
 const NONE = "(none)";
+
 type IconType = IconName | typeof NONE;
 const ICON_NAMES = Object.keys(IconNames).map<IconType>(
   (name: string) => IconNames[name as keyof typeof IconNames],
 );
-ICON_NAMES.unshift(NONE);
 const icons = new Set(ICON_NAMES);
 
 const TypedSelect = Select.ofType<IconType>();
@@ -138,6 +139,23 @@ class IconSelectControl extends BaseControl<
     this.searchInput = React.createRef();
     this.initialItemIndex = 0;
     this.filteredItems = [];
+
+    /**
+     * Multiple instances of the IconSelectControl class may be created,
+     * and each instance modifies the ICON_NAMES array and the icons set.
+     * Without the below logic, the NONE icon may be added or removed
+     * multiple times, leading to unexpected behaviour.
+     */
+    const noneIconExists = icons.has(NONE);
+
+    if (!props.hideNoneIcon && !noneIconExists) {
+      ICON_NAMES.unshift(NONE);
+      icons.add(NONE);
+    } else if (props.hideNoneIcon && noneIconExists) {
+      ICON_NAMES.shift();
+      icons.delete(NONE);
+    }
+
     this.state = {
       activeIcon: props.propertyValue ?? NONE,
       isOpen: false,
@@ -147,6 +165,8 @@ class IconSelectControl extends BaseControl<
   // debouncedSetState is used to fix the following bug:
   // https://github.com/appsmithorg/appsmith/pull/10460#issuecomment-1022895174
   private debouncedSetState = _.debounce(
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (obj: any, callback?: () => void) => {
       this.setState((prevState: IconSelectControlState) => {
         return {
@@ -254,14 +274,19 @@ class IconSelectControl extends BaseControl<
           emitInteractionAnalyticsEvent(this.iconSelectTargetRef.current, {
             key: e.key,
           });
+
           if (document.activeElement === this.searchInput.current) {
             (document.activeElement as HTMLElement).blur();
+
             if (this.initialItemIndex < 0) this.initialItemIndex = -4;
             else break;
           }
+
           const nextIndex = this.initialItemIndex + 4;
+
           if (nextIndex < this.filteredItems.length)
             this.setActiveIcon(nextIndex);
+
           e.preventDefault();
           break;
         }
@@ -280,11 +305,14 @@ class IconSelectControl extends BaseControl<
             this.searchInput.current.focus();
             break;
           }
+
           emitInteractionAnalyticsEvent(this.iconSelectTargetRef.current, {
             key: e.key,
           });
           const nextIndex = this.initialItemIndex - 4;
+
           if (nextIndex >= 0) this.setActiveIcon(nextIndex);
+
           e.preventDefault();
           break;
         }
@@ -293,12 +321,15 @@ class IconSelectControl extends BaseControl<
           if (document.activeElement === this.searchInput.current) {
             break;
           }
+
           emitInteractionAnalyticsEvent(this.iconSelectTargetRef.current, {
             key: e.key,
           });
           const nextIndex = this.initialItemIndex + 1;
+
           if (nextIndex < this.filteredItems.length)
             this.setActiveIcon(nextIndex);
+
           e.preventDefault();
           break;
         }
@@ -307,11 +338,14 @@ class IconSelectControl extends BaseControl<
           if (document.activeElement === this.searchInput.current) {
             break;
           }
+
           emitInteractionAnalyticsEvent(this.iconSelectTargetRef.current, {
             key: e.key,
           });
           const nextIndex = this.initialItemIndex - 1;
+
           if (nextIndex >= 0) this.setActiveIcon(nextIndex);
+
           e.preventDefault();
           break;
         }
@@ -322,6 +356,7 @@ class IconSelectControl extends BaseControl<
             this.filteredItems.length !== 2
           )
             break;
+
           emitInteractionAnalyticsEvent(this.iconSelectTargetRef.current, {
             key: e.key,
           });
@@ -401,6 +436,7 @@ class IconSelectControl extends BaseControl<
     if (!modifiers.matchesPredicate) {
       return null;
     }
+
     return (
       <Tooltip content={icon} mouseEnterDelay={0}>
         <StyledMenuItem
@@ -422,6 +458,7 @@ class IconSelectControl extends BaseControl<
     if (iconName === NONE || query === "") {
       return true;
     }
+
     return iconName.toLowerCase().indexOf(query.toLowerCase()) >= 0;
   };
 
@@ -444,9 +481,12 @@ class IconSelectControl extends BaseControl<
 
   static canDisplayValueInUI(
     config: IconSelectControlProps,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any,
   ): boolean {
     if (icons.has(value)) return true;
+
     return false;
   }
 }

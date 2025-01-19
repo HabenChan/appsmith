@@ -69,7 +69,7 @@ const rowRenderer = React.memo((rowProps: ListChildComponentProps) => {
   }
 }, areEqual);
 
-type BodyPropsType = {
+interface BodyPropsType {
   getTableBodyProps(
     propGetter?: TableBodyPropGetter<Record<string, unknown>> | undefined,
   ): TableBodyProps;
@@ -79,7 +79,7 @@ type BodyPropsType = {
   width?: number;
   tableSizes: TableSizes;
   innerElementType?: ReactElementType;
-};
+}
 
 const TableVirtualBodyComponent = React.forwardRef(
   (props: BodyPropsType, ref: Ref<SimpleBar>) => {
@@ -90,14 +90,12 @@ const TableVirtualBodyComponent = React.forwardRef(
           height={
             props.height -
             props.tableSizes.TABLE_HEADER_HEIGHT -
-            2 * WIDGET_PADDING
+            2 * props.tableSizes.VERTICAL_PADDING
           }
           innerElementType={props.innerElementType}
           itemCount={Math.max(props.rows.length, props.pageSize)}
           itemData={props.rows}
-          itemSize={
-            props.tableSizes.ROW_HEIGHT + props.tableSizes.ROW_VIRTUAL_OFFSET
-          }
+          itemSize={props.tableSizes.ROW_HEIGHT}
           outerRef={ref}
           width={`calc(100% + ${2 * WIDGET_PADDING}px)`}
         >

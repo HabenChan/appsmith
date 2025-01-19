@@ -1,7 +1,8 @@
 package com.appsmith.server.helpers;
 
-
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -41,7 +42,7 @@ public class CollectionUtils {
     public static <E> void putAtFirst(List<E> list, E item) {
         // check if item already exists
         int index = list.indexOf(item);
-        if (index == -1) {  // does not exist so put it at first
+        if (index == -1) { // does not exist so put it at first
             list.add(0, item);
         } else if (index > 0) {
             list.remove(item);
@@ -94,4 +95,18 @@ public class CollectionUtils {
         }
     }
 
+    /**
+     * Use this like `List.of`, but can take any `null` values and will not include them in the resulting list.
+     * @return An unmodifiable list of the non-null items.
+     */
+    @SafeVarargs
+    public static <T> List<T> ofNonNulls(T... items) {
+        List<T> list = new ArrayList<>();
+        for (T item : items) {
+            if (item != null) {
+                list.add(item);
+            }
+        }
+        return Collections.unmodifiableList(list);
+    }
 }

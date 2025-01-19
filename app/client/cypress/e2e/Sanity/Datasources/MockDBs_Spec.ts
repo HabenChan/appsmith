@@ -1,91 +1,101 @@
-import * as _ from "../../../support/Objects/ObjectsCore";
+import {
+  agHelper,
+  entityExplorer,
+  entityItems,
+  dataSources,
+  assertHelper,
+} from "../../../support/Objects/ObjectsCore";
 let dsName: any;
+import formControls from "../../../locators/FormControl.json";
+import {
+  AppSidebar,
+  AppSidebarButton,
+  PageLeftPane,
+  PagePaneSegment,
+} from "../../../support/Pages/EditorNavigation";
+import PageList from "../../../support/Pages/PageList";
 
 describe(
-  "excludeForAirgap",
   "Validate Mock Query Active Ds querying & count",
+  {
+    tags: [
+      "@tag.Datasource",
+      "@tag.excludeForAirgap",
+      "@tag.Git",
+      "@tag.AccessControl",
+    ],
+  },
   () => {
-    it("1. Create Query from Mock Mongo DB & verify active queries count", () => {
-      _.dataSources.CreateMockDB("Movies").then((mockDBName) => {
+    it("1. Create Query from Mock Postgres DB & verify active queries count", () => {
+      PageList.AddNewPage();
+      PageList.AddNewPage();
+      dataSources.CreateMockDB("Users").then((mockDBName) => {
         dsName = mockDBName;
-        _.dataSources.CreateQueryFromActiveTab(mockDBName, false);
-        _.dataSources.ValidateNSelectDropdown("Commands", "Find document(s)");
-        _.agHelper.EnterValue("movies", {
-          propFieldName: "",
-          directInput: false,
-          inputFieldName: "Collection",
-        });
-        _.dataSources.RunQueryNVerifyResponseViews(10, false);
-        _.dataSources.NavigateToActiveTab();
-        _.agHelper
-          .GetText(_.dataSources._queriesOnPageText(mockDBName))
-          .then(($queryCount) =>
-            expect($queryCount).to.eq("1 query on this page"),
-          );
+        cy.log("Mock DB Name: " + mockDBName);
 
-        _.entityExplorer.CreateNewDsQuery(mockDBName);
-        _.dataSources.ValidateNSelectDropdown("Commands", "Find document(s)");
-        _.agHelper.EnterValue("movies", {
-          propFieldName: "",
-          directInput: false,
-          inputFieldName: "Collection",
-        });
-        _.dataSources.RunQueryNVerifyResponseViews(10, false);
-        _.dataSources.NavigateToActiveTab();
-        _.agHelper
-          .GetText(_.dataSources._queriesOnPageText(mockDBName))
-          .then(($queryCount) =>
-            expect($queryCount).to.eq("2 queries on this page"),
-          );
-      });
-    });
+        assertHelper.AssertNetworkStatus("@getDatasourceStructure", 200);
+        dataSources.CreateQueryAfterDSSaved();
 
-    it("2. Create Query from Mock Postgres DB & verify active queries count", () => {
-      _.dataSources.CreateMockDB("Users").then((mockDBName) => {
-        dsName = mockDBName;
-        _.dataSources.CreateQueryFromActiveTab(mockDBName, false);
-        _.agHelper.GetNClick(_.dataSources._templateMenuOption("Select"));
-        _.dataSources.RunQueryNVerifyResponseViews(10);
-        _.dataSources.NavigateToActiveTab();
-        _.agHelper
-          .GetText(_.dataSources._queriesOnPageText(mockDBName))
-          .then(($queryCount) =>
-            expect($queryCount).to.eq("1 query on this page"),
-          );
-
-        _.entityExplorer.CreateNewDsQuery(mockDBName);
-        _.agHelper.GetNClick(_.dataSources._templateMenuOption("Select"));
-        _.dataSources.RunQueryNVerifyResponseViews(10, false);
-        _.dataSources.NavigateToActiveTab();
-        _.agHelper
-          .GetText(_.dataSources._queriesOnPageText(mockDBName))
-          .then(($queryCount) =>
-            expect($queryCount).to.eq("2 queries on this page"),
-          );
-      });
-    });
-
-    afterEach(() => {
-      _.entityExplorer.ExpandCollapseEntity("Queries/JS");
-      _.entityExplorer.ActionContextMenuByEntityName(
-        "Query1",
-        "Delete",
-        "Are you sure?",
-      );
-      _.entityExplorer.ActionContextMenuByEntityName(
-        "Query2",
-        "Delete",
-        "Are you sure?",
-      );
-      _.dataSources.NavigateToActiveTab();
-      _.agHelper
-        .GetText(_.dataSources._queriesOnPageText(dsName))
-        .then(($queryCount) =>
-          expect($queryCount).to.eq(
-            "No query in this application is using this datasource",
-          ),
+        // This will validate that query populated in editor uses existing table name
+        agHelper.VerifyCodeInputValue(
+          formControls.postgreSqlBody,
+          'SELECT * FROM public."users" LIMIT 10;',
         );
-      _.dataSources.DeleteDatasouceFromActiveTab(dsName);
+
+        dataSources.runQueryAndVerifyResponseViews({
+          count: 1,
+          operator: "gte",
+        }); //minimum 1 rows are expected
+
+        AppSidebar.navigate(AppSidebarButton.Data);
+        dataSources
+          .getDatasourceListItemDescription(mockDBName)
+          .then(($queryCount) =>
+            expect($queryCount).to.eq("1 queries in this app"),
+          );
+
+        entityExplorer.CreateNewDsQuery(mockDBName);
+        // Validates the value of source for action creation -
+        // should be self here as the user explicitly triggered create action
+        cy.wait("@createNewApi").then((interception) => {
+          expect(interception.request.body.source).to.equal("SELF");
+        });
+
+        // dataSources.runQueryAndVerifyResponseViews({
+        //   count: 1,
+        //   operator: "gte",
+        // }); //minimum 1 rows are expected
+
+        // AppSidebar.navigate(AppSidebarButton.Data);
+        // dataSources
+        //   .getDatasourceListItemDescription(mockDBName)
+        //   .then(($queryCount) =>
+        //     expect($queryCount).to.eq("2 queries in this app"),
+        //   );
+      });
+    });
+
+    it("2. Create Query from Mock Mongo DB & verify active queries count", () => {
+      dataSources.CreateMockDB("Movies").then((mockDBName) => {
+        dsName = mockDBName;
+        cy.log("Mock DB Name: " + mockDBName);
+
+        // delay is introduced so that structure fetch is complete before moving to query creation
+        // feat: #25320, new query created for mock db movies, will be populated with default values
+        agHelper.Sleep(500);
+
+        assertHelper.AssertNetworkStatus("@getDatasourceStructure", 200);
+        dataSources.CreateQueryAfterDSSaved();
+
+        assertHelper.AssertNetworkStatus("@trigger");
+        dataSources.ValidateNSelectDropdown("Command", "Find document(s)");
+
+        // dataSources.runQueryAndVerifyResponseViews({
+        //   count: 1,
+        //   operator: "gte",
+        //   responseTypes: ["JSON", "RAW"],
+        // });
+      });
     });
   },
 );

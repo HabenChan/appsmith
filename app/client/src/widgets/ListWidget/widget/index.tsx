@@ -1,18 +1,43 @@
-import { Positioning } from "utils/autoLayout/constants";
-import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
-import type { WidgetType } from "constants/WidgetConstants";
-import { GridDefaults, RenderModes } from "constants/WidgetConstants";
-import { ValidationTypes } from "constants/WidgetValidation";
-import type { Stylesheet } from "entities/AppTheming";
-import type { PrivateWidgets } from "entities/DataTree/types";
-import equal from "fast-deep-equal/es6";
-import { klona } from "klona/lite";
+import type { PrivateWidgets } from "ee/entities/DataTree/types";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+  PropertyUpdates,
+  SnipingModeProperty,
+  WidgetCallout,
+} from "WidgetProvider/constants";
 import {
+  BlueprintOperationTypes,
+  type DSLWidget,
+  type FlattenedWidgetProps,
+} from "WidgetProvider/constants";
+import WidgetFactory from "WidgetProvider/factory";
+import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import { ASSETS_CDN_URL } from "constants/ThirdPartyConstants";
+import {
+  GridDefaults,
+  RenderModes,
+  WIDGET_TAGS,
+} from "constants/WidgetConstants";
+import { ValidationTypes } from "constants/WidgetValidation";
+import { FILL_WIDGET_MIN_WIDTH } from "constants/minWidthConstants";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import equal from "fast-deep-equal/es6";
+import { renderAppsmithCanvas } from "layoutSystems/CanvasFactory";
+import {
+  Positioning,
+  ResponsiveBehavior,
+} from "layoutSystems/common/utils/constants";
+import {
+  cloneDeep,
   compact,
   get,
+  indexOf,
   isBoolean,
   isEmpty,
   isNumber,
+  isString,
   omit,
   range,
   set,
@@ -21,17 +46,19 @@ import {
 } from "lodash";
 import log from "loglevel";
 import memoizeOne from "memoize-one";
+import { buildDeprecationWidgetMessage } from "pages/Editor/utils";
 import React from "react";
 import shallowEqual from "shallowequal";
-import { getDynamicBindings } from "utils/DynamicBindingUtils";
-import { removeFalsyEntries } from "utils/helpers";
-import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
-import type { ExtraDef } from "utils/autocomplete/dataTreeTypeDefCreator";
-import { generateTypeDef } from "utils/autocomplete/dataTreeTypeDefCreator";
-import WidgetFactory from "utils/WidgetFactory";
+import {
+  combineDynamicBindings,
+  getDynamicBindings,
+} from "utils/DynamicBindingUtils";
+import type { ExtraDef } from "utils/autocomplete/defCreatorUtils";
+import { generateTypeDef } from "utils/autocomplete/defCreatorUtils";
+import { klonaLiteWithTelemetry, removeFalsyEntries } from "utils/helpers";
 import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
 import BaseWidget from "widgets/BaseWidget";
-import type { DSLWidget } from "widgets/constants";
+import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
 import ListComponent, {
   ListComponentEmpty,
   ListComponentLoading,
@@ -39,12 +66,12 @@ import ListComponent, {
 import ListPagination, {
   ServerSideListPagination,
 } from "../component/ListPagination";
+import IconSVG from "../icon.svg";
 import derivedProperties from "./parseDerivedProperties";
 import {
   PropertyPaneContentConfig,
   PropertyPaneStyleConfig,
 } from "./propertyConfig";
-import type { AutocompletionDefinitions } from "widgets/constants";
 
 const LIST_WIDGET_PAGINATION_HEIGHT = 36;
 
@@ -53,10 +80,489 @@ const LIST_WIDGET_PAGINATION_HEIGHT = 36;
 */
 const PATH_TO_ALL_WIDGETS_IN_LIST_WIDGET =
   "children.0.children.0.children.0.children";
+
 class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
   state = {
     page: 1,
   };
+
+  static type = "LIST_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "List",
+      iconSVG: IconSVG,
+      needsMeta: true,
+      isCanvas: true,
+      isDeprecated: true,
+      hideCard: true,
+      replacement: "LIST_WIDGET_V2",
+      needsHeightForContent: true,
+      tags: [WIDGET_TAGS.DISPLAY],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      backgroundColor: "transparent",
+      itemBackgroundColor: "#FFFFFF",
+      rows: 40,
+      columns: 24,
+      animateLoading: true,
+      gridType: "vertical",
+      template: {},
+      responsiveBehavior: ResponsiveBehavior.Fill,
+      minWidth: FILL_WIDGET_MIN_WIDTH,
+      positioning: Positioning.Fixed,
+      enhancements: {
+        child: {
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          autocomplete: (parentProps: any) => {
+            return parentProps.childAutoComplete;
+          },
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          updateDataTreePath: (parentProps: any, dataTreePath: string) => {
+            return `${parentProps.widgetName}.template.${dataTreePath}`;
+          },
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          shouldHideProperty: (parentProps: any, propertyName: string) => {
+            if (propertyName === "dynamicHeight") return true;
+
+            return false;
+          },
+          propertyUpdateHook: (
+            // TODO: Fix this the next time the file is edited
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            parentProps: any,
+            widgetName: string,
+            propertyPath: string,
+            propertyValue: string,
+            isTriggerProperty: boolean,
+          ) => {
+            let value = propertyValue;
+
+            if (!parentProps.widgetId) return [];
+
+            const { jsSnippets, stringSegments } =
+              getDynamicBindings(propertyValue);
+
+            const js = combineDynamicBindings(jsSnippets, stringSegments);
+
+            value = `{{${parentProps.widgetName}.listData.map((currentItem, currentIndex) => {
+                return (function(){
+                  return  ${js};
+                })();
+              })}}`;
+
+            if (!js) {
+              value = propertyValue;
+            }
+
+            const path = `template.${widgetName}.${propertyPath}`;
+
+            return [
+              {
+                widgetId: parentProps.widgetId,
+                propertyPath: path,
+                propertyValue: isTriggerProperty ? propertyValue : value,
+                isDynamicTrigger: isTriggerProperty,
+              },
+            ];
+          },
+        },
+      },
+      gridGap: 0,
+      listData: [
+        {
+          id: "001",
+          name: "Blue",
+          img: getAssetUrl(`${ASSETS_CDN_URL}/widgets/default.png`),
+        },
+        {
+          id: "002",
+          name: "Green",
+          img: getAssetUrl(`${ASSETS_CDN_URL}/widgets/default.png`),
+        },
+        {
+          id: "003",
+          name: "Red",
+          img: getAssetUrl(`${ASSETS_CDN_URL}/widgets/default.png`),
+        },
+      ],
+      widgetName: "List",
+      children: [],
+      blueprint: {
+        view: [
+          {
+            type: "CANVAS_WIDGET",
+            position: { top: 0, left: 0 },
+            props: {
+              containerStyle: "none",
+              canExtend: false,
+              detachFromLayout: true,
+              dropDisabled: true,
+              openParentPropertyPane: true,
+              noPad: true,
+              children: [],
+              blueprint: {
+                view: [
+                  {
+                    type: "CONTAINER_WIDGET",
+                    size: {
+                      rows: 12,
+                      cols: 64,
+                    },
+                    position: { top: 0, left: 0 },
+                    props: {
+                      backgroundColor: "white",
+                      containerStyle: "card",
+                      dragDisabled: true,
+                      isDeletable: false,
+                      disallowCopy: true,
+                      disablePropertyPane: true,
+                      openParentPropertyPane: true,
+                      children: [],
+                      positioning: Positioning.Fixed,
+                      blueprint: {
+                        view: [
+                          {
+                            type: "CANVAS_WIDGET",
+                            position: { top: 0, left: 0 },
+                            props: {
+                              containerStyle: "none",
+                              canExtend: false,
+                              detachFromLayout: true,
+                              children: [],
+                              version: 1,
+                              blueprint: {
+                                view: [
+                                  {
+                                    type: "IMAGE_WIDGET",
+                                    size: {
+                                      rows: 8,
+                                      cols: 16,
+                                    },
+                                    position: { top: 0, left: 0 },
+                                    props: {
+                                      defaultImage: getAssetUrl(
+                                        `${ASSETS_CDN_URL}/widgets/default.png`,
+                                      ),
+                                      imageShape: "RECTANGLE",
+                                      maxZoomLevel: 1,
+                                      image: "{{currentItem.img}}",
+                                      boxShadow: "none",
+                                      objectFit: "cover",
+                                      dynamicBindingPathList: [
+                                        {
+                                          key: "image",
+                                        },
+                                      ],
+                                      dynamicTriggerPathList: [],
+                                    },
+                                  },
+                                  {
+                                    type: "TEXT_WIDGET",
+                                    size: {
+                                      rows: 4,
+                                      cols: 12,
+                                    },
+                                    position: {
+                                      top: 0,
+                                      left: 16,
+                                    },
+                                    props: {
+                                      text: "{{currentItem.name}}",
+                                      textStyle: "HEADING",
+                                      textAlign: "LEFT",
+                                      boxShadow: "none",
+                                      dynamicHeight: "FIXED",
+                                      dynamicBindingPathList: [
+                                        {
+                                          key: "text",
+                                        },
+                                      ],
+                                      dynamicTriggerPathList: [],
+                                    },
+                                  },
+                                  {
+                                    type: "TEXT_WIDGET",
+                                    size: {
+                                      rows: 4,
+                                      cols: 8,
+                                    },
+                                    position: {
+                                      top: 4,
+                                      left: 16,
+                                    },
+                                    props: {
+                                      text: "{{currentItem.id}}",
+                                      textStyle: "BODY",
+                                      textAlign: "LEFT",
+                                      boxShadow: "none",
+                                      dynamicHeight: "FIXED",
+                                      dynamicBindingPathList: [
+                                        {
+                                          key: "text",
+                                        },
+                                      ],
+                                      dynamicTriggerPathList: [],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+        operations: [
+          {
+            type: BlueprintOperationTypes.MODIFY_PROPS,
+            fn: (
+              widget: WidgetProps & { children?: WidgetProps[] },
+              widgets: { [widgetId: string]: FlattenedWidgetProps },
+            ) => {
+              let template = {};
+              // TODO: Fix this the next time the file is edited
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const logBlackListMap: any = {};
+              const container = get(
+                widgets,
+                `${get(widget, "children.0.children.0")}`,
+              );
+              const canvas = get(widgets, `${get(container, "children.0")}`);
+              // TODO: Fix this the next time the file is edited
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              let updatePropertyMap: any = [];
+              // TODO: Fix this the next time the file is edited
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const dynamicBindingPathList: any[] = get(
+                widget,
+                "dynamicBindingPathList",
+                [],
+              );
+
+              canvas.children &&
+                get(canvas, "children", []).forEach((child: string) => {
+                  const childWidget = cloneDeep(get(widgets, `${child}`));
+                  const logBlackList: { [key: string]: boolean } = {};
+                  const keys = Object.keys(childWidget);
+
+                  for (let i = 0; i < keys.length; i++) {
+                    const key = keys[i];
+                    let value = childWidget[key];
+
+                    if (isString(value) && value.indexOf("currentItem") > -1) {
+                      const { jsSnippets, stringSegments } =
+                        getDynamicBindings(value);
+
+                      const js = combineDynamicBindings(
+                        jsSnippets,
+                        stringSegments,
+                      );
+
+                      value = `{{${widget.widgetName}.listData.map((currentItem) => ${js})}}`;
+
+                      childWidget[key] = value;
+
+                      dynamicBindingPathList.push({
+                        key: `template.${childWidget.widgetName}.${key}`,
+                      });
+                    }
+                  }
+
+                  Object.keys(childWidget).map((key) => {
+                    logBlackList[key] = true;
+                  });
+
+                  logBlackListMap[childWidget.widgetId] = logBlackList;
+
+                  template = {
+                    ...template,
+                    [childWidget.widgetName]: childWidget,
+                  };
+                });
+
+              updatePropertyMap = [
+                {
+                  widgetId: widget.widgetId,
+                  propertyName: "dynamicBindingPathList",
+                  propertyValue: dynamicBindingPathList,
+                },
+                {
+                  widgetId: widget.widgetId,
+                  propertyName: "template",
+                  propertyValue: template,
+                },
+                {
+                  widgetId: container.widgetId,
+                  propertyName: "dynamicHeight",
+                  propertyValue: "FIXED",
+                },
+              ];
+
+              // add logBlackList to updateProperyMap for all children
+              updatePropertyMap = updatePropertyMap.concat(
+                Object.keys(logBlackListMap).map((logBlackListMapKey) => {
+                  return {
+                    widgetId: logBlackListMapKey,
+                    propertyName: "logBlackList",
+                    propertyValue: logBlackListMap[logBlackListMapKey],
+                  };
+                }),
+              );
+
+              return updatePropertyMap;
+            },
+          },
+          {
+            type: BlueprintOperationTypes.CHILD_OPERATIONS,
+            fn: (
+              widgets: { [widgetId: string]: FlattenedWidgetProps },
+              widgetId: string,
+              parentId: string,
+            ) => {
+              if (!parentId) return { widgets };
+
+              const widget = { ...widgets[widgetId] };
+              const parent = { ...widgets[parentId] };
+              const logBlackList: { [key: string]: boolean } = {};
+
+              widget.dynamicHeight = "FIXED";
+
+              /*
+               * Only widgets that don't have derived or meta properties
+               * work well inside the current version of List widget.
+               * Widgets like Input, Select maintain the state on meta properties,
+               * which won't be available in List.selectedItem object. Hence we're
+               * restricting them from being placed inside the List widget.
+               */
+              const allowedWidgets = [
+                "AUDIO_WIDGET",
+                "BUTTON_GROUP_WIDGET",
+                "BUTTON_WIDGET",
+                "CHART_WIDGET",
+                "CHECKBOX_WIDGET",
+                "CHECKBOX_GROUP_WIDGET",
+                "DIVIDER_WIDGET",
+                "ICON_BUTTON_WIDGET",
+                "IFRAME_WIDGET",
+                "IMAGE_WIDGET",
+                "INPUT_WIDGET_V2",
+                "MAP_CHART_WIDGET",
+                "MAP_WIDGET",
+                "MENU_BUTTON_WIDGET",
+                "PROGRESS_WIDGET",
+                "STATBOX_WIDGET",
+                "SWITCH_WIDGET",
+                "SWITCH_GROUP_WIDGET",
+                "TEXT_WIDGET",
+                "VIDEO_WIDGET",
+              ];
+
+              if (indexOf(allowedWidgets, widget.type) === -1) {
+                const widget = widgets[widgetId];
+
+                if (widget.children && widget.children.length > 0) {
+                  widget.children.forEach((childId: string) => {
+                    delete widgets[childId];
+                  });
+                }
+
+                if (widget.parentId) {
+                  const _parent = { ...widgets[widget.parentId] };
+
+                  _parent.children = _parent.children?.filter(
+                    (id) => id !== widgetId,
+                  );
+                  widgets[widget.parentId] = _parent;
+                }
+
+                delete widgets[widgetId];
+
+                return {
+                  widgets,
+                  message: `This widget cannot be used inside the list widget.`,
+                };
+              }
+
+              // add logBlackList for the children being added
+              Object.keys(widget).map((key) => {
+                logBlackList[key] = true;
+              });
+
+              widget.logBlackList = logBlackList;
+
+              widgets[parentId] = parent;
+              widgets[widgetId] = widget;
+
+              return { widgets };
+            },
+          },
+        ],
+      },
+    };
+  }
+
+  static getMethods() {
+    return {
+      getSnipingModeUpdates: (
+        propValueMap: SnipingModeProperty,
+      ): PropertyUpdates[] => {
+        return [
+          {
+            propertyPath: "listData",
+            propertyValue: propValueMap.data,
+            isDynamicPropertyPath: true,
+          },
+        ];
+      },
+      getEditorCallouts(): WidgetCallout[] {
+        return [
+          {
+            message: buildDeprecationWidgetMessage(ListWidget.getConfig().name),
+          },
+        ];
+      },
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "280px",
+              minHeight: "300px",
+            };
+          },
+        },
+      ],
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: { base: "300px" },
+        minWidth: { base: "280px" },
+      },
+    };
+  }
 
   static getAutocompleteDefinitions(): AutocompletionDefinitions {
     return (
@@ -79,6 +585,18 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
       pageSize: generateTypeDef(widget.pageSize),
     });
   }
+
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+      },
+    };
+  }
+
   static getPropertyPaneContentConfig() {
     return PropertyPaneContentConfig;
   }
@@ -108,6 +626,7 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
     if (this.props.serverSidePaginationEnabled && !this.props.pageNo) {
       this.props.updateWidgetMetaProperty("pageNo", 1);
     }
+
     this.props.updateWidgetMetaProperty(
       "templateBottomRow",
       get(this.props.childWidgets, "0.children.0.bottomRow"),
@@ -131,6 +650,8 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
    */
   generateChildrenEntityDefinitions(props: ListWidgetProps<WidgetProps>) {
     const template = props.template;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const childrenEntityDefinitions: Record<string, any> = {};
 
     if (template) {
@@ -167,7 +688,9 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
       props,
       PATH_TO_ALL_WIDGETS_IN_LIST_WIDGET,
     );
+
     if (!listWidgetChildren) return;
+
     listWidgetChildren.map((child) => {
       privateWidgets[child.widgetName] = true;
     });
@@ -258,6 +781,7 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
 
     if (this.props.serverSidePaginationEnabled) {
       if (!this.props.pageNo) this.props.updateWidgetMetaProperty("pageNo", 1);
+
       // run onPageSizeChange if user resize widgets
       if (
         this.props.onPageSizeChange &&
@@ -315,6 +839,8 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
     return {};
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       pageNo: 1,
@@ -326,6 +852,7 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
     const currentPage = this.props.pageNo;
     const eventType =
       currentPage > page ? EventType.ON_PREV_PAGE : EventType.ON_NEXT_PAGE;
+
     this.props.updateWidgetMetaProperty("pageNo", page, {
       triggerPropertyName: "onPageChange",
       dynamicString: this.props.onPageChange,
@@ -380,7 +907,7 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
 
   renderChild = (childWidgetData: WidgetProps) => {
     const { shouldPaginate } = this.shouldPaginate();
-    const { componentHeight, componentWidth } = this.getComponentDimensions();
+    const { componentHeight, componentWidth } = this.props;
 
     childWidgetData.parentId = this.props.widgetId;
     // childWidgetData.shouldScrollContents = this.props.shouldScrollContents;
@@ -394,10 +921,11 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
       : componentHeight;
     const positioning: Positioning =
       this.props.positioning || childWidgetData.positioning;
+
     childWidgetData.positioning = positioning;
     childWidgetData.useAutoLayout = positioning === Positioning.Vertical;
 
-    return WidgetFactory.createWidget(childWidgetData, this.props.renderMode);
+    return renderAppsmithCanvas(childWidgetData as WidgetProps);
   };
 
   getGridGap = () =>
@@ -507,6 +1035,7 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
             validationPath?.type === ValidationTypes.OBJECT_ARRAY
           ) {
             const value = Array.isArray(evaluatedValue) ? evaluatedValue : [];
+
             set(widget, path, value);
           } else {
             set(widget, path, toString(evaluatedValue));
@@ -572,10 +1101,12 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
                   `{{((currentItem) => { ${next}})(JSON.parse(JSON.stringify(${stringifiedListItem})))}}`
                 );
               }
+
               return prev + `{{${next}}}`;
             },
             "",
           );
+
           set(widget, path, newPropertyValue);
         }
 
@@ -596,6 +1127,7 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
                   `{{((currentIndex) => { ${next}})(JSON.parse(JSON.stringify(${itemIndex})))}}`
                 );
               }
+
               return prev + `{{${next}}}`;
             },
             "",
@@ -670,6 +1202,7 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
               );
             },
           );
+
           // Set the update list of children as the new children for the current list item
           set(
             updatedListItemContainer,
@@ -677,6 +1210,7 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
             updatedListItemChildren,
           );
         }
+
         // Get the item container's canvas child widget
         const listItemContainerCanvas = get(
           updatedListItemContainer,
@@ -688,6 +1222,7 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
             listItemContainerCanvas,
             listItemIndex,
           );
+
         // Set the item container's canvas child widget
         set(
           updatedListItemContainer,
@@ -736,6 +1271,7 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
 
   updateGridChildrenProps = (children: DSLWidget[]) => {
     let updatedChildren = this.useNewValues(children);
+
     updatedChildren = this.updateActions(updatedChildren);
     updatedChildren = this.paginateItems(updatedChildren);
     updatedChildren = this.updatePosition(updatedChildren);
@@ -764,6 +1300,7 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
   paginateItems = (children: DSLWidget[]) => {
     // return all children if serverside pagination
     if (this.props.serverSidePaginationEnabled) return children;
+
     const { page } = this.state;
     const { perPage, shouldPaginate } = this.shouldPaginate();
 
@@ -784,13 +1321,19 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
       this.props.listData
     ) {
       const { page } = this.state;
-      const children = removeFalsyEntries(klona(this.props.childWidgets));
+      const children = removeFalsyEntries(
+        klonaLiteWithTelemetry(
+          this.props.childWidgets,
+          "ListWidget.renderChildren",
+        ),
+      );
       const childCanvas = children[0];
       const { perPage } = this.shouldPaginate();
 
       const canvasChildren = childCanvas.children;
       const template = canvasChildren.slice(0, 1).shift();
       const gridGap = this.getGridGap();
+
       try {
         // Passing template instead of deriving from canvasChildren becuase lesser items to compare
         // in memoize
@@ -807,15 +1350,24 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
       } catch (e) {
         log.error(e);
       }
+
       return this.renderChild(childCanvas);
     }
   };
 
   getCanvasChildren = memoizeOne(
     (
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       template: any,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       listData: any,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       staticTemplate: any,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       canvasChildren: any,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -828,10 +1380,15 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
       perPage,
     ) => {
       const canvasChildrenList = [];
+
       if (listData.length > 0) {
         for (let i = 0; i < listData.length; i++) {
-          canvasChildrenList[i] = klona(template);
+          canvasChildrenList[i] = klonaLiteWithTelemetry(
+            template,
+            "ListWidget.renderChildren",
+          );
         }
+
         canvasChildren = this.updateGridChildrenProps(canvasChildrenList);
       } else {
         canvasChildren = this.updateGridChildrenProps(canvasChildren);
@@ -839,10 +1396,14 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
 
       return canvasChildren;
     },
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prev: any, next: any) => this.compareProps(prev, next),
   );
 
   // DeepEqual Comparison
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   compareProps = (prev: any[], next: any[]) => {
     return (
       equal(prev[0], next[0]) &&
@@ -880,9 +1441,9 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
   /**
    * view that is rendered in editor
    */
-  getPageView() {
+  getWidgetView() {
     const children = this.renderChildren();
-    const { componentHeight } = this.getComponentDimensions();
+    const { componentHeight } = this.props;
     const { pageNo, serverSidePaginationEnabled } = this.props;
     const { perPage, shouldPaginate } = this.shouldPaginate();
     const templateBottomRow = get(
@@ -973,13 +1534,6 @@ class ListWidget extends BaseWidget<ListWidgetProps<WidgetProps>, WidgetState> {
           ))}
       </ListComponent>
     );
-  }
-
-  /**
-   * returns type of the widget
-   */
-  static getWidgetType(): WidgetType {
-    return "LIST_WIDGET";
   }
 }
 

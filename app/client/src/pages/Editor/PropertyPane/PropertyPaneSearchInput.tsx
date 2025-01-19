@@ -1,17 +1,17 @@
 import React, { useEffect, useRef, useCallback } from "react";
 import styled from "styled-components";
-import { SearchInput } from "design-system";
+import { SearchInput } from "@appsmith/ads";
 import { useSelector } from "react-redux";
 import {
   getShouldFocusPanelPropertySearch,
   getShouldFocusPropertySearch,
 } from "selectors/propertyPaneSelectors";
 import { isCurrentFocusOnInput } from "utils/editorContextUtils";
-import { PROPERTY_SEARCH_INPUT_PLACEHOLDER } from "@appsmith/constants/messages";
+import { PROPERTY_SEARCH_INPUT_PLACEHOLDER } from "ee/constants/messages";
 
 const Container = styled.div`
   position: sticky;
-  top: 42px;
+  top: 44px;
   z-index: 3;
   margin-bottom: 2px;
   background: var(--ads-v2-color-white);
@@ -37,10 +37,10 @@ const StyledSearchInput = styled(SearchInput)`
   }
 `;
 
-type PropertyPaneSearchInputProps = {
+interface PropertyPaneSearchInputProps {
   onTextChange: (text: string) => void;
   isPanel?: boolean;
-};
+}
 
 export function PropertyPaneSearchInput(props: PropertyPaneSearchInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);

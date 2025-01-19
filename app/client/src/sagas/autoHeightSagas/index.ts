@@ -1,5 +1,5 @@
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import {
   all,
   call,
@@ -15,11 +15,17 @@ import {
 import { dynamicallyUpdateContainersSaga } from "./containers";
 import { generateTreeForAutoHeightComputations } from "./layoutTree";
 import { updateWidgetAutoHeightSaga } from "./widgets";
-import { getIsAutoLayout } from "selectors/editorSelectors";
+import { LayoutSystemTypes } from "layoutSystems/types";
+import { getLayoutSystemType } from "selectors/layoutSystemSelectors";
 
+// Auto height actions must be computed only in FIXED layout
+// We can avoid these types of checks once we change the architecture of layout specific sagas.
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function* shouldCallAutoHeight(saga: any, action: ReduxAction<unknown>) {
-  const isAutoLayout: boolean = yield select(getIsAutoLayout);
-  if (!isAutoLayout) {
+  const layoutSystemType: LayoutSystemTypes = yield select(getLayoutSystemType);
+
+  if (layoutSystemType === LayoutSystemTypes.FIXED) {
     yield call(saga, action);
   }
 }

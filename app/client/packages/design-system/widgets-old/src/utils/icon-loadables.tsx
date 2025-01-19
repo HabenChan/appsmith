@@ -35,11 +35,12 @@ export function importSvg(
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   importFn: () => Promise<typeof import("*.svg")>,
 ): React.ComponentType<React.SVGProps<SVGSVGElement>> {
-  return importIconImpl(() =>
+  return importIconImpl(async () =>
     importFn()
       .then((m) => ({ default: m.ReactComponent }))
       .catch((e) => {
         log.warn("Failed to load SVG icon:", e);
+
         return { default: IconLoadFailFallback };
       }),
   );
@@ -48,9 +49,10 @@ export function importSvg(
 export function importRemixIcon(
   importFn: () => Promise<{ default: RemixiconReactIconComponentType }>,
 ): React.ComponentType<RemixiconReactIconProps> {
-  return importIconImpl(() =>
+  return importIconImpl(async () =>
     importFn().catch((e) => {
       log.warn("Failed to load SVG icon:", e);
+
       return { default: IconLoadFailFallback };
     }),
   );

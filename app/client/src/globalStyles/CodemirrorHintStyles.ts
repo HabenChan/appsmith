@@ -1,8 +1,10 @@
 import { createGlobalStyle } from "styled-components";
 import type { EditorTheme } from "components/editorComponents/CodeEditor/EditorConfig";
-import { getTypographyByKey } from "design-system-old";
 import type { Theme } from "constants/DefaultTheme";
-import { LINT_TOOLTIP_JUSTIFIED_LEFT_CLASS } from "components/editorComponents/CodeEditor/constants";
+import {
+  CodeEditorColors,
+  LINT_TOOLTIP_JUSTIFIED_LEFT_CLASS,
+} from "components/editorComponents/CodeEditor/constants";
 
 export const CodemirrorHintStyles = createGlobalStyle<{
   editorTheme: EditorTheme;
@@ -15,15 +17,13 @@ export const CodemirrorHintStyles = createGlobalStyle<{
       z-index: 20;
       overflow: hidden;
       list-style: none;
-      margin-top: ${(props) => props.theme.spaces[3]}px;
-      padding: 0px 0px;
-      font-family: monospace;
-      max-height: 20em;
+      padding: 0px;
+      font-family: ${(props) => props.theme.fonts.code};
+      max-height: 25em;
       overflow-y: auto;
       background: var(--ads-v2-color-bg);
       box-shadow: var(--ads-v2-shadow-popovers);
       border: 1px solid var(--ads-v2-color-border);
-      border-radius: var(--ads-v2-border-radius);
     }
 
     .CodeMirror-hint {
@@ -39,7 +39,6 @@ export const CodemirrorHintStyles = createGlobalStyle<{
       letter-spacing: -0.24px;
       &:hover {
         background: var(--ads-v2-color-bg-subtle);
-        border-radius: 0px;
         color: var(--ads-v2-color-fg);
         &:after {
           color: var(--ads-v2-color-fg);
@@ -48,25 +47,42 @@ export const CodemirrorHintStyles = createGlobalStyle<{
     }
 
     .CodeMirror-command-header {
-      padding: 0 ${(props) => props.theme.spaces[3]}px;
-      color: var(--ads-v2-color-fg-emphasis-plus);
+      padding: 8px;
+      color: var(--ads-v2-color-gray-600);
       pointer-events: none !important;
       font-family: ${(props) => props.theme.fonts.text};
-      ${getTypographyByKey("p3")}
-      font-weight: 600;
+      font-size:12px;
+      position: relative;
+      margin: 0 4px;
+      &.separator {
+        &:after {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 4px;
+          right: 4px;
+          width: calc(100% - 8px);
+          height: 1px;
+          background: var(--ads-v2-color-border);
+        }
+      }
     }
 
     .CodeMirror-commands {
+      &:first-child {
+        margin-top: 4px
+      }
+      &:last-child {
+        margin-bottom: 4px
+      }
       color: var(--ads-v2-color-fg);
       position: relative;
-      padding: 0 ${(props) => props.theme.spaces[3]}px !important;
-      height: 25px;
+      padding: 4px !important;
+      height: auto;
       font-family: ${(props) => props.theme.fonts.text};
-      ${getTypographyByKey("p3")}
+      font-size:14px;
+      margin: 0 4px;
       &.CodeMirror-hint-active {
-        .shortcut {
-          color: var(--ads-v2-color-bg);
-        }
         .magic {
           path {
             fill: black;
@@ -75,37 +91,40 @@ export const CodemirrorHintStyles = createGlobalStyle<{
         .add-datasource-icon {
           background: var(--ads-v2-color-bg);
         }
-      }
-      .command-container {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 5px 0;
-        flex: 1;
-      }
-      .command {
-        display: flex;
-        align-items: center;
-        > div {
-          padding: 0 2px;
-          img {
-            height: 14px;
-            width: 14px;
+        .command-container {
+          .command-desc {
+            display: flex;
           }
         }
       }
-      .shortcut {
-        font-style: italic;
-        font-size: 10px;
-        color: var(--ads-v2-color-fg-subtle);
+      .command-container {
+        display: flex;
+        align-items: start;
+        flex-direction: column;
+        justify-content: space-between;
+        flex: 1;
+        padding: 4px;
+        .command-desc {
+          display: none;
+          font-size: 12px;
+          color: #6A7585;
+        }
+      }
+      .command {
+        display: flex;
+        align-items: start;
+        gap: 8px;
+      }
+      &.show-more-option {
+        opacity: 0.7;
       }
     }
 
     .CodeMirror-hint-header {
-      padding-left: 8px;
-      color: var(--ads-v2-color-fg-emphasis);
+      padding: 8px;
+      font-size: var(--ads-v2-font-size-1);
+      color: var(--ads-v2-color-fg);
       pointer-events: none !important;
-      font-weight: 600;
     }
 
     .datasource-hint {
@@ -138,6 +157,7 @@ export const CodemirrorHintStyles = createGlobalStyle<{
     .CodeMirror-Tern-completion {
       font-family: ${(props) => props.theme.fonts.code};
       display: flex;
+      font-size: var(--ads-v2-font-size-2);
       padding-left: ${(props) => props.theme.spaces[11]}px !important;
       &:hover{
         background: var(--ads-v2-color-bg-subtle);
@@ -152,7 +172,6 @@ export const CodemirrorHintStyles = createGlobalStyle<{
       bottom: 6px;
       height: 12px;
       width: 12px;
-      border-radius: var(--ads-v2-border-radius);
       font-size: 10px;
       line-height: 12px;
       font-weight: normal;
@@ -216,12 +235,8 @@ export const CodemirrorHintStyles = createGlobalStyle<{
     .CodeMirror-Tern-completion-keyword[keyword]:after {
       content: attr(keyword);
     }
-    .CodeMirror-Tern-tooltip {
-      z-index: 20 !important;
-    }
     li.CodeMirror-hint-active {
       background-color: var(--ads-v2-color-bg-muted);
-      border-radius: var(--ads-v2-border-radius);
       color: var(--ads-v2-color-fg);
       &:after {
         color: var(--ads-v2-color-fg);
@@ -236,55 +251,123 @@ export const CodemirrorHintStyles = createGlobalStyle<{
     }
   }
 
-  .sql-hint-label{
-    color: #6D6D6D;
-  }
-
-  .CodeMirror-hint:hover{
-    .sql-hint-label{
-      color: #090707;
-    }
-  }
-
-  .CodeMirror-hint-active{
-    .sql-hint-label{
-      color: #fff
-    }
-  }
-
-  .CodeMirror-hint-active:hover{
-    .sql-hint-label{
-      color: #fff
-    }
-  }
-  .CodeMirror-Tern-hint-doc {
-    display: none;
-    &.visible {
-      display: block;
-        background-color: var(--ads-v2-color-bg) !important;
-        color: var(--ads-v2-color-fg) !important;
+  .CodeMirror-Tern-tooltip {
+    font-family: ${(props) => props.theme.fonts.code};
+    &&& {
+      font-size: var(--ads-v2-font-size-2);
+      z-index: 20;
+      background: var(--ads-v2-color-bg);
+      box-shadow: var(--ads-v2-shadow-popovers);
+      border: 1px solid var(--ads-v2-color-border);
+      z-index: 15px;
+      font-weight: 500;
+      max-width: none;
+      white-space: nowrap;
+      .CodeMirror-Tern-fname {
+        color: ${CodeEditorColors.KEYWORD};
+      }
+      .CodeMirror-Tern-farg {
+        color: ${CodeEditorColors.TOOLTIP_FN_ARGS};
+        &.CodeMirror-Tern-farg-current {
+          color: ${CodeEditorColors.TOOLTIP_FN_ARGS};
+          font-weight: 600;
+        }
+      }
+      .CodeMirror-Tern-type {
+        color: #364252;
+      }
+      &.CodeMirror-Tern-hint-doc {
+        display: block;
+        background: var(--ads-v2-color-bg);
+        box-shadow: var(--ads-v2-shadow-popovers);
+        border: 1px solid var(--ads-v2-color-border);
+        color: var(--ads-v2-color-fg);
         max-height: 150px;
-        width: 250px;
-        font-size: 12px;
-        padding: 5px !important;
-        border: 1px solid !important;
-        border: 1px solid var(--ads-v2-color-border) !important;
-        box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.12) !important;
-        overflow: scroll;
+        max-width: 350px;
+        overflow: auto;
+        font-size: 11px;
+        padding: 0 !important;
+        .doc-link > span {
+          font-size: var(--ads-v2-font-size-2);
+        }
+        code {
+          background: var(--ads-v2-color-bg-subtle);
+          padding: 2px 4px;
+          border-radius: var(--ads-v2-border-radius);
+        }
+      }
     }
   }
+
+  .cm-sql-hint{
+    font-family: ${(props) => props.theme.fonts.code};
+    display: flex;
+    padding-left: ${(props) => props.theme.spaces[11]}px !important;
+    &:hover{
+      background: var(--ads-v2-color-bg-subtle);
+      color: var(--ads-v2-color-fg);
+      &:after {
+        color: var(--ads-v2-color-fg);
+      }
+    }
+    position: relative;
+  }
+  .cm-sql-hint:before {
+    content: attr(icontext);
+    left: 7px;
+    bottom: 6px;
+    height: 12px;
+    width: 12px;
+    font-size: 10px;
+    line-height: 12px;
+    font-weight: normal;
+    text-align: center;
+    color: var(--ads-v2-color-fg);
+    margin-right: ${(props) => props.theme.spaces[13]}px;
+    position:absolute;
+  }
+  .cm-sql-hint:after{
+    content: attr(hinttype);
+    display: flex;
+    justify-content: flex-end;
+    flex: 1;
+    padding-right: 10px;
+    font-style: italic;
+    font-weight: normal;
+    font-size: 10px;
+    line-height: 13px;
+    letter-spacing: -0.24px;
+    padding-left: 10px;
+    color: ${(props) => props.theme.colors.codeMirror.dataType.fullForm};
+  }
+  .cm-sql-hint-unknown:before {
+    background:${(props) => props.theme.colors.dataTypeBg.unknown};
+  }
+  .cm-sql-hint-keyword:before {
+    background:${(props) => props.theme.colors.dataTypeBg.object};
+  }
+  .cm-sql-hint-text:before {
+    background:${(props) => props.theme.colors.dataTypeBg.number};
+  }
+  .cm-sql-hint-int4:before {
+    background:${(props) => props.theme.colors.dataTypeBg.array};
+  }
+  .cm-sql-hint-table:before {
+    background:${(props) => props.theme.colors.dataTypeBg.function};
+  }
+}
+
   .CodeMirror-lint-tooltip {
     && {
       border: 1px solid var(--ads-v2-color-border) !important;
-      border-radius: var(--ads-v2-border-radius);
       background: var(--ads-v2-color-bg) !important;
       box-shadow: 0px 12px 28px -6px rgba(0, 0, 0, 0.32);
-      padding: 7px 12px;
+      padding: 4px;
       color: var(--ads-v2-color-fg);
 
       display: flex;
-      align-items: center;
-      gap: var(--ads-v2-spaces-3);
+      flex-direction: column;
+      align-items: flex-start;
 
       &.${LINT_TOOLTIP_JUSTIFIED_LEFT_CLASS} {
         transform: translate(-100%);
@@ -293,12 +376,9 @@ export const CodemirrorHintStyles = createGlobalStyle<{
   }
   .CodeMirror-lint-message {
     && {
-      margin-top: 5px;
-      margin-bottom: 5px;
       font-family: ${(props) => props.theme.fonts.text};
       color: var(--ads-v2-color-fg);
       background-position: 0 2.8px;
-      padding-left: 20px;
     }
   }
   .CodeMirror-lint-mark-warning {

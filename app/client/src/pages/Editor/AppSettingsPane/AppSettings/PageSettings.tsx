@@ -1,6 +1,6 @@
-import { ApplicationVersion } from "@appsmith/actions/applicationActions";
-import { setPageAsDefault, updatePage } from "actions/pageActions";
-import type { UpdatePageRequest } from "api/PageApi";
+import { ApplicationVersion } from "ee/actions/applicationActions";
+import type { UpdatePageActionPayload } from "actions/pageActions";
+import { setPageAsDefault, updatePageAction } from "actions/pageActions";
 import {
   PAGE_SETTINGS_SHOW_PAGE_NAV,
   PAGE_SETTINGS_PAGE_NAME_LABEL,
@@ -14,12 +14,11 @@ import {
   PAGE_SETTINGS_SHOW_PAGE_NAV_TOOLTIP,
   PAGE_SETTINGS_SET_AS_HOMEPAGE_TOOLTIP_NON_HOME_PAGE,
   PAGE_SETTINGS_ACTION_NAME_CONFLICT_ERROR,
-} from "@appsmith/constants/messages";
-import type { Page } from "@appsmith/constants/ReduxActionConstants";
-import { hasManagePagePermission } from "@appsmith/utils/permissionHelpers";
+} from "ee/constants/messages";
+import type { Page } from "entities/Page";
 import classNames from "classnames";
-import { Input, Switch } from "design-system";
-import ManualUpgrades from "ce/components/BottomBar/ManualUpgrades";
+import { Input, Switch } from "@appsmith/ads";
+import ManualUpgrades from "components/BottomBar/ManualUpgrades";
 import PropertyHelpLabel from "pages/Editor/PropertyPane/PropertyHelpLabel";
 import React, { useCallback, useEffect, useState } from "react";
 import { shallowEqual, useDispatch, useSelector } from "react-redux";
@@ -32,9 +31,12 @@ import { getPageLoadingState } from "selectors/pageListSelectors";
 import styled from "styled-components";
 import TextLoaderIcon from "../Components/TextLoaderIcon";
 import { filterAccentedAndSpecialCharacters, getUrlPreview } from "../Utils";
-import type { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import { getUsedActionNames } from "selectors/actionSelectors";
-import { isNameValid, resolveAsSpaceChar } from "utils/helpers";
+import { isNameValid, toValidPageName } from "utils/helpers";
+import { useFeatureFlag } from "utils/hooks/useFeatureFlag";
+import { FEATURE_FLAG } from "ee/entities/FeatureFlag";
+import { getHasManagePagePermission } from "ee/utils/BusinessFeatures/permissionPageHelpers";
 
 const UrlPreviewWrapper = styled.div`
   height: 52px;
@@ -61,15 +63,15 @@ function PageSettings(props: { page: Page }) {
 
   const appNeedsUpdate = applicationVersion < ApplicationVersion.SLUG_URL;
 
+  const isFeatureEnabled = useFeatureFlag(FEATURE_FLAG.license_gac_enabled);
+
   const [canManagePages, setCanManagePages] = useState(
-    hasManagePagePermission(page?.userPermissions || []),
+    getHasManagePagePermission(isFeatureEnabled, page?.userPermissions || []),
   );
 
   const [pageName, setPageName] = useState(page.pageName);
   const [isPageNameSaving, setIsPageNameSaving] = useState(false);
-  const [isPageNameValid, setIsPageNameValid] = useState<string | undefined>(
-    undefined,
-  );
+  const [pageNameError, setPageNameError] = useState<string | null>(null);
 
   const [customSlug, setCustomSlug] = useState(page.customSlug);
   const [isCustomSlugSaving, setIsCustomSlugSaving] = useState(false);
@@ -103,7 +105,9 @@ function PageSettings(props: { page: Page }) {
     setCustomSlug(page.customSlug || "");
     setIsShown(!!!page.isHidden);
     setIsDefault(!!page.isDefault);
-    setCanManagePages(hasManagePagePermission(page?.userPermissions || []));
+    setCanManagePages(
+      getHasManagePagePermission(isFeatureEnabled, page?.userPermissions || []),
+    );
   }, [page, page.pageName, page.customSlug, page.isHidden, page.isDefault]);
 
   useEffect(() => {
@@ -120,50 +124,61 @@ function PageSettings(props: { page: Page }) {
     }
   }, [isUpdatingEntity]);
 
+  useEffect(() => {
+    setPageNameError(null);
+  }, [page]);
+
   const savePageName = useCallback(() => {
-    if (!canManagePages || !!isPageNameValid || page.pageName === pageName)
+    if (!canManagePages || pageNameError !== null || page.pageName === pageName)
       return;
-    const payload: UpdatePageRequest = {
+
+    const payload: UpdatePageActionPayload = {
       id: page.pageId,
       name: pageName,
     };
+
     setIsPageNameSaving(true);
-    dispatch(updatePage(payload));
-  }, [page.pageId, page.pageName, pageName, isPageNameValid]);
+    dispatch(updatePageAction(payload));
+  }, [page.pageId, page.pageName, pageName, pageNameError]);
 
   const saveCustomSlug = useCallback(() => {
     if (!canManagePages || page.customSlug === customSlug) return;
-    const payload: UpdatePageRequest = {
+
+    const payload: UpdatePageActionPayload = {
       id: page.pageId,
       customSlug: customSlug || "",
     };
+
     setIsCustomSlugSaving(true);
-    dispatch(updatePage(payload));
+    dispatch(updatePageAction(payload));
   }, [page.pageId, page.customSlug, customSlug]);
 
   const saveIsShown = useCallback(
     (isShown: boolean) => {
       if (!canManagePages) return;
-      const payload: UpdatePageRequest = {
+
+      const payload: UpdatePageActionPayload = {
         id: page.pageId,
         isHidden: !isShown,
       };
+
       setIsShownSaving(true);
-      dispatch(updatePage(payload));
+      dispatch(updatePageAction(payload));
     },
     [page.pageId, isShown],
   );
 
   const onPageNameChange = (value: string) => {
-    let isValid = undefined;
+    let errorMessage = null;
+
     if (!value || value.trim().length === 0) {
-      isValid = PAGE_SETTINGS_NAME_EMPTY_MESSAGE();
+      errorMessage = PAGE_SETTINGS_NAME_EMPTY_MESSAGE();
     } else if (value !== page.pageName && hasActionNameConflict(value)) {
-      isValid = PAGE_SETTINGS_ACTION_NAME_CONFLICT_ERROR(value);
+      errorMessage = PAGE_SETTINGS_ACTION_NAME_CONFLICT_ERROR(value);
     }
 
-    setIsPageNameValid(isValid);
-    setPageName(resolveAsSpaceChar(value, 30));
+    setPageNameError(errorMessage);
+    setPageName(toValidPageName(value));
   };
 
   const onPageSlugChange = (value: string) => {
@@ -177,13 +192,13 @@ function PageSettings(props: { page: Page }) {
       <div
         className={classNames({
           "pt-1 pb-2 relative": true,
-          "pb-4": !isPageNameValid,
+          "pb-4": !pageNameError,
         })}
       >
         {isPageNameSaving && <TextLoaderIcon />}
         <Input
           defaultValue={pageName}
-          errorMessage={isPageNameValid}
+          errorMessage={pageNameError}
           id="t--page-settings-name"
           isDisabled={!canManagePages}
           label={PAGE_SETTINGS_PAGE_NAME_LABEL()}
@@ -247,7 +262,7 @@ function PageSettings(props: { page: Page }) {
       {!appNeedsUpdate && (
         <UrlPreviewWrapper className="mb-2">
           <UrlPreviewScroll
-            className="py-1 pl-2 mr-0.5 text-xs break-all"
+            className="py-1 pl-2 mr-0.5 text-xs break-all select-text"
             onCopy={() => {
               navigator.clipboard.writeText(
                 location.protocol +
@@ -279,7 +294,7 @@ function PageSettings(props: { page: Page }) {
         </UrlPreviewWrapper>
       )}
 
-      <div className="flex justify-between content-center pb-2">
+      <div className="flex content-center justify-between pb-2">
         <Switch
           className="mb-0"
           id="t--page-settings-show-nav-control"
@@ -299,7 +314,7 @@ function PageSettings(props: { page: Page }) {
         </Switch>
       </div>
 
-      <div className="flex justify-between content-center">
+      <div className="flex content-center justify-between">
         <Switch
           className="mb-0"
           id="t--page-settings-home-page-control"
@@ -307,6 +322,7 @@ function PageSettings(props: { page: Page }) {
           isSelected={isDefault}
           onChange={() => {
             if (!canManagePages) return;
+
             setIsDefault(!isDefault);
             setIsDefaultSaving(true);
             dispatch(setPageAsDefault(page.pageId, applicationId));

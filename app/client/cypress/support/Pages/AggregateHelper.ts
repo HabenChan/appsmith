@@ -1,15 +1,46 @@
 import "cypress-wait-until";
-const uuid = require("uuid");
+import { v4 as uuidv4 } from "uuid";
 import { ObjectsRegistry } from "../Objects/Registry";
 import type CodeMirror from "codemirror";
+import type { EntityItemsType } from "./AssertHelper";
+import { EntityItems } from "./AssertHelper";
+import EditorNavigator from "./EditorNavigation";
+import { EntityType } from "./EditorNavigation";
+import ClickOptions = Cypress.ClickOptions;
 
 type ElementType = string | JQuery<HTMLElement>;
 
+interface DeleteParams {
+  action: "Copy to page" | "Move to page" | "Delete" | "Prettify code";
+  subAction?: string;
+  entityType?: EntityItemsType;
+  toastToValidate?: string;
+}
+
+interface SubActionParams {
+  subAction: string;
+  index?: number;
+  force?: boolean;
+  toastToValidate?: string;
+}
+
+interface SelectAndValidateParams {
+  clickOptions?: Partial<ClickOptions>;
+  widgetName: string;
+  widgetType?: EntityType;
+  hierarchy?: string[];
+  propFieldName: string;
+  valueToValidate: string;
+  toggleEle?: string | null;
+}
+
 let LOCAL_STORAGE_MEMORY: any = {};
+
 export interface IEnterValue {
   propFieldName: string;
   directInput: boolean;
   inputFieldName: string;
+  apiOrQuery?: "api" | "query";
 }
 
 const DEFAULT_ENTERVALUE_OPTIONS = {
@@ -17,18 +48,32 @@ const DEFAULT_ENTERVALUE_OPTIONS = {
   directInput: false,
   inputFieldName: "",
 };
+
 export class AggregateHelper {
   private locator = ObjectsRegistry.CommonLocators;
-  public _modifierKey = Cypress.platform === "darwin" ? "meta" : "ctrl";
+  private assertHelper = ObjectsRegistry.AssertHelper;
 
-  public isMac = Cypress.platform === "darwin";
+  public get isMac() {
+    return Cypress.platform === "darwin";
+  }
+
   private selectLine = `${
     this.isMac ? "{cmd}{shift}{leftArrow}" : "{shift}{home}"
   }`;
-  private removeLine = "{backspace}";
+
+  public get removeLine() {
+    return "{backspace}";
+  }
+
+  public _modifierKey = `${this.isMac ? "meta" : "ctrl"}`;
   private selectAll = `${this.isMac ? "{cmd}{a}" : "{ctrl}{a}"}`;
   private lazyCodeEditorFallback = ".t--lazyCodeEditor-fallback";
   private lazyCodeEditorRendered = ".t--lazyCodeEditor-editor";
+  private toolTipSpan = ".rc-tooltip-inner span";
+  _walkthroughOverlay = ".t--walkthrough-overlay";
+  _walkthroughOverlayClose = ".t--walkthrough-overlay .t--walkthrough-close";
+  _walkthroughOverlayTitle = (title: string) =>
+    `//div[contains(@class, 't--walkthrough-overlay')]//p[text()='${title}']`;
 
   private selectChars = (noOfChars: number) =>
     `${"{leftArrow}".repeat(noOfChars) + "{shift}{cmd}{leftArrow}{backspace}"}`;
@@ -72,38 +117,83 @@ export class AggregateHelper {
     });
   }
 
+  public SimulateCopyPaste(action: "copy" | "paste" | "cut") {
+    const actionToKey = {
+      copy: "c",
+      paste: "v",
+      cut: "x",
+    };
+    const keyToSimulate = actionToKey[action];
+
+    // Simulate Ctrl keypress (Ctrl down)
+    this.GetElement(this.locator._body).type(`{${this._modifierKey}}`, {
+      release: false,
+    });
+
+    // Simulate 'C' keypress while Ctrl is held (Ctrl + C)
+    this.GetElement(this.locator._body).type(keyToSimulate, { release: false });
+
+    // Release the Ctrl key
+    this.GetElement(this.locator._body).type(`{${this._modifierKey}}`, {
+      release: true,
+    });
+  }
+
+  /**
+   * Extract the pageId out of the URL, supporting both ObjectID and UUIDv4 values. This implementation is for tests
+   * only. Do NOT copy this over to production code.
+   * @param urlFragment can be either a full absolute URL (like https://dev.appsmith.com/app/name/page1-...) or just a
+   *        path fragment (like /app/name/page1-...) or even a custom slug URL (like /app/custom-slug-...).
+   */
+  public extractPageIdFromUrl(urlFragment: string): null | string {
+    return (
+      urlFragment.match(
+        /\/app(?:\/[^/]+)?\/[^/]+-([0-9a-f]{24}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/,
+      )?.[1] ?? null
+    );
+  }
+
   public AddDsl(
-    dsl: string,
-    elementToCheckPresenceaftDslLoad: string | "" = "",
+    dslFile: string,
+    elementToCheckPresenceaftDslLoad: string | "" = "", //    reloadWithoutCache = true,
   ) {
-    let pageid: string, layoutId;
-    const appId: string | null = localStorage.getItem("applicationId");
-    cy.url().then((url) => {
-      pageid = url.split("/")[5]?.split("-").pop() as string;
-      cy.log(pageid + "page id");
-      //Fetch the layout id
-      cy.request("GET", "api/v1/pages/" + pageid).then((response) => {
-        const respBody = JSON.stringify(response.body);
-        layoutId = JSON.parse(respBody).data.layouts[0].id;
-        // Dumping the DSL to the created page
-        cy.request(
-          "PUT",
-          "api/v1/layouts/" +
-            layoutId +
-            "/pages/" +
-            pageid +
-            "?applicationId=" +
-            appId,
-          dsl,
-        ).then((dslDumpResp) => {
-          //cy.log("Pages resposne is : " + dslDumpResp.body);
-          expect(dslDumpResp.status).equal(200);
-          this.RefreshPage();
-          if (elementToCheckPresenceaftDslLoad)
-            this.WaitUntilEleAppear(elementToCheckPresenceaftDslLoad);
-          this.Sleep(); //settling time for dsl
-          cy.get(this.locator._loading).should("not.exist"); //Checks the spinner is gone & dsl loaded!
-          this.AssertElementAbsence(this.locator._animationSpnner, 20000); //Checks page is loaded with dsl!
+    let layoutId;
+    let appId: string | null;
+    cy.fixture(dslFile).then((val) => {
+      cy.url().then((url) => {
+        const pageid = this.extractPageIdFromUrl(url);
+        expect(pageid).to.not.be.null;
+        //Fetch the layout id
+        cy.request("GET", "api/v1/pages/" + pageid).then((response: any) => {
+          const respBody = JSON.stringify(response.body);
+          const parsedData = JSON.parse(respBody).data;
+          layoutId = parsedData.layouts[0].id;
+          appId = parsedData.applicationId;
+          // Dumping the DSL to the created page
+          cy.request({
+            method: "PUT",
+            url:
+              "api/v1/layouts/" +
+              layoutId +
+              "/pages/" +
+              pageid +
+              "?applicationId=" +
+              appId,
+            body: val,
+            headers: {
+              "X-Requested-By": "Appsmith",
+            },
+          }).then((dslDumpResp) => {
+            expect(dslDumpResp.status).equal(200);
+            //this.Sleep(3000); //for dsl to settle in layouts api & then refresh
+            this.RefreshPage();
+            if (elementToCheckPresenceaftDslLoad)
+              this.WaitUntilEleAppear(elementToCheckPresenceaftDslLoad);
+            // this.Sleep(5000); //settling time for dsl
+            this.assertHelper.AssertNetworkResponseData("@getConsolidatedData");
+            this.AssertElementAbsence(this.locator._loading); //Checks the spinner is gone & dsl loaded!
+            this.AssertElementAbsence(this.locator._animationSpnner, 20000); //Checks page is loaded with dsl!
+          });
         });
       });
     });
@@ -115,33 +205,85 @@ export class AggregateHelper {
     //cy.intercept("POST", "/api/v1/users/invite", (req) => { req.headers["origin"] = "Cypress";}).as("mockPostInvite");
   }
 
-  public RenameWithInPane(renameVal: string, IsQuery = true) {
-    const name = IsQuery ? this.locator._queryName : this.locator._dsName;
-    const text = IsQuery ? this.locator._queryNameTxt : this.locator._dsNameTxt;
-    this.Sleep(300); //for default query name to load
-    this.GetNClick(name, 0, true);
-    cy.get(text)
-      .clear({ force: true })
-      .type(renameVal, { force: true, delay: 0 })
-      .should("have.value", renameVal)
-      .blur();
-    this.AssertElementAbsence(this.locator._runBtnSpinner, 10000);
-    //this.Sleep(2000); //allow name to settle
+  public AssertPopoverTooltip(expectedText: string) {
+    this.GetText(this.locator._popoverToolTip, "text").then(($tooltiptxt) =>
+      expect($tooltiptxt).to.eq(expectedText),
+    );
   }
 
-  public RenameWidget(oldName: string, newName: string) {
-    this.GetNClick(this.locator._widgetName(oldName));
-    cy.get(this.locator._widgetNameTxt)
+  /**
+   *
+   * @param selector
+   * @param index
+   * Checks if the given selector has class with disabled in the class name
+   * @returns
+   */
+  public AssertElementClassContainsDisabled(selector: string, index = 0) {
+    return this.GetElement(selector)
+      .eq(index)
+      .should(($element) => {
+        const elementClass = $element.attr("class");
+        expect(elementClass).to.include("disabled");
+      });
+  }
+
+  private rename(args: {
+    nameLocator: string;
+    textInputLocator: string;
+    renameVal: string;
+    dblClick?: boolean;
+    willFailError?: string;
+  }) {
+    const { dblClick = false, nameLocator, renameVal, textInputLocator } = args;
+
+    this.Sleep(300);
+
+    if (dblClick) {
+      cy.get(nameLocator).dblclick({ force: true });
+    } else {
+      this.GetNClick(nameLocator, 0, true);
+    }
+
+    cy.get(textInputLocator)
       .clear({ force: true })
-      .type(newName, { force: true })
-      .should("have.value", newName)
-      .blur();
+      .type(renameVal, { force: true, delay: 0 })
+      .should("have.value", renameVal);
+
+    if (args.willFailError) {
+      this.AssertContains(args.willFailError, "exist", ".ads-v2-tooltip");
+      cy.get(textInputLocator).blur();
+    } else {
+      cy.get(textInputLocator).blur();
+      this.PressEnter();
+    }
     this.Sleep();
+  }
+
+  public RenameDatasource(renameVal: string) {
+    this.rename({
+      nameLocator: this.locator._dsName,
+      textInputLocator: this.locator._dsNameTxt,
+      renameVal,
+    });
+    this.AssertElementVisibility(this.locator._editIcon);
+  }
+
+  public RenameQuery(renameVal: string, willFailError?: string) {
+    this.rename({
+      nameLocator: this.locator._queryName,
+      textInputLocator: this.locator._queryNameTxt,
+      renameVal,
+      dblClick: true,
+      willFailError,
+    });
   }
 
   public CheckForPageSaveError() {
     // Wait for "saving" status to disappear
-    this.GetElement(this.locator._statusSaving, 30000).should("not.exist");
+    this.AssertElementAbsence(
+      this.locator._statusSaving,
+      Cypress.config("defaultCommandTimeout"),
+    );
     // Check for page save error
     cy.get("body").then(($ele) => {
       if ($ele.find(this.locator._saveStatusError).length) {
@@ -156,11 +298,12 @@ export class AggregateHelper {
     let saveStatus = this.CheckForPageSaveError();
     // wait for save query to trigger & n/w call to finish occuring
     if (!saveStatus)
-      cy.get(this.locator._saveStatusContainer, { timeout: 30000 }).should(
-        "not.exist",
+      this.AssertElementAbsence(
+        this.locator._saveStatusContainer,
+        Cypress.config("defaultCommandTimeout"),
       ); //adding timeout since waiting more time is not worth it!
 
-    //this.ValidateNetworkStatus("@sucessSave", 200);
+    //this.AssertNetworkStatus("@sucessSave", 200);
   }
 
   public PopupClose(popUpName: string) {
@@ -168,63 +311,207 @@ export class AggregateHelper {
   }
 
   public ValidateCodeEditorContent(selector: string, contentToValidate: any) {
-    cy.get(selector).within(() => {
-      cy.get(this.locator._codeMirrorCode).should(
-        "have.text",
-        contentToValidate,
-      );
-    });
+    // cy.get(selector).each(($ele) => {
+    //   cy.wrap($ele).within(() => {
+    //     cy.get(this.locator._codeMirrorCode).should(
+    //       "include.text",
+    //       contentToValidate,
+    //     );
+    //   });
+    // });
+
+    let isTextContained = false;
+
+    cy.get(selector)
+      .each(($ele) => {
+        cy.wrap($ele).within(() => {
+          cy.get(this.locator._codeMirrorCode)
+            .invoke("text")
+            .then((text) => {
+              if (contentToValidate.includes(text)) {
+                isTextContained = true;
+              }
+            });
+        });
+      })
+      .then(() => {
+        expect(isTextContained).to.be.true;
+      });
   }
 
-  public GetElement(selector: ElementType, timeout = 20000) {
+  public GetElement(
+    selector: ElementType,
+    exists: "exist" | "not.exist" | "noVerify" = "exist",
+    timeout = Cypress.config("pageLoadTimeout"),
+  ) {
     let locator;
+    expect(selector).to.not.be.undefined;
     if (typeof selector == "string") {
-      //cy.log(selector, "selector");
       locator =
         selector.startsWith("//") || selector.startsWith("(//")
-          ? cy.xpath(selector, { timeout: timeout })
-          : cy.get(selector, { timeout: timeout });
+          ? cy.xpath(selector, {
+              timeout,
+            })
+          : cy.get(selector, {
+              timeout,
+            });
     } else locator = cy.wrap(selector);
-    return locator;
+    return exists === "noVerify"
+      ? locator // Return the locator without verification if exists is "noVerify"
+      : exists === "exist"
+        ? locator.should("have.length.at.least", 1)
+        : locator.should("have.length", 0);
   }
 
   public GetNAssertElementText(
     selector: string,
     text: string,
-    textPresence: "have.text" | "contain.text" | "not.have.text" = "have.text",
+    textPresence:
+      | "have.text"
+      | "not.have.text"
+      | "contain.text"
+      | "not.contain.text" = "have.text",
     index = 0,
   ) {
     if (index >= 0)
-      this.GetElement(selector).eq(index).should(textPresence, text);
+      this.ScrollIntoView(selector, index).should(textPresence, text);
     else this.GetElement(selector).should(textPresence, text);
   }
 
+  public GetElementsNAssertTextPresence(selector: string, text: string) {
+    this.GetElement(selector).then(($elements: any) => {
+      let found = false;
+      $elements.each((index: any, element: any) => {
+        const eleText = Cypress.$(element).text().trim();
+        if (eleText === text) {
+          found = true;
+          return false; // Exit the loop if the expected text is found
+        }
+      });
+      expect(found).to.be.true;
+    });
+  }
+
   public ValidateToastMessage(text: string, index = 0, length = 1) {
-    this.GetElement(this.locator._toastMsg)
-      .should("have.length.at.least", length)
-      .eq(index)
-      .should("contain.text", text);
+    if (index != 0) {
+      this.GetElement(this.locator._toastMsg, "noVerify")
+        .should("have.length.at.least", length)
+        .eq(index)
+        .should("contain.text", text);
+    } else this.GetNAssertContains(this.locator._toastMsg, text);
+  }
+
+  public AssertTooltip(toolTipText: string) {
+    this.GetNAssertContains(this.toolTipSpan, toolTipText);
+  }
+
+  public RemoveUIElement(
+    elementToRemove: "EvaluatedPopUp" | "Tooltip" | "Toast",
+    toolTipOrToasttext = "",
+  ) {
+    cy.get("body").then(($body) => {
+      switch (elementToRemove) {
+        case "EvaluatedPopUp":
+          if ($body.find(this.locator._evalPopup).length > 0) {
+            this.GetElement(this.locator._evalPopup).then(($evalPopUp) => {
+              $evalPopUp.remove();
+            });
+          }
+          break;
+        case "Tooltip":
+          if (
+            $body.find(this.locator._appLeveltooltip(toolTipOrToasttext))
+              .length > 0
+          ) {
+            this.GetElement(this.locator._appLeveltooltip(toolTipOrToasttext))
+              .parents("div.rc-tooltip")
+              .then(($tooltipElement) => {
+                $tooltipElement.remove();
+              });
+          }
+          break;
+        case "Toast":
+          if (
+            $body.find(
+              this.locator._toastContainer +
+                " span:contains(" +
+                toolTipOrToasttext +
+                ")",
+            ).length > 0
+          ) {
+            this.GetElement(
+              this.locator._toastContainer +
+                ":has(:contains('" +
+                toolTipOrToasttext +
+                "'))",
+            ).then(($toastContainer) => {
+              $toastContainer.remove();
+            });
+          }
+          break;
+      }
+    });
   }
 
   public ClickButton(
     btnVisibleText: string,
-    index = 0,
-    shouldSleep = true,
-    force = true,
+    indexOrOptions:
+      | number
+      | Partial<{
+          index: number;
+          force: boolean;
+          waitAfterClick: boolean;
+          sleepTime: number;
+          type?: "click" | "invoke";
+        }> = 0,
   ) {
-    cy.xpath(this.locator._spanButton(btnVisibleText))
-      .eq(index)
-      .scrollIntoView()
-      .click({ force: force });
-    shouldSleep && this.Sleep();
+    const button = this.locator._buttonByText(btnVisibleText);
+    let index: number,
+      force = true,
+      waitAfterClick = true,
+      waitTime = 1000,
+      type = "click";
+
+    if (typeof indexOrOptions === "number") {
+      index = indexOrOptions;
+    } else {
+      index = indexOrOptions.index || 0;
+      force =
+        typeof indexOrOptions.force !== "undefined"
+          ? indexOrOptions.force
+          : true;
+      // waitAfterClick = indexOrOptions.waitAfterClick || false;
+      // Check if waitAfterClick is explicitly set, otherwise default to true
+      waitAfterClick =
+        typeof indexOrOptions.waitAfterClick !== "undefined"
+          ? indexOrOptions.waitAfterClick
+          : true;
+      waitTime = indexOrOptions.sleepTime || 1000;
+      type = indexOrOptions?.type || "click";
+    }
+
+    const element = this.ScrollIntoView(button, index);
+    if (type == "invoke") {
+      return element.invoke("click").then(() => {
+        if (waitAfterClick) {
+          return this.Sleep(waitTime);
+        }
+      });
+    }
+
+    return element.click({ force }).then(() => {
+      if (waitAfterClick) {
+        return this.Sleep(waitTime);
+      }
+    });
   }
 
-  public clickMultipleButtons(btnVisibleText: string, shouldSleep = true) {
-    cy.xpath(this.locator._spanButton(btnVisibleText)).each(($el) => {
+  public clickMultipleButtons(btnVisibleText: string, waitAfterClick = true) {
+    cy.xpath(this.locator._buttonByText(btnVisibleText)).each(($el) => {
       $el.trigger("click", { force: true });
       cy.wait(200);
     });
-    shouldSleep && this.Sleep();
+    waitAfterClick && this.Sleep();
   }
 
   public Paste(selector: any, pastePayload: string) {
@@ -253,43 +540,58 @@ export class AggregateHelper {
       interval: 1000,
     }).then(($ele) => {
       cy.wrap($ele)
-        .contains(msgToCheckforDisappearance)
+        //.contains(msgToCheckforDisappearance)
         .should("have.length", 0);
       this.Sleep();
     });
   }
 
   public WaitUntilEleDisappear(selector: string) {
-    const locator = selector.includes("//")
-      ? cy.xpath(selector)
-      : cy.get(selector);
-    locator.waitUntil(($ele) => cy.wrap($ele).should("have.length", 0), {
-      errorMsg: "Element did not disappear even after 10 seconds",
-      timeout: 10000,
+    cy.waitUntil(() => this.GetElement(selector, "not.exist"), {
+      errorMsg:
+        "Element did not disappear after " +
+        Cypress.config().pageLoadTimeout +
+        "seconds",
+      timeout: Cypress.config().pageLoadTimeout,
       interval: 1000,
     });
   }
 
   public WaitUntilAllToastsDisappear() {
-    cy.get(this.locator._toastContainer).waitUntil(
-      ($ele) => cy.wrap($ele).children().should("have.length", 0),
-      {
-        errorMsg: "Toasts did not disappear even after 10 seconds",
-        timeout: 10000,
-        interval: 1000,
-      },
-    );
+    cy.get("body").then(($body) => {
+      if ($body.find(this.locator._toastContainer).length > 0) {
+        this.GetElement(this.locator._toastContainer).waitUntil(
+          ($ele) => cy.wrap($ele).should("have.length", 0),
+          {
+            errorMsg:
+              "Toasts did not disappear even after " +
+              Cypress.config().defaultCommandTimeout +
+              " seconds",
+            timeout: Cypress.config().defaultCommandTimeout,
+            interval: 1000,
+          },
+        );
+      }
+    });
   }
 
   public WaitUntilEleAppear(selector: string) {
-    const locator = selector.includes("//")
-      ? cy.xpath(selector)
-      : cy.get(selector);
-    locator.waitUntil(($ele) => cy.wrap($ele).should("be.visible"), {
-      errorMsg: "Element did not appear even after 10 seconds",
-      timeout: 10000,
-      interval: 1000,
-    });
+    cy.waitUntil(
+      () =>
+        this.GetElement(selector)
+          .should("exist")
+          .should("be.visible")
+          .its("length")
+          .should("be.gte", 1),
+      {
+        errorMsg:
+          "Element did not appear even after " +
+          Cypress.config().pageLoadTimeout +
+          " seconds",
+        timeout: Cypress.config().pageLoadTimeout,
+        interval: 2000,
+      },
+    );
 
     //Below can be tried if above starts being flaky:
     // cy.waitUntil(() => cy.get(selector, { timeout: 50000 }).should("have.length.greaterThan", 0)
@@ -297,66 +599,35 @@ export class AggregateHelper {
     // cy.waitUntil(()) => (selector.includes("//") ? cy.xpath(selector) : cy.get(selector))).then(($ele) => { cy.wrap($ele).eq(0).should("be.visible");});
   }
 
-  public ValidateNetworkExecutionSuccess(
-    aliasName: string,
-    expectedRes = true,
-  ) {
-    cy.wait(aliasName).should(
-      "have.nested.property",
-      "response.body.data.isExecutionSuccess",
-      expectedRes,
-    );
-  }
-
-  public ValidateNetworkDataSuccess(aliasName: string, expectedRes = true) {
-    cy.wait(aliasName).should(
-      "have.nested.property",
-      "response.body.data.success",
-      expectedRes,
-    );
-  }
-
-  public ValidateNetworkStatus(aliasName: string, expectedStatus = 200) {
-    cy.wait(aliasName).then(($apiCall: any) => {
-      expect($apiCall.response.body.responseMeta.status).to.eq(expectedStatus);
+  public WaitForCondition(conditionFn: any) {
+    cy.waitUntil(() => conditionFn, {
+      timeout: Cypress.config("pageLoadTimeout"),
+      interval: 1000,
     });
-
-    // should(
-    //   "have.nested.property",
-    //   "response.body.responseMeta.status",
-    //   expectedStatus,
-    // );
-
-    //To improve below:
-    // cy.wait(aliasName, { timeout: timeout }).should((response: any) => {
-    //   expect(response.status).to.be.oneOf([expectedStatus]);
-    // });
   }
 
-  public ValidateNetworkDataAssert(
+  public AssertNetworkDataSuccess(aliasName: string, expectedRes = true) {
+    cy.wait(1000).wait(aliasName); //Wait a bit for call to finish!
+    cy.get(aliasName)
+      .its("response.body.data.success")
+      .should("eq", expectedRes);
+  }
+
+  public AssertNetworkDataNestedProperty(
     aliasName: string,
     expectedPath: string,
     expectedRes: any,
   ) {
-    cy.wait(aliasName).should(
-      "have.nested.property",
-      expectedPath,
-      expectedRes,
-    );
+    cy.wait(1000).wait(aliasName); //Wait a bit for call to finish!
+    cy.get(aliasName).should("have.nested.property", expectedPath, expectedRes);
   }
 
   public SelectDropDown(dropdownOption: string, endpoint = "selectwidget") {
     const mode = window.localStorage.getItem("inDeployedMode");
     if (mode == "false") {
-      cy.xpath(this.locator._selectWidgetDropdown(endpoint))
-        .first()
-        .scrollIntoView()
-        .click();
+      this.GetNClick(this.locator._selectWidgetDropdown(endpoint));
     } else {
-      cy.xpath(this.locator._selectWidgetDropdownInDeployed(endpoint))
-        .first()
-        .scrollIntoView()
-        .click();
+      this.GetNClick(this.locator._selectWidgetDropdownInDeployed(endpoint));
     }
     if (endpoint == "selectwidget")
       cy.get(this.locator._selectOptionValue(dropdownOption)).click({
@@ -382,7 +653,6 @@ export class AggregateHelper {
     endpoint = "dropdownwidget",
   ) {
     const mode = window.localStorage.getItem("inDeployedMode");
-    //cy.log("mode frm deployed is:" + mode)
     const modeSelector =
       mode == "true"
         ? this.locator._selectWidgetDropdownInDeployed(endpoint)
@@ -390,16 +660,16 @@ export class AggregateHelper {
     const finalSelector = insideParent
       ? this.locator._divWithClass(insideParent) + modeSelector
       : modeSelector;
-    cy.log(finalSelector);
-    cy.xpath(finalSelector).eq(index).scrollIntoView().click();
+
+    this.GetNClick(finalSelector, index);
     cy.get(this.locator._dropDownValue(dropdownOption)).click({ force: true });
     this.Sleep(); //for selected value to reflect!
   }
 
-  public SelectDropdownList(ddName: string, dropdownOption: string) {
-    this.GetNClick(this.locator._existingFieldTextByName(ddName));
-    cy.get(this.locator._dropdownText).contains(dropdownOption).click();
-  }
+  // public SelectDropdownList(ddName: string, dropdownOption: string) {
+  //   this.GetNClick(this.locator._existingFieldTextByName(ddName));
+  //   cy.get(this.locator._dropdownText).contains(dropdownOption).click();
+  // }
 
   public SelectFromMultiSelect(
     options: string[],
@@ -407,9 +677,10 @@ export class AggregateHelper {
     check = true,
     endpoint = "multiselectwidgetv2",
   ) {
-    cy.get(this.locator._widgetInDeployed(endpoint) + " div.rc-select-selector")
-      .eq(index)
-      .scrollIntoView()
+    this.ScrollIntoView(
+      this.locator._widgetInDeployed(endpoint) + " div.rc-select-selector",
+      index,
+    )
       .then(($element: any) => {
         // here, we try to click on downArrow in dropdown of multiSelect.
         // the position is calculated from top left of the element
@@ -422,7 +693,8 @@ export class AggregateHelper {
             force: true,
           },
         );
-      });
+      })
+      .wait(500); //for dropdown options to settle
 
     if (check) {
       options.forEach(($each) => {
@@ -449,20 +721,31 @@ export class AggregateHelper {
     //     .click()
   }
 
-  public PressEscape() {
+  public PressEscape(sleep = 500) {
     cy.get("body").type("{esc}");
+    this.Sleep(sleep);
   }
 
-  public PressEnter() {
+  public PressEnter(sleep = 500) {
     cy.get("body").type("{enter}");
+    this.Sleep(sleep);
   }
 
-  public PressDelete() {
+  public PressDelete(sleep = 500) {
     cy.get("body").type(`{del}`, { force: true });
+    this.Sleep(sleep);
   }
 
-  public ClickOutside() {
-    cy.get("body").click(0, 0, { force: true });
+  public SelectAllWidgets() {
+    cy.get("body").type(this.isMac ? "{meta}A" : "{ctrl}A");
+  }
+
+  public SetCanvasViewportWidth(width: number) {
+    cy.get(this.locator._canvasViewport).invoke("width", `${width}px`);
+  }
+
+  public ClickOutside(x = 0, y = 0, force = true) {
+    cy.get("body").click(x, y, { force: force });
   }
 
   public RemoveMultiSelectItems(items: string[]) {
@@ -485,9 +768,7 @@ export class AggregateHelper {
     index = 0,
     parseSpecialCharacters = false,
   ) {
-    cy.xpath(this.locator._actionTextArea(actionName))
-      .eq(index)
-      .scrollIntoView()
+    this.ScrollIntoView(this.locator._actionTextArea(actionName), index)
       .parents(".CodeMirror")
       .first()
       .then((ins: any) => {
@@ -504,10 +785,7 @@ export class AggregateHelper {
     // .type("{ctrl}{shift}{downarrow}{del}", { force: true });
     cy.focused().then(($cm: any) => {
       if ($cm.contents != "") {
-        cy.log("The field is not empty");
-        cy.xpath(this.locator._actionTextArea(actionName))
-          .eq(index)
-          .scrollIntoView()
+        this.ScrollIntoView(this.locator._actionTextArea(actionName), index)
           .click({ force: true })
           .focused()
           .clear({
@@ -515,10 +793,9 @@ export class AggregateHelper {
           });
       }
       this.Sleep();
-      cy.xpath(this.locator._actionTextArea(actionName))
-        .eq(index)
-        .scrollIntoView()
-        .then((el: any) => {
+
+      this.ScrollIntoView(this.locator._actionTextArea(actionName), index).then(
+        (el: any) => {
           if (paste) {
             //input.invoke("val", value);
             this.Paste(el, value);
@@ -527,7 +804,8 @@ export class AggregateHelper {
               parseSpecialCharSequences: parseSpecialCharacters,
             });
           }
-        });
+        },
+      );
       this.AssertAutoSave();
     });
   }
@@ -537,17 +815,77 @@ export class AggregateHelper {
     cy.get(`${alias}.all`).should("have.length", expectedNumberOfCalls);
   }
 
+  public GetNClickIfPresent(selector: string) {
+    cy.get("body").then(($body) => {
+      if ($body.find(selector).length > 0) {
+        cy.get(selector).click();
+      }
+    });
+  }
+
   public GetNClick(
     selector: string,
     index = 0,
     force = false,
     waitTimeInterval = 500,
+    ctrlKey = false,
+    metaKey = false,
+    position: Cypress.PositionType = "center",
   ) {
-    return this.GetElement(selector)
-      .eq(index)
-      .scrollIntoView()
+    return this.ScrollIntoView(selector, index)
+      .click(position, {
+        force: force,
+        ctrlKey: ctrlKey,
+        metaKey,
+      })
+      .then(($element) => {
+        return cy.wrap($element).wait(waitTimeInterval);
+      });
+  }
+
+  public GetClosestNClick(
+    selector: string,
+    closestSelector: string,
+    index = 0,
+    force = false,
+    waitTimeInterval = 500,
+    ctrlKey = false,
+  ) {
+    return this.ScrollIntoView(selector, index)
+      .closest(closestSelector)
+      .click({ force: force, ctrlKey: ctrlKey })
+      .wait(waitTimeInterval);
+  }
+
+  public GetHoverNClick(
+    selector: string,
+    index = 0,
+    force = false,
+    waitTimeInterval = 500,
+  ) {
+    return (this.ScrollIntoView(selector, index) as any)
+      .realHover()
       .click({ force: force })
       .wait(waitTimeInterval);
+  }
+
+  public HoverElement(
+    selector: string,
+    index = 0,
+    realTouch = true,
+    waitTimeInterval = 100,
+  ) {
+    let chain = this.ScrollIntoView(selector, index);
+    if (realTouch) {
+      chain = (chain as any)
+        .realTouch({ position: "center" })
+        .realHover({ pointer: "mouse" });
+    }
+    return (
+      chain
+        //.trigger("mousemove", { eventConstructor: "MouseEvent" })
+        .wait(waitTimeInterval)
+    );
   }
 
   public GetSiblingNClick(
@@ -561,7 +899,17 @@ export class AggregateHelper {
       .siblings(siblingSelector)
       .first()
       .eq(index)
-      .scrollIntoView()
+      .then(($element) => {
+        if (
+          Cypress.$("body").find($element).length &&
+          $element[0].offsetParent !== null
+        ) {
+          return $element;
+        } else {
+          $element[0].scrollIntoView();
+          return $element;
+        }
+      })
       .click({ force: force })
       .wait(waitTimeInterval);
   }
@@ -570,50 +918,102 @@ export class AggregateHelper {
     this.GetNClick(this.locator._goBack);
   }
 
+  public SelectAllAndType(selector: string, text: string) {
+    this.GetElement(selector).type("{selectall}" + text);
+  }
+
   public SelectNRemoveLineText(selector: string) {
-    const locator = selector.startsWith("//")
-      ? cy.xpath(selector)
-      : cy.get(selector);
-    locator.type(this.selectLine);
-    return locator.type(this.removeLine);
+    this.GetElement(selector).type(this.selectLine);
+    return this.GetElement(selector).type(this.removeLine);
   }
 
   public SelectAllRemoveCodeText(selector: string) {
-    const locator = selector.startsWith("//")
-      ? cy.xpath(selector)
-      : cy.get(selector);
-    return locator.type(this.selectAll + "{del}");
+    return this.GetElement(selector).type(this.selectAll + "{del}");
   }
 
-  public RemoveCharsNType(selector: string, charCount = 0, totype: string) {
+  public RemoveCharsNType(
+    selector: string,
+    charCount = 0,
+    totype: string,
+    index = 0,
+  ) {
     if (charCount > 0)
       this.GetElement(selector)
+        .eq(index)
         .focus()
         .type("{backspace}".repeat(charCount), { timeout: 2, force: true })
         .wait(50)
         .type(totype);
     else {
-      if (charCount == -1) this.GetElement(selector).clear();
-      this.TypeText(selector, totype);
+      if (charCount == -1) this.GetElement(selector).eq(index).clear();
+      this.TypeText(selector, totype, index);
     }
   }
 
-  public ClearTextField(selector: string) {
-    this.GetElement(selector).clear();
+  public ClickNClear(selector: string, force = false, index = 0) {
+    this.GetNClick(selector, index, force);
+    this.ClearTextField(selector, force, index);
+  }
+
+  public ClearTextField(selector: string, force = false, index = 0) {
+    this.GetElement(selector)
+      .eq(index)
+      .scrollIntoView({ easing: "linear" })
+      .click()
+      .clear({ force });
+    this.Sleep(500); //for text to clear for CI runs
+  }
+
+  public ClearNType(
+    selector: string,
+    totype: string,
+    index = 0,
+    force = false,
+  ) {
+    this.ClearTextField(selector, force, index);
+    return this.TypeText(selector, totype, index);
   }
 
   public TypeText(
     selector: string,
     value: string,
-    index = 0,
-    parseSpecialCharSeq = false,
+    indexOrOptions:
+      | number
+      | Partial<{
+          index: number;
+          parseSpecialCharSeq: boolean;
+          shouldFocus: boolean;
+          delay: number;
+        }> = 0,
   ) {
-    const locator = selector.startsWith("//")
-      ? cy.xpath(selector)
-      : cy.get(selector);
-    return locator.eq(index).focus().wait(100).type(value, {
+    let index: number;
+    let shouldFocus = true;
+    let parseSpecialCharSeq = false;
+    let delay = 10;
+
+    if (typeof indexOrOptions === "number") {
+      index = indexOrOptions;
+    } else {
+      index = indexOrOptions.index || 0;
+      parseSpecialCharSeq = indexOrOptions.parseSpecialCharSeq || false;
+      delay = indexOrOptions.delay || 10;
+      shouldFocus =
+        indexOrOptions.shouldFocus !== undefined
+          ? indexOrOptions.shouldFocus
+          : true;
+    }
+
+    const element = this.GetElement(selector).eq(index);
+
+    if (shouldFocus) {
+      element.focus();
+    }
+
+    if (value === "") return element;
+
+    return element.wait(100).type(value, {
       parseSpecialCharSequences: parseSpecialCharSeq,
-      //delay: 3,
+      delay: delay,
       force: true,
     });
   }
@@ -633,15 +1033,17 @@ export class AggregateHelper {
 
   public GetNClickByContains(
     selector: string,
-    containsText: string,
+    containsText: string | RegExp,
     index = 0,
+    force = true,
+    waitTimeInterval = 500,
   ) {
     return cy
       .get(selector)
-      .contains(containsText)
+      .contains(containsText, { matchCase: false })
       .eq(index)
-      .click({ force: true })
-      .wait(500);
+      .click({ force: force })
+      .wait(waitTimeInterval);
   }
 
   public CheckUncheck(selector: string, check = true) {
@@ -659,27 +1061,28 @@ export class AggregateHelper {
     propertyName: string,
     toggle: "true" | "false",
   ) {
-    let locator;
-    if (propertyName.startsWith("//")) {
-      locator = cy.xpath(propertyName);
-      locator.should("have.attr", toggle);
-    } else if (propertyName.includes(" ")) {
-      locator = cy.get(propertyName);
-      locator.should("have.attr", toggle);
-    } else {
-      locator = cy.xpath(this.locator._propertyToggleValue(propertyName));
-      locator.invoke("attr", "data-checked").then((classes) => {
+    this.GetElement(this.locator._propertyToggleValue(propertyName))
+      .invoke("attr", "data-checked")
+      .then((classes) => {
         expect(classes).includes(toggle);
       });
-    }
   }
 
-  public AssertExistingCheckedState(selector: string, toggle: string) {
-    this.GetElement(selector).should(
-      "have.attr",
-      "data-selected-value",
-      toggle,
-    );
+  public AssertExistingCheckedState(selector: string, toggle = "true") {
+    this.GetElement(selector)
+      .invoke("attr", "data-selected-value")
+      .then((dataSelectedValue) => {
+        if (dataSelectedValue !== undefined) {
+          this.GetElement(selector).should(
+            "have.attr",
+            "data-selected-value",
+            toggle,
+          );
+        } else
+          this.GetElement(selector).should(
+            toggle == "true" ? "be.checked" : "not.be.checked",
+          );
+      });
   }
 
   public AssertSelectedTab(propertyName: string, value: "true" | "false") {
@@ -696,13 +1099,34 @@ export class AggregateHelper {
   public AssertAttribute(
     selector: string,
     attribName: string,
-    attribValue: string,
+    attribValue: any,
+    index = 0,
   ) {
-    return this.GetElement(selector).should(
-      "have.attr",
-      attribName,
-      attribValue,
-    );
+    return this.GetElement(selector)
+      .eq(index)
+      .should("have.attr", attribName, attribValue);
+  }
+
+  public AssertProperty(
+    selector: string,
+    propName: string,
+    propValue: any,
+    index = 0,
+  ) {
+    return this.GetElement(selector)
+      .eq(index)
+      .should("have.prop", propName, propValue);
+  }
+
+  public AssertCSS(
+    selector: string,
+    cssName: string,
+    cssValue: string,
+    index = 0,
+  ) {
+    return this.GetElement(selector)
+      .eq(index)
+      .should("have.css", cssName, cssValue);
   }
 
   public ToggleSwitch(
@@ -728,15 +1152,9 @@ export class AggregateHelper {
       });
   }
 
-  // public NavigateBacktoEditor() {
-  //   cy.get(this.locator._backToEditor).click();
-  //   this.Sleep(2000);
-  //   localStorage.setItem("inDeployedMode", "false");
-  // }
-
   public GenerateUUID() {
-    let id = uuid.v4();
-    id = id.split("-")[0];
+    let id = uuidv4();
+    id = "Cy" + id.split("-")[0];
     cy.wrap(id).as("guid");
   }
 
@@ -746,41 +1164,84 @@ export class AggregateHelper {
   }
 
   public GetElementLength(selector: string) {
-    const locator = selector.startsWith("//")
-      ? cy.xpath(selector)
-      : cy.get(selector);
-    return locator.its("length");
+    return this.GetElement(selector).its("length");
   }
 
   public Sleep(timeout = 1000) {
-    cy.wait(timeout);
+    return cy.wait(timeout);
   }
 
-  public RefreshPage() {
-    cy.reload(true);
-    this.Sleep(2000);
-  }
-
-  public ActionContextMenuWithInPane(
-    action: "Copy to page" | "Move to page" | "Delete" | "Prettify code",
-    subAction = "",
-    jsDelete = false,
+  public RefreshPage(
+    networkCallAlias = "getWorkspace", //    reloadWithoutCache = true,
   ) {
+    this.Sleep(2000);
+    this.assertHelper.AssertDocumentReady();
+    // // cy.window()
+    // //   .then((win) => {
+    // //     win.location.reload();
+    // //   })
+    // cy.reload(reloadWithoutCache).then(() => {
+    //   this.assertHelper.AssertDocumentReady();
+    // });
+
+    cy.url().then((url) => {
+      cy.window({ timeout: 60000 }).then((win) => {
+        win.location.href = url;
+      });
+    });
+    this.AssertElementAbsence(
+      this.locator._specificToast("Cannot read properties of undefined"),
+    );
+    this.assertHelper.AssertDocumentReady();
+    this.Sleep(4000); //for page to load for CI runs
+    networkCallAlias &&
+      this.assertHelper.AssertNetworkStatus("@" + networkCallAlias); //getWorkspace for Edit page!
+  }
+
+  public CypressReload() {
+    cy.reload();
+    this.assertHelper.AssertDocumentReady();
+  }
+
+  public ActionContextMenuWithInPane({
+    action = "Delete",
+    entityType = EntityItems.JSObject,
+    subAction = "",
+    toastToValidate = "",
+  }: DeleteParams) {
     cy.get(this.locator._contextMenuInPane).click();
     this.GetNClick(this.locator._contextMenuItem(action));
+    if (action == "Delete") {
+      this.DeleteEntityNAssert(entityType);
+    } else if (subAction) {
+      this.ActionContextMenuSubItem({
+        subAction: subAction,
+        toastToValidate: toastToValidate,
+      });
+      toastToValidate && this.AssertContains(toastToValidate);
+    }
+  }
 
-    if (action == "Delete") {
-      subAction = "Are you sure?";
-    }
-    if (subAction) {
-      this.GetNClick(this.locator._contextMenuItem(subAction));
-      this.Sleep(1000);
-    }
-    if (action == "Delete") {
-      !jsDelete && this.ValidateNetworkStatus("@deleteAction");
-      jsDelete && this.ValidateNetworkStatus("@deleteJSCollection");
-      jsDelete && this.AssertContains("deleted successfully");
-    }
+  public DeleteEntityNAssert(
+    entityType: EntityItemsType,
+    toAssertAction = true,
+  ) {
+    if (entityType != EntityItems.Widget)
+      this.GetNClick(this.locator._contextMenuItem("Are you sure?"));
+    this.Sleep();
+    toAssertAction && this.assertHelper.AssertDelete(entityType);
+  }
+
+  public ActionContextMenuSubItem({
+    force = false,
+    subAction,
+    toastToValidate = "",
+  }: SubActionParams) {
+    cy.xpath(this.locator._contextMenuItem(subAction)).trigger("click", {
+      force: force,
+    });
+    this.Sleep(500);
+    toastToValidate && this.AssertContains(toastToValidate);
   }
 
   public EnterValueNValidate(valueToType: string, fieldName = "") {
@@ -814,17 +1275,18 @@ export class AggregateHelper {
   public EnterValue(
     valueToEnter: string,
     options: IEnterValue = DEFAULT_ENTERVALUE_OPTIONS,
+    toVerifySave = true,
   ) {
-    const { directInput, inputFieldName, propFieldName } = options;
+    const { apiOrQuery, directInput, inputFieldName, propFieldName } = options;
     if (propFieldName && directInput && !inputFieldName) {
-      this.UpdateCodeInput(propFieldName, valueToEnter);
+      this.UpdateCodeInput(propFieldName, valueToEnter, apiOrQuery);
     } else if (inputFieldName && !propFieldName && !directInput) {
       this.UpdateCodeInput(
         this.locator._inputFieldByName(inputFieldName),
         valueToEnter,
       );
     }
-    this.AssertAutoSave();
+    toVerifySave && this.AssertAutoSave();
   }
 
   public VerifyCodeInputValue(propFieldName: string, value: string) {
@@ -857,7 +1319,11 @@ export class AggregateHelper {
     });
   }
 
-  public UpdateCodeInput(selector: string, value: string) {
+  public UpdateCodeInput(
+    selector: string,
+    value: string,
+    apiOrQuery: "api" | "query" = "query",
+  ) {
     this.EnableAllCodeEditors();
 
     const isXPathSelector =
@@ -880,37 +1346,47 @@ export class AggregateHelper {
       .first()
       .then((ins) => {
         const input = (ins[0] as any).CodeMirror as CodeMirror.Editor;
-        input.focus();
-        this.Sleep(200);
-        input.setValue(value);
-        this.Sleep(200);
+        if (apiOrQuery === "api") {
+          setTimeout(() => {
+            input.focus();
+            setTimeout(() => {
+              input.setValue(value);
+              setTimeout(() => {
+                input.execCommand("goLineStart");
+                // Move cursor to the end of the line
+                input.execCommand("goLineEnd");
+              }, 1000);
+            }, 500);
+          }, 500);
+        } else {
+          input.focus();
+          this.Sleep(200);
+          input.setValue(value);
+          this.Sleep(200);
+          input.execCommand("goLineEnd");
+          this.Sleep(200);
+        }
       });
-    this.Sleep(500); //for value set to settle
+    this.Sleep(); //for value set to register
   }
 
-  public UpdateInput(selector: string, value: string) {
-    this.GetElement(selector)
-      .find("input")
-      .clear()
-      //.type(this.selectAll)
-      .type(value, { delay: 1, parseSpecialCharSequences: false });
-    // .type(selectAllJSObjectContentShortcut)
-    // .then((ins: any) => {
-    //   //const input = ins[0].input;
-    //   ins.clear();
-    //   this.Sleep(200);
-    //   //ins.setValue(value);
-    //   ins.val(value).trigger('change');
-    //   this.Sleep(200);
-    // });
-  }
-
-  public UpdateFieldLongInput(selector: string, value: string) {
+  public UpdateFieldInput(selector: string, value: string) {
     this.GetElement(selector)
       .find("input")
       .invoke("attr", "value", value)
       .trigger("input");
-    this.Sleep(); //for value set to settle
+    this.Sleep(); //for value set to register
+  }
+
+  public ValidateFieldInputValue(selector: string, value: string) {
+    this.GetElement(selector)
+      .closest("input")
+      .scrollIntoView({ easing: "linear" })
+      .invoke("val")
+      .then((inputValue) => {
+        expect(inputValue).to.equal(value);
+      });
+    this.Sleep(); //for value set to register
   }
 
   public UpdateTextArea(selector: string, value: string) {
@@ -919,7 +1395,7 @@ export class AggregateHelper {
       .first()
       .invoke("val", value)
       .trigger("input");
-    this.Sleep(500); //for value set to settle
+    this.Sleep(500); //for value set to register
   }
 
   public TypeIntoTextArea(selector: string, value: string) {
@@ -927,14 +1403,7 @@ export class AggregateHelper {
       .find("textarea")
       .first()
       .type(value, { delay: 0, force: true, parseSpecialCharSequences: false });
-    this.Sleep(500); //for value set to settle
-  }
-
-  public UpdateInputValue(selector: string, value: string) {
-    this.GetElement(selector)
-      .closest("input")
-      //.type(this.selectAll)
-      .type(value, { delay: 0 });
+    this.Sleep(500); //for value set to register
   }
 
   public BlurCodeInput(selector: string) {
@@ -964,10 +1433,12 @@ export class AggregateHelper {
   }
 
   DragEvaluatedValuePopUp(x: number, y: number) {
-    cy.get(this.locator._evaluatedCurrentValue)
-      .first()
-      .should("be.visible")
-      .realHover({ pointer: "mouse" });
+    (
+      cy
+        .get(this.locator._evaluatedCurrentValue)
+        .first()
+        .should("be.visible") as any
+    ).realHover({ pointer: "mouse" });
     cy.get(this.locator._evaluatedValuePopDragHandler)
       .trigger("mousedown", { which: 1 })
       .trigger("mousemove", { clientX: x, clientY: y })
@@ -1048,27 +1519,23 @@ export class AggregateHelper {
   // this should only be used when we want to verify the evaluated value of dynamic bindings for example {{Api1.data}} or {{"asa"}}
   // and should not be called for plain strings
   public VerifyEvaluatedValue(currentValue: string) {
-    this.Sleep(3000);
-    cy.get(this.locator._evaluatedCurrentValue)
+    this.GetElement(this.locator._evaluatedCurrentValue)
       .first()
       .should("be.visible")
       .should("not.have.text", "undefined");
-    cy.get(this.locator._evaluatedCurrentValue)
+    this.GetElement(this.locator._evaluatedCurrentValue)
       .first()
       .click({ force: true })
       .then(($text) => {
         if ($text.text()) expect($text.text()).to.eq(currentValue);
       })
-      .trigger("mouseout")
-      .then(() => {
-        cy.wait(2000);
-      });
+      .trigger("mouseout");
   }
 
-  public UploadFile(fixtureName: string, toClickUpload = true) {
+  public UploadFile(fixtureName: string, toClickUpload = true, index = 0) {
     //cy.fixture(fixtureName).as("selectFileFixture");//giving issue, hence using directly as below
     cy.get(this.locator._uploadFiles)
-      .eq(0)
+      .eq(index)
       .selectFile("cypress/fixtures/" + fixtureName, { force: true })
       .wait(3000);
     toClickUpload && this.GetNClick(this.locator._uploadBtn, 0, false);
@@ -1076,7 +1543,7 @@ export class AggregateHelper {
 
   public AssertElementAbsence(selector: ElementType, timeout = 0) {
     //Should not exists - cannot take indexes
-    return this.GetElement(selector, timeout).should("not.exist");
+    return this.GetElement(selector, "not.exist", timeout).should("not.exist");
   }
 
   public GetText(
@@ -1110,29 +1577,83 @@ export class AggregateHelper {
     return this.GetElement(selector).should("not.be.focused");
   }
 
-  public AssertElementVisible(
+  public AssertElementVisibility(
     selector: ElementType,
+    visibility = true,
     index = 0,
-    timeout = 20000,
+    timeout = Cypress.config("pageLoadTimeout"),
   ) {
-    return this.GetElement(selector, timeout)
+    return this.GetElement(selector, "exist", timeout)
       .eq(index)
       .scrollIntoView()
-      .should("be.visible");
+      .should(visibility == true ? "be.visible" : "not.be.visible");
+    //return this.ScrollIntoView(selector, index, timeout).should("be.visible");//to find out why this is failing.
   }
 
-  public CheckForErrorToast(error: string) {
+  IsElementVisible(selector: ElementType) {
+    return this.GetElement(selector).then(($element) =>
+      Cypress.$($element).length > 0 ? true : false,
+    ) as Cypress.Chainable<boolean>;
+  }
+
+  /**
+   * Checks if the specified instance of the element is present with number and visible on the page.
+   *
+   * @param {ElementType} selector - The element selector.
+   * @param {number} [eq=0] - The index of the element to check (default is 0).
+   * @returns {Cypress.Chainable<boolean>} - Returns a boolean wrapped in a Cypress Chainable indicating visibility.
+   */
+  IsElementVisibleWithEq(selector: ElementType, eq: number = 0) {
+    return this.GetElement(selector)
+      .eq(eq)
+      .then(($element) => {
+        // Check if the element is present and visible
+        const isVisible =
+          Cypress.$($element).length > 0 && Cypress.$($element).is(":visible");
+        console.log(`Element visibility: ${isVisible}`);
+        return isVisible;
+      }) as Cypress.Chainable<boolean>;
+  }
+
+  public FailIfErrorToast(error: string) {
     cy.get("body").then(($ele) => {
-      if ($ele.find(this.locator._toastMsg).length) {
-        if ($ele.find(this.locator._specificToast(error)).length) {
+      if ($ele.find(this.locator._toastMsg).length > 0) {
+        if ($ele.find(this.locator._specificToast(error)).length > 0) {
           throw new Error("Error Toast from Application:" + error);
         }
       }
     });
   }
 
-  public AssertElementExist(selector: ElementType, index = 0, timeout = 20000) {
-    return this.GetElement(selector, timeout).eq(index).should("exist");
+  public AssertElementExist(
+    selector: ElementType,
+    index = 0,
+    timeout = Cypress.config("defaultCommandTimeout"),
+  ) {
+    return this.GetElement(selector, "exist", timeout)
+      .eq(index)
+      .should("exist");
+  }
+
+  public ScrollIntoView(
+    selector: ElementType,
+    index = 0,
+    timeout = Cypress.config("defaultCommandTimeout"),
+  ) {
+    return this.GetElement(selector, "exist", timeout)
+      .should("have.length.at.least", 1)
+      .eq(index)
+      .then(($element) => {
+        if (
+          Cypress.$("body").find($element).length &&
+          $element[0].offsetParent !== null
+        ) {
+          return $element;
+        } else {
+          $element[0].scrollIntoView();
+          return $element;
+        }
+      });
   }
 
   public AssertElementLength(
@@ -1141,8 +1662,14 @@ export class AggregateHelper {
     index: number | null = null,
   ) {
     if (index)
-      return this.GetElement(selector).eq(index).should("have.length", length);
-    else return this.GetElement(selector).should("have.length", length);
+      return this.GetElement(selector, "noVerify")
+        .eq(index)
+        .should("have.length", length);
+    else
+      return this.GetElement(selector, "noVerify").should(
+        "have.length",
+        length,
+      );
   }
 
   public FocusElement(selector: ElementType) {
@@ -1154,30 +1681,28 @@ export class AggregateHelper {
     exists: "exist" | "not.exist" | "be.visible" = "exist",
     selector?: string,
   ) {
+    let timeout = Cypress.config().pageLoadTimeout;
     if (selector) {
-      return cy.contains(selector, text).should(exists);
+      return cy.contains(selector, text, { timeout }).should(exists);
     }
-    return cy.contains(text).should(exists);
+    return cy.contains(text, { timeout }).should(exists);
   }
 
   public GetNAssertContains(
     selector: ElementType,
     text: string | number | RegExp,
     exists: "exist" | "not.exist" = "exist",
-    index?: number,
-    timeout?: number,
   ) {
-    if (index)
-      return this.GetElement(selector, timeout)
-        .eq(index)
-        .contains(text)
-        .should(exists);
-    else
-      return this.GetElement(selector, timeout).contains(text).should(exists);
+    return this.GetElement(selector, "noVerify").contains(text).should(exists);
   }
 
-  public ValidateURL(url: string) {
-    cy.url().should("include", url);
+  public AssertURL(url: string) {
+    this.WaitForCondition(() =>
+      cy.url().then((currentUrl) => {
+        return currentUrl.includes(url);
+      }),
+    );
+    this.assertHelper.AssertDocumentReady();
   }
 
   public ScrollTo(
@@ -1194,6 +1719,54 @@ export class AggregateHelper {
       | "bottomRight",
   ) {
     return this.GetElement(selector).scrollTo(position).wait(2000);
+  }
+
+  public ScrollToXY(
+    selector: ElementType,
+    x: number | string,
+    y: number | string,
+  ) {
+    return this.GetElement(selector).scrollTo(x, y).wait(2000);
+  }
+
+  public GetWidth(widgetSelector: string) {
+    this.GetElement(widgetSelector).then(($element) => {
+      cy.wrap(Number($element.width())).as("eleWidth");
+    });
+  }
+
+  public GetHeight(widgetSelector: string) {
+    this.GetElement(widgetSelector).then(($element) => {
+      cy.wrap(Number($element.height())).as("eleHeight");
+    });
+  }
+
+  public GetWidgetCSSHeight(widgetSelector: string, index = 0) {
+    return this.GetElement(widgetSelector).eq(index).invoke("css", "height");
+  }
+
+  public GetWidgetCSSFrAttribute(
+    widgetSelector: string,
+    attribute: string,
+    index = 0,
+  ) {
+    return this.GetElement(widgetSelector).eq(index).invoke("css", attribute);
+  }
+
+  public GetWidgetCSSValue(
+    widgetSelector: string,
+    attribute: string,
+    index = 0,
+  ) {
+    return this.GetElement(widgetSelector)
+      .eq(index)
+      .then(($element) => {
+        cy.wrap($element.css(attribute)).as("cssAttributeValue");
+      });
+  }
+
+  GetWidgetByName(widgetName: string) {
+    return this.GetElement(this.locator._widgetByName(widgetName));
   }
 
   public EnableAllEditors() {
@@ -1218,11 +1791,9 @@ export class AggregateHelper {
     index = 0,
     disabled = true,
   ) {
-    if (disabled) {
-      return this.GetElement(selector).eq(index).should("be.disabled");
-    } else {
-      return this.GetElement(selector).eq(index).should("not.be.disabled");
-    }
+    return this.GetElement(selector)
+      .eq(index)
+      .should(disabled ? "have.attr" : "not.have.attr", "disabled");
   }
 
   // Waits until all LazyCodeEditor wrappers finished loading the actual code editor.
@@ -1230,8 +1801,14 @@ export class AggregateHelper {
   // with the same name.
   public EnableAllCodeEditors() {
     cy.get(this.lazyCodeEditorFallback, { timeout: 60000 }).should("not.exist");
-    cy.get(this.lazyCodeEditorRendered).each(($el) => {
-      cy.wrap($el).find(".CodeMirror").should("exist");
+    // Code editors might not always be present on the page, so we need to check for their existence first
+    // (https://docs.cypress.io/guides/core-concepts/conditional-testing#Element-existence)
+    cy.get("body").then(($body) => {
+      if ($body.find(this.lazyCodeEditorRendered).length === 0) return;
+
+      return cy.get(this.lazyCodeEditorRendered).each(($el) => {
+        cy.wrap($el).find(".CodeMirror").should("exist");
+      });
     });
   }
 
@@ -1239,12 +1816,60 @@ export class AggregateHelper {
     cy.window().then((win) => {
       cy.spy(win, "open").as("windowOpen");
       openTabFunc();
-      cy.get("@windowOpen").should(
-        "be.calledWith",
-        Cypress.sinon.match.string,
-        "_blank",
-      );
+      cy.get("@windowOpen").should("be.called");
     });
+  }
+
+  public VisitNAssert(url: string, apiToValidate = "") {
+    cy.visit(url);
+    this.AssertURL(url);
+    if (Cypress.env("AIRGAPPED")) {
+      // Intentionally left blank: No actions needed in air-gapped environment
+    } else
+      apiToValidate && this.assertHelper.AssertNetworkStatus(apiToValidate);
+  }
+
+  public GetDropTargetId(widgetName: string) {
+    return this.GetWidgetByName(widgetName).invoke("attr", "id");
+  }
+
+  public GetModalDropTargetId() {
+    return this.GetElement(this.locator._modal).invoke("attr", "id");
+  }
+
+  public BrowserNavigation(direction: number) {
+    //passing 1 works as browser back
+    //passing -1 works as browser forward
+    cy.go(direction);
+  }
+
+  public AssertCursorInput($selector: string, cursor = { ch: 0, line: 0 }) {
+    this.EnableAllCodeEditors();
+    cy.get($selector)
+      .first()
+      .find(".CodeMirror")
+      .first()
+      .then((ins) => {
+        const input = (ins[0] as any).CodeMirror;
+        // The input gets focused with a slight delay so we need to wait for it
+        cy.waitUntil(() => input.hasFocus()).then(() => {
+          const editorCursor = input.getCursor();
+          expect(editorCursor.ch).to.equal(cursor.ch);
+          expect(editorCursor.line).to.equal(cursor.line);
+        });
+      });
+  }
+
+  public GetAttribute(selector: string, attribName: string, index = 0) {
+    return this.GetElement(selector).eq(index).invoke("attr", attribName);
+  }
+
+  public AssertClassExists(selector: string, className: string) {
+    this.GetElement(selector).should("have.class", className);
+  }
+
+  public VerifySnapshot(selector: string, identifier: string) {
+    this.GetElement(selector).matchImageSnapshot(identifier);
   }
 
   //Not used:
@@ -1268,4 +1893,110 @@ export class AggregateHelper {
   //     }
   //     return items;
   //   }, { timeout: 5000 });
+
+  public GetChildrenNClick(
+    selector: string,
+    childSelector: string,
+    index = 0,
+    force = false,
+    waitTimeInterval = 500,
+    ctrlKey = false,
+  ) {
+    return this.ScrollIntoView(selector, index)
+      .children(childSelector)
+      .click({ force: force, ctrlKey: ctrlKey })
+      .wait(waitTimeInterval);
+  }
+
+  public selectAndValidateWidgetNameAndProperty({
+    clickOptions = {},
+    hierarchy = [],
+    propFieldName,
+    toggleEle = null,
+    valueToValidate,
+    widgetName,
+    widgetType = EntityType.Widget,
+  }: SelectAndValidateParams) {
+    // Select the widget by name, type, and hierarchy with optional click options
+    EditorNavigator.SelectEntityByName(
+      widgetName,
+      widgetType,
+      clickOptions,
+      hierarchy,
+    );
+
+    // Assert that the Property Pane title matches the widget name
+    this.AssertText(
+      ObjectsRegistry.PropertyPane._paneTitle,
+      "text",
+      widgetName,
+    );
+
+    // If a toggle element is provided, toggle its JavaScript mode
+    if (toggleEle) {
+      ObjectsRegistry.PropertyPane.ToggleJSMode(toggleEle);
+    }
+
+    // Validate that the property field value matches the expected value
+    ObjectsRegistry.PropertyPane.ValidatePropertyFieldValue(
+      propFieldName,
+      valueToValidate,
+    );
+  }
+
+  public RemoveChars(selector: string, charCount = 0, index = 0) {
+    if (charCount > 0)
+      this.GetElement(selector)
+        .eq(index)
+        .focus()
+        .type("{backspace}".repeat(charCount), { timeout: 2, force: true })
+        .wait(50);
+    else {
+      if (charCount == -1) this.GetElement(selector).eq(index).clear();
+    }
+  }
+
+  public captureConsoleLogs(): void {
+    cy.window()
+      .its("console")
+      .then((console) => {
+        cy.spy(console, "log").as("log");
+        cy.spy(console, "error").as("error");
+        cy.spy(console, "warn").as("warn");
+      });
+  }
+
+  public verifyConsoleLogNotContainingError(): void {
+    cy.get("@error")
+      .invoke("getCalls")
+      .then((calls) => {
+        console.table(calls);
+        cy.wrap(calls).each((call) => {
+          (call as any).args.forEach((arg: any) => {
+            expect(arg).to.not.contain("error");
+          });
+        });
+      });
+  }
+
+  public verifyConsoleLogContainsExpectedMessage(message: string): void {
+    cy.get("@log")
+      .invoke("getCalls")
+      .then((calls) => {
+        console.table(calls);
+        cy.wrap(calls).each((call) => {
+          (call as any).args.forEach((arg: any) => {
+            expect(arg).to.contain(message);
+          });
+        });
+      });
+  }
+
+  public clearConsoleLogs(): void {
+    cy.window().then((win) => {
+      cy.spy(win.console, "log").as("log");
+      cy.spy(win.console, "error").as("error");
+      cy.spy(win.console, "warn").as("warn");
+    });
+  }
 }

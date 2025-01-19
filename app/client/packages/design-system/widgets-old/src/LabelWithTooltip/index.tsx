@@ -8,7 +8,9 @@ import Tooltip from "../Tooltip";
 import { IconWrapper } from "../Icon";
 import { importSvg } from "../utils/icon-loadables";
 
-const HelpIcon = importSvg(() => import("../assets/icons/control/help.svg"));
+const HelpIcon = importSvg(
+  async () => import("../assets/icons/control/help.svg"),
+);
 
 export interface LabelWithTooltipProps {
   alignment?: Alignment;
@@ -102,14 +104,19 @@ export const labelLayoutStyles = css<{
   display: flex;
   flex-direction: ${({ compactMode, labelPosition }) => {
     if (labelPosition === LabelPosition.Left) return "row";
+
     if (labelPosition === LabelPosition.Top) return "column";
+
     if (compactMode) return "row";
+
     return "column";
   }};
 
   align-items: ${({ compactMode, labelPosition }) => {
     if (labelPosition === LabelPosition.Top) return "flex-start";
+
     if (compactMode) return "center";
+
     return "flex-start";
   }};
   justify-content: flex-start;
@@ -124,8 +131,11 @@ export const multiSelectInputContainerStyles = css<{
   display: flex;
   align-items: ${({ compactMode, labelPosition }) => {
     if (labelPosition === LabelPosition.Top) return "flex-start";
+
     if (labelPosition === LabelPosition.Left) return "center";
+
     if (compactMode) return "center";
+
     return "flex-start";
   }};
 `;
@@ -172,11 +182,13 @@ export const StyledLabel = styled(Label)<StyledLabelProps>`
   &&& {
     ${({ compact, hasHelpText, position }) => {
       if (!position && !compact) return;
+
       if (
         position === LabelPosition.Left ||
         ((!position || position === LabelPosition.Auto) && compact)
       )
         return `margin-bottom: 0px; margin-right: ${LABEL_DEFAULT_GAP}`;
+
       return `margin-bottom: ${LABEL_DEFAULT_GAP}; ${
         hasHelpText ? `margin-right: ${LABEL_DEFAULT_GAP}` : "margin-right: 0px"
       }`;
@@ -213,7 +225,9 @@ const ToolTipIcon = styled(IconWrapper)<TooltipIconProps>`
     if (position === LabelPosition.Top) {
       return `margin-bottom: ${LABEL_DEFAULT_GAP}`;
     }
+
     if (compact || position === LabelPosition.Left) return "margin-bottom: 0px";
+
     return `margin-bottom: ${LABEL_DEFAULT_GAP}`;
   }};
 `;

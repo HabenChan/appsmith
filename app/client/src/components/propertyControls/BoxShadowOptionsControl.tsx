@@ -2,8 +2,8 @@ import * as React from "react";
 
 import type { ControlData, ControlProps } from "./BaseControl";
 import BaseControl from "./BaseControl";
-import { Icon, SegmentedControl, Tooltip } from "design-system";
-import { boxShadowOptions } from "constants/ThemeConstants";
+import { Icon, SegmentedControl } from "@appsmith/ads";
+import { boxShadowOptions, sizeMappings } from "constants/ThemeConstants";
 import type { DSEventDetail } from "utils/AppsmithUtils";
 import {
   DSEventTypes,
@@ -13,23 +13,13 @@ import {
 export interface BoxShadowOptionsControlProps extends ControlProps {
   propertyValue: string | undefined;
 }
-
 const options = Object.keys(boxShadowOptions).map((optionKey) => ({
-  label: (
-    <Tooltip content={optionKey} key={optionKey}>
-      {optionKey === "none" ? (
-        <div className="flex items-center justify-center w-5 h-5">
-          <Icon name="close-line" size="md" />
-        </div>
-      ) : (
-        <div
-          className="flex items-center justify-center w-5 h-5 bg-white"
-          style={{ boxShadow: boxShadowOptions[optionKey] }}
-        />
-      )}
-    </Tooltip>
-  ),
-
+  label:
+    optionKey === "none" ? (
+      <Icon name="close-line" size="md" />
+    ) : (
+      sizeMappings[optionKey]
+    ),
   value: boxShadowOptions[optionKey],
 }));
 
@@ -86,6 +76,8 @@ class BoxShadowOptionsControl extends BaseControl<BoxShadowOptionsControlProps> 
     );
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static canDisplayValueInUI(config: ControlData, value: any): boolean {
     return optionsValues.has(value);
   }

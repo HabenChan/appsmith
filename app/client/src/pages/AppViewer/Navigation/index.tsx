@@ -1,14 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ThemeProvider } from "styled-components";
-import type { ApplicationPayload } from "@appsmith/constants/ReduxActionConstants";
+import type { ApplicationPayload } from "entities/Application";
 import { useDispatch, useSelector } from "react-redux";
-import type { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import {
-  getCurrentPageId,
+  getCurrentBasePageId,
   getViewModePageList,
 } from "selectors/editorSelectors";
-import { getCurrentWorkspaceId } from "@appsmith/selectors/workspaceSelectors";
+import { getCurrentWorkspaceId } from "ee/selectors/selectedWorkspaceSelectors";
 import { getCurrentUser } from "selectors/usersSelectors";
 import type { User } from "constants/userConstants";
 import type { Theme } from "constants/DefaultTheme";
@@ -16,24 +16,25 @@ import { getThemeDetails, ThemeMode } from "selectors/themeSelectors";
 import HtmlTitle from "../AppViewerHtmlTitle";
 import { NAVIGATION_SETTINGS } from "constants/AppConstants";
 import PageMenu from "pages/AppViewer/PageMenu";
-import TourCompletionMessage from "pages/Editor/GuidedTour/TourCompletionMessage";
 import { useHref } from "pages/Editor/utils";
-import { builderURL } from "RouteBuilder";
+import { builderURL } from "ee/RouteBuilder";
 import TopHeader from "./components/TopHeader";
 import Sidebar from "./Sidebar";
-import { getCurrentApplication } from "@appsmith/selectors/applicationSelectors";
+import { getCurrentApplication } from "ee/selectors/applicationSelectors";
 import { useIsMobileDevice } from "utils/hooks/useDeviceDetect";
 import { setAppViewHeaderHeight } from "actions/appViewActions";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 
 export function Navigation() {
   const { search } = useLocation();
   const queryParams = new URLSearchParams(search);
-  const isEmbed = queryParams.get("embed");
-  const hideHeader = !!isEmbed;
+  const isEmbed = queryParams.get("embed") === "true";
+  const showNavBar = queryParams.get("navbar") === "true";
+  const hideHeader = isEmbed && !showNavBar;
   const [isMenuOpen, setMenuOpen] = useState(false);
   const headerRef = useRef<HTMLDivElement>(null);
-  const pageId = useSelector(getCurrentPageId);
-  const editorURL = useHref(builderURL, { pageId });
+  const basePageId = useSelector(getCurrentBasePageId);
+  const editorURL = useHref(builderURL, { basePageId });
   const currentWorkspaceId: string = useSelector(getCurrentWorkspaceId);
   const currentUser: User | undefined = useSelector(getCurrentUser);
   const lightTheme: Theme = useSelector((state: AppState) =>
@@ -59,6 +60,13 @@ export function Navigation() {
     currentApplicationDetails?.applicationDetail?.navigationSetting
       ?.orientation,
   ]);
+  useEffect(() => {
+    if (showNavBar && currentApplicationDetails) {
+      AnalyticsUtil.logEvent("APP_VIEWED_WITH_NAVBAR", {
+        id: currentApplicationDetails.id,
+      });
+    }
+  }, [showNavBar, currentApplicationDetails]);
 
   const renderNavigation = () => {
     if (
@@ -79,6 +87,7 @@ export function Navigation() {
               isMenuOpen={isMenuOpen}
               pages={pages}
               setMenuOpen={setMenuOpen}
+              showUserSettings={!isEmbed}
             />
           ) : (
             <Sidebar
@@ -86,6 +95,7 @@ export function Navigation() {
               currentUser={currentUser}
               currentWorkspaceId={currentWorkspaceId}
               pages={pages}
+              showUserSettings={!isEmbed}
             />
           )}
         </>
@@ -100,6 +110,7 @@ export function Navigation() {
         isMenuOpen={isMenuOpen}
         pages={pages}
         setMenuOpen={setMenuOpen}
+        showUserSettings={!isEmbed}
       />
     );
   };
@@ -125,8 +136,6 @@ export function Navigation() {
           setMenuOpen={setMenuOpen}
           url={editorURL}
         />
-
-        <TourCompletionMessage />
       </div>
     </ThemeProvider>
   );

@@ -1,16 +1,16 @@
-import type { SendTestEmailPayload } from "@appsmith/api/UserApi";
-import UserApi from "@appsmith/api/UserApi";
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
+import type { SendTestEmailPayload } from "ee/api/UserApi";
+import UserApi from "ee/api/UserApi";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+} from "ee/constants/ReduxActionConstants";
 import { APPLICATIONS_URL } from "constants/routes";
 import type { User } from "constants/userConstants";
 import { call, put, delay, select } from "redux-saga/effects";
 import history from "utils/history";
 import { validateResponse } from "sagas/ErrorSagas";
-import { getAppsmithConfigs } from "@appsmith/configs";
+import { getAppsmithConfigs } from "ee/configs";
 
 import type { ApiResponse } from "api/ApiResponses";
 import {
@@ -19,18 +19,25 @@ import {
   TEST_EMAIL_FAILURE,
   TEST_EMAIL_SUCCESS,
   TEST_EMAIL_SUCCESS_TROUBLESHOOT,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import { getCurrentUser } from "selectors/usersSelectors";
 import { EMAIL_SETUP_DOC } from "constants/ThirdPartyConstants";
-import { getCurrentTenant } from "ce/actions/tenantActions";
-import { toast } from "design-system";
+import { toast } from "@appsmith/ads";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import {
+  MIGRATION_STATUS,
+  RESTART_POLL_INTERVAL,
+  RESTART_POLL_TIMEOUT,
+} from "ee/constants/tenantConstants";
+import type { FetchCurrentTenantConfigResponse } from "ee/api/TenantApi";
+import TenantApi from "ee/api/TenantApi";
 
 export function* FetchAdminSettingsSaga() {
   const response: ApiResponse = yield call(UserApi.fetchAdminSettings);
   const isValidResponse: boolean = yield validateResponse(response);
 
   if (isValidResponse) {
-    const { appVersion, cloudHosting } = getAppsmithConfigs();
+    const { appVersion } = getAppsmithConfigs();
     const settings = {
       //@ts-expect-error: response is of type unknown
       ...response.data,
@@ -38,7 +45,6 @@ export function* FetchAdminSettingsSaga() {
         APPSMITH_DISPLAY_VERSION,
         appVersion.edition,
         appVersion.id,
-        cloudHosting,
       ),
     };
 
@@ -67,6 +73,8 @@ export function* FetchAdminSettingsErrorSaga() {
 
 export function* SaveAdminSettingsSaga(
   action: ReduxAction<{
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     settings: Record<string, any>;
     needsRestart: boolean;
   }>,
@@ -74,6 +82,12 @@ export function* SaveAdminSettingsSaga(
   const { needsRestart = true, settings } = action.payload;
 
   try {
+    const hasDisableTelemetrySetting = settings.hasOwnProperty(
+      "APPSMITH_DISABLE_TELEMETRY",
+    );
+    const hasHideWatermarkSetting = settings.hasOwnProperty(
+      "APPSMITH_HIDE_WATERMARK",
+    );
     const response: ApiResponse = yield call(
       UserApi.saveAdminSettings,
       settings,
@@ -84,11 +98,25 @@ export function* SaveAdminSettingsSaga(
       toast.show("Successfully saved", {
         kind: "success",
       });
+
+      if (settings["APPSMITH_DISABLE_TELEMETRY"]) {
+        AnalyticsUtil.logEvent("TELEMETRY_DISABLED");
+      }
+
+      if (hasDisableTelemetrySetting || hasHideWatermarkSetting) {
+        AnalyticsUtil.logEvent("GENERAL_SETTINGS_UPDATE", {
+          ...(hasDisableTelemetrySetting
+            ? { telemetry_disabled: settings["APPSMITH_DISABLE_TELEMETRY"] }
+            : {}),
+          ...(hasHideWatermarkSetting
+            ? { watermark_disabled: settings["APPSMITH_HIDE_WATERMARK"] }
+            : {}),
+        });
+      }
+
       yield put({
         type: ReduxActionTypes.SAVE_ADMIN_SETTINGS_SUCCESS,
       });
-
-      yield put(getCurrentTenant());
 
       yield put({
         type: ReduxActionTypes.FETCH_ADMIN_SETTINGS_SUCCESS,
@@ -112,9 +140,6 @@ export function* SaveAdminSettingsSaga(
   }
 }
 
-const RESTART_POLL_TIMEOUT = 2 * 60 * 1000;
-const RESTART_POLL_INTERVAL = 2000;
-
 export function* RestartServerPoll() {
   yield call(UserApi.restartServer);
   yield call(RestryRestartServerPoll);
@@ -123,16 +148,25 @@ export function* RestartServerPoll() {
 export function* RestryRestartServerPoll() {
   let pollCount = 0;
   const maxPollCount = RESTART_POLL_TIMEOUT / RESTART_POLL_INTERVAL;
+
   while (pollCount < maxPollCount) {
     pollCount++;
     yield delay(RESTART_POLL_INTERVAL);
     try {
-      const response: ApiResponse = yield call(UserApi.getCurrentUser);
-      if (response.responseMeta.status === 200) {
+      const response: FetchCurrentTenantConfigResponse = yield call(
+        TenantApi.fetchCurrentTenantConfig,
+      );
+
+      if (
+        response.responseMeta.status === 200 &&
+        response.data?.tenantConfiguration?.migrationStatus ===
+          MIGRATION_STATUS.COMPLETED
+      ) {
         window.location.reload();
       }
     } catch (e) {}
   }
+
   yield put({
     type: ReduxActionErrorTypes.RESTART_SERVER_ERROR,
   });
@@ -150,6 +184,7 @@ export function* SendTestEmail(action: ReduxAction<SendTestEmailPayload>) {
     if (isValidResponse) {
       if (response.data) {
       }
+
       toast.show(
         createMessage(
           response.data

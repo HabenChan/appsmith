@@ -1,12 +1,11 @@
-import { changeAppViewAccessInit } from "@appsmith/actions/applicationActions";
-import { Switch, Divider } from "design-system";
+import { changeAppViewAccessInit } from "ee/actions/applicationActions";
+import { Switch, Divider } from "@appsmith/ads";
 import React from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   getCurrentApplication,
   getIsChangingViewAccess,
-  getIsFetchingApplications,
-} from "@appsmith/selectors/applicationSelectors";
+} from "ee/selectors/applicationSelectors";
 import PropertyHelpLabel from "pages/Editor/PropertyPane/PropertyHelpLabel";
 import styled from "styled-components";
 import {
@@ -14,13 +13,14 @@ import {
   IN_APP_EMBED_SETTING,
   MAKE_APPLICATION_PUBLIC_TOOLTIP,
   MAKE_APPLICATION_PUBLIC,
-} from "@appsmith/constants/messages";
-import {
-  isPermitted,
-  PERMISSION_TYPE,
-} from "@appsmith/utils/permissionHelpers";
+} from "ee/constants/messages";
+import { isPermitted, PERMISSION_TYPE } from "ee/utils/permissionHelpers";
 import MakeApplicationForkable from "./MakeApplicationForkable";
-import EmbedSnippetTab from "@appsmith/pages/Applications/EmbedSnippetTab";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { useFeatureFlag } from "utils/hooks/useFeatureFlag";
+import { FEATURE_FLAG } from "ee/entities/FeatureFlag";
+import { getEmbedSnippetTab } from "ee/utils/BusinessFeatures/privateEmbedHelpers";
+import { getIsFetchingApplications } from "ee/selectors/selectedWorkspaceSelectors";
 
 const StyledPropertyHelpLabel = styled(PropertyHelpLabel)`
   .bp3-popover-content > div {
@@ -44,6 +44,9 @@ function EmbedSettings() {
   const isChangingViewAccess = useSelector(getIsChangingViewAccess);
   const isFetchingApplication = useSelector(getIsFetchingApplications);
   const userAppPermissions = application?.userPermissions ?? [];
+  const isPrivateEmbedEnabled = useFeatureFlag(
+    FEATURE_FLAG.license_private_embeds_enabled,
+  );
   const canShareWithPublic = isPermitted(
     userAppPermissions,
     PERMISSION_TYPE.MAKE_PUBLIC_APPLICATION,
@@ -68,15 +71,18 @@ function EmbedSettings() {
                 data-testid="t--embed-settings-application-public"
                 isDisabled={isFetchingApplication || isChangingViewAccess}
                 isSelected={application?.isPublic}
-                onChange={() =>
+                onChange={() => {
+                  AnalyticsUtil.logEvent("MAKE_APPLICATION_PUBLIC", {
+                    isPublic: !application?.isPublic,
+                  });
                   application &&
-                  dispatch(
-                    changeAppViewAccessInit(
-                      application?.id,
-                      !application?.isPublic,
-                    ),
-                  )
-                }
+                    dispatch(
+                      changeAppViewAccessInit(
+                        application?.id,
+                        !application?.isPublic,
+                      ),
+                    );
+                }}
               >
                 <StyledPropertyHelpLabel
                   label={createMessage(MAKE_APPLICATION_PUBLIC)}
@@ -94,7 +100,7 @@ function EmbedSettings() {
       {canMarkAppForkable && (
         <MakeApplicationForkable application={application} />
       )}
-      <EmbedSnippetTab isAppSettings />
+      {getEmbedSnippetTab(isPrivateEmbedEnabled)}
     </div>
   );
 }

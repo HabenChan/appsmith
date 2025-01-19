@@ -5,19 +5,158 @@ import type {
   TabsWidgetProps,
 } from "widgets/TabsWidget/constants";
 import { selectedTabValidation } from "widgets/TabsWidget/widget";
-import type { WidgetType } from "constants/WidgetConstants";
-import { migrateTabsData } from "utils/DSLMigrations";
-import { cloneDeep, get } from "lodash";
+import { cloneDeep, get, isString } from "lodash";
 import { ValidationTypes } from "constants/WidgetValidation";
 import { generateReactKey } from "utils/generators";
 import { EVAL_VALUE_PATH } from "utils/DynamicBindingUtils";
 import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
+import * as Sentry from "@sentry/react";
+import type { DSLWidget } from "WidgetProvider/constants";
+import { DATA_BIND_REGEX_GLOBAL } from "constants/BindingsConstants";
+
+function migrateTabsDataUsingMigrator(currentDSL: DSLWidget) {
+  if (currentDSL.type === "TABS_WIDGET" && currentDSL.version === 1) {
+    try {
+      currentDSL.type = "TABS_MIGRATOR_WIDGET";
+      currentDSL.version = 1;
+    } catch (error) {
+      Sentry.captureException({
+        message: "Tabs Migration Failed",
+        oldData: currentDSL.tabs,
+      });
+      currentDSL.tabsObj = {};
+      delete currentDSL.tabs;
+    }
+  }
+
+  if (currentDSL.children && currentDSL.children.length) {
+    currentDSL.children = currentDSL.children.map(migrateTabsDataUsingMigrator);
+  }
+
+  return currentDSL;
+}
+
+const migrateTabsData = (currentDSL: DSLWidget) => {
+  if (
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ["TABS_WIDGET", "TABS_MIGRATOR_WIDGET"].includes(currentDSL.type as any) &&
+    currentDSL.version === 1
+  ) {
+    try {
+      currentDSL.type = "TABS_WIDGET";
+      const isTabsDataBinded = isString(currentDSL.tabs);
+
+      currentDSL.dynamicPropertyPathList =
+        currentDSL.dynamicPropertyPathList || [];
+      currentDSL.dynamicBindingPathList =
+        currentDSL.dynamicBindingPathList || [];
+
+      if (isTabsDataBinded) {
+        const tabsString = currentDSL.tabs.replace(
+          DATA_BIND_REGEX_GLOBAL,
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (word: any) => `"${word}"`,
+        );
+
+        try {
+          currentDSL.tabs = JSON.parse(tabsString);
+        } catch (error) {
+          return migrateTabsDataUsingMigrator(currentDSL);
+        }
+        const dynamicPropsList = currentDSL.tabs // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .filter((each: any) => DATA_BIND_REGEX_GLOBAL.test(each.isVisible)) // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((each: any) => {
+            return { key: `tabsObj.${each.id}.isVisible` };
+          });
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const dynamicBindablePropsList = currentDSL.tabs.map((each: any) => {
+          return { key: `tabsObj.${each.id}.isVisible` };
+        });
+
+        currentDSL.dynamicPropertyPathList = [
+          ...currentDSL.dynamicPropertyPathList,
+          ...dynamicPropsList,
+        ];
+        currentDSL.dynamicBindingPathList = [
+          ...currentDSL.dynamicBindingPathList,
+          ...dynamicBindablePropsList,
+        ];
+      }
+
+      currentDSL.dynamicPropertyPathList =
+        currentDSL.dynamicPropertyPathList.filter((each) => {
+          return each.key !== "tabs";
+        });
+      currentDSL.dynamicBindingPathList =
+        currentDSL.dynamicBindingPathList.filter((each) => {
+          return each.key !== "tabs";
+        });
+      currentDSL.tabsObj = currentDSL.tabs.reduce(
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (obj: any, tab: any, index: number) => {
+          obj = {
+            ...obj,
+            [tab.id]: {
+              ...tab,
+              isVisible: tab.isVisible === undefined ? true : tab.isVisible,
+              index,
+            },
+          };
+
+          return obj;
+        },
+        {},
+      );
+      currentDSL.version = 2;
+      delete currentDSL.tabs;
+    } catch (error) {
+      Sentry.captureException({
+        message: "Tabs Migration Failed",
+        oldData: currentDSL.tabs,
+      });
+      currentDSL.tabsObj = {};
+      delete currentDSL.tabs;
+    }
+  }
+
+  if (currentDSL.children && currentDSL.children.length) {
+    currentDSL.children = currentDSL.children.map(migrateTabsData);
+  }
+
+  return currentDSL;
+};
 
 class TabsMigratorWidget extends BaseWidget<
   TabsWidgetProps<TabContainerWidgetProps>,
   WidgetState
 > {
-  getPageView() {
+  static type = "TABS_MIGRATOR_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "TabsMigrator",
+      needsMeta: true,
+    };
+  }
+
+  static getDefaults() {
+    return {
+      isLoading: true,
+      rows: 1,
+      columns: 1,
+      widgetName: "Skeleton",
+      version: 1,
+      animateLoading: true,
+    };
+  }
+
+  getWidgetView() {
     return null;
   }
   static getPropertyPaneConfig() {
@@ -142,6 +281,7 @@ class TabsMigratorWidget extends BaseWidget<
     if (get(this.props, EVAL_VALUE_PATH, false)) {
       const tabsDsl = cloneDeep(this.props);
       const migratedTabsDsl = migrateTabsData(tabsDsl);
+
       super.batchUpdateWidgetProperty({
         modify: {
           tabsObj: migratedTabsDsl.tabsObj,
@@ -153,9 +293,6 @@ class TabsMigratorWidget extends BaseWidget<
         remove: ["tabs"],
       });
     }
-  }
-  static getWidgetType(): WidgetType {
-    return "TABS_MIGRATOR_WIDGET";
   }
 }
 export default TabsMigratorWidget;

@@ -16,10 +16,12 @@ export default {
     } else {
       const columnType = get(props, `${propertyPath}.columnType`, "");
       const isEditable = get(props, `${propertyPath}.isEditable`, "");
+
       return (
         !(
           columnType === ColumnTypes.TEXT ||
           columnType === ColumnTypes.NUMBER ||
+          columnType === ColumnTypes.CURRENCY ||
           columnType === ColumnTypes.CHECKBOX ||
           columnType === ColumnTypes.SWITCH ||
           columnType === ColumnTypes.SELECT ||
@@ -38,6 +40,7 @@ export default {
       hidden: (props: TableWidgetProps, propertyPath: string) => {
         const baseProperty = getBasePropertyPath(propertyPath);
         const columnType = get(props, `${baseProperty}.columnType`, "");
+
         return columnType !== ColumnTypes.IMAGE;
       },
       dependencies: ["primaryColumns", "columnOrder"],
@@ -54,9 +57,12 @@ export default {
         const baseProperty = getBasePropertyPath(propertyPath);
         const columnType = get(props, `${baseProperty}.columnType`, "");
         const isEditable = get(props, `${baseProperty}.isEditable`, "");
+
         return (
           !(
-            columnType === ColumnTypes.TEXT || columnType === ColumnTypes.NUMBER
+            columnType === ColumnTypes.TEXT ||
+            columnType === ColumnTypes.NUMBER ||
+            columnType === ColumnTypes.CURRENCY
           ) || !isEditable
         );
       },
@@ -74,6 +80,7 @@ export default {
         const baseProperty = getBasePropertyPath(propertyPath);
         const columnType = get(props, `${baseProperty}.columnType`, "");
         const isEditable = get(props, `${baseProperty}.isEditable`, "");
+
         return columnType !== ColumnTypes.SELECT || !isEditable;
       },
       dependencies: ["primaryColumns"],
@@ -119,6 +126,7 @@ export default {
           `${baseProperty}.serverSideFiltering`,
           false,
         );
+
         return (
           columnType !== ColumnTypes.SELECT ||
           !isEditable ||
@@ -146,6 +154,7 @@ export default {
       dependencies: ["primaryColumns"],
       hidden: (props: TableWidgetProps, propertyPath: string) => {
         const path = getColumnPath(propertyPath);
+
         return hideByColumnType(props, path, [ColumnTypes.DATE], true);
       },
     },

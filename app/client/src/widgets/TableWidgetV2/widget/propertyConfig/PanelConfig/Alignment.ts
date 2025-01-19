@@ -9,7 +9,7 @@ export default {
     return hideByColumnType(
       props,
       propertyPath,
-      [ColumnTypes.CHECKBOX, ColumnTypes.SWITCH],
+      [ColumnTypes.CHECKBOX, ColumnTypes.SWITCH, ColumnTypes.BUTTON],
       true,
     );
   },
@@ -53,9 +53,11 @@ export default {
           ColumnTypes.TEXT,
           ColumnTypes.DATE,
           ColumnTypes.NUMBER,
+          ColumnTypes.CURRENCY,
           ColumnTypes.URL,
           ColumnTypes.CHECKBOX,
           ColumnTypes.SWITCH,
+          ColumnTypes.BUTTON,
         ]);
       },
     },
@@ -98,9 +100,11 @@ export default {
           ColumnTypes.TEXT,
           ColumnTypes.DATE,
           ColumnTypes.NUMBER,
+          ColumnTypes.CURRENCY,
           ColumnTypes.URL,
           ColumnTypes.CHECKBOX,
           ColumnTypes.SWITCH,
+          ColumnTypes.BUTTON,
         ]);
       },
     },

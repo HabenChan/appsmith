@@ -1,13 +1,10 @@
 import React from "react";
 import {
   createMessage,
-  CURRENT_PAGE_DISCARD_WARNING,
   DISCARD_CHANGES_WARNING,
-} from "@appsmith/constants/messages";
-import { useSelector } from "react-redux";
-import { getCurrentPageName } from "selectors/editorSelectors";
-import { getGitStatus } from "selectors/gitSyncSelectors";
-import { Callout, Text } from "design-system";
+  DISCARD_MESSAGE,
+} from "ee/constants/messages";
+import { Callout, Text } from "@appsmith/ads";
 import styled from "styled-components";
 
 const Container = styled.div`
@@ -15,37 +12,32 @@ const Container = styled.div`
 `;
 
 export default function DiscardChangesWarning({
-  discardDocUrl,
   onCloseDiscardChangesWarning,
-}: any) {
-  const currentPageName = useSelector(getCurrentPageName) || "";
-  const modifiedPageList = useSelector(getGitStatus)?.modified.map(
-    (page: string) => page.toLocaleLowerCase(),
-  );
-  const isCurrentPageDiscardable =
-    modifiedPageList?.some((page: string) =>
-      page.includes(currentPageName.toLocaleLowerCase()),
-    ) || false;
+}: {
+  onCloseDiscardChangesWarning: () => void;
+}) {
+  const discardDocUrl =
+    "https://docs.appsmith.com/advanced-concepts/version-control-with-git/commit-and-push";
 
   return (
     <Container>
       <Callout
+        data-testid="t--discard-callout"
         isClosable
         kind="error"
         links={[
           {
-            onClick: () => window.open(discardDocUrl, "_blank"),
-            children: "Learn More",
+            children: "Learn more",
             endIcon: "right-arrow",
+            to: discardDocUrl,
+            target: "_blank",
           },
         ]}
         onClose={onCloseDiscardChangesWarning}
       >
         <Text kind="heading-xs">{createMessage(DISCARD_CHANGES_WARNING)}</Text>
         <br />
-        {isCurrentPageDiscardable
-          ? createMessage(CURRENT_PAGE_DISCARD_WARNING, currentPageName)
-          : null}
+        {createMessage(DISCARD_MESSAGE)}
       </Callout>
     </Container>
   );

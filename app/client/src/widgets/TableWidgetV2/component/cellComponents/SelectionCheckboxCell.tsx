@@ -2,13 +2,13 @@ import React from "react";
 
 import { CellCheckboxWrapper, CellCheckbox } from "../TableStyledWrappers";
 import { CheckboxState } from "../Constants";
-import { importSvg } from "design-system-old";
+import { importSvg } from "@appsmith/ads-old";
 
 const CheckBoxCheckIcon = importSvg(
-  () => import("assets/icons/widget/table/checkbox-check.svg"),
+  async () => import("assets/icons/widget/table/checkbox-check.svg"),
 );
 const CheckBoxLineIcon = importSvg(
-  () => import("assets/icons/widget/table/checkbox-line.svg"),
+  async () => import("assets/icons/widget/table/checkbox-line.svg"),
 );
 
 export const renderBodyCheckBoxCell = (

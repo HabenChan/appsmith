@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getTypographyByKey } from "design-system-old";
+import { getTypographyByKey } from "@appsmith/ads-old";
 import styled, { useTheme } from "styled-components";
 import { useDispatch, useSelector } from "react-redux";
 
 import {
   createNewBranchInit,
   fetchBranchesInit,
+  fetchGitProtectedBranchesInit,
   switchGitBranchInit,
 } from "actions/gitSyncActions";
 import {
@@ -14,6 +15,8 @@ import {
   getFetchingBranches,
   getGitBranches,
   getGitBranchNames,
+  getIsGetProtectedBranchesLoading,
+  getProtectedBranchesSelector,
 } from "selectors/gitSyncSelectors";
 
 import Skeleton from "components/utils/Skeleton";
@@ -26,7 +29,7 @@ import {
   FIND_OR_CREATE_A_BRANCH,
   SWITCH_BRANCHES,
   SYNC_BRANCHES,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import {
   Icon,
   Spinner,
@@ -34,14 +37,14 @@ import {
   Button,
   SearchInput,
   Text,
-} from "design-system";
+} from "@appsmith/ads";
 import { get } from "lodash";
 import {
   isLocalBranch,
   isRemoteBranch,
   removeSpecialChars,
 } from "pages/Editor/gitSync/utils";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 import { useActiveHoverIndex, useFilteredBranches } from "../hooks";
 import { BranchListItemContainer } from "./BranchListItemContainer";
 import { RemoteBranchList } from "./RemoteBranchList";
@@ -52,19 +55,15 @@ import { Space } from "./StyledComponents";
 const ListContainer = styled.div`
   flex: 1;
   overflow: auto;
-  width: 300px;
+  width: calc(300px + 5px);
+  margin-right: -5px;
   position: relative;
 `;
 
 const BranchDropdownContainer = styled.div`
-  height: 40vh;
+  height: 45vh;
   display: flex;
   flex-direction: column;
-
-  // & .title {
-  //   ${getTypographyByKey("h3")};
-  //   color: var(--ads-v2-color-fg-emphasis-plus);
-  // }
 
   padding: ${(props) => props.theme.spaces[5]}px;
   min-height: 0;
@@ -111,7 +110,8 @@ function CreateNewBranch({
   hovered,
   isCreatingNewBranch,
   onClick,
-  shouldScrollIntoView,
+  shouldScrollIntoView, // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 }: any) {
   useEffect(() => {
     if (itemRef.current && shouldScrollIntoView)
@@ -238,6 +238,7 @@ export default function BranchList(props: {
       source: "BRANCH_LIST_POPUP_FROM_BOTTOM_BAR",
     });
     dispatch(fetchBranchesInit({ pruneBranches: true }));
+    dispatch(fetchGitProtectedBranchesInit());
   };
 
   const branches = useSelector(getGitBranches);
@@ -245,7 +246,10 @@ export default function BranchList(props: {
   const currentBranch = useSelector(getCurrentGitBranch);
   const fetchingBranches = useSelector(getFetchingBranches);
   const defaultBranch = useSelector(getDefaultGitBranchName);
-
+  const protectedBranches = useSelector(getProtectedBranchesSelector);
+  const isGetProtectedBranchesLoading = useSelector(
+    getIsGetProtectedBranchesLoading,
+  );
   const [searchText, changeSearchTextInState] = useState("");
   const changeSearchText = (text: string) => {
     changeSearchTextInState(removeSpecialChars(text));
@@ -279,10 +283,12 @@ export default function BranchList(props: {
 
   const handleCreateNewBranch = () => {
     if (isCreatingNewBranch) return;
+
     AnalyticsUtil.logEvent("GS_CREATE_NEW_BRANCH", {
       source: "BRANCH_LIST_POPUP_FROM_BOTTOM_BAR",
     });
     const branch = searchText;
+
     setIsCreatingNewBranch(true);
     dispatch(
       createNewBranchInit({
@@ -292,6 +298,7 @@ export default function BranchList(props: {
         },
         onSuccessCallback: () => {
           setIsCreatingNewBranch(false);
+
           if (typeof props.setIsPopupOpen === "function")
             props.setIsPopupOpen(false);
         },
@@ -330,7 +337,11 @@ export default function BranchList(props: {
     activeHoverIndex,
     defaultBranch,
     switchBranch,
+    protectedBranches,
   );
+
+  const loading = fetchingBranches || isGetProtectedBranchesLoading;
+
   return (
     <BranchListHotkeys
       handleDownKey={handleDownKey}
@@ -349,15 +360,16 @@ export default function BranchList(props: {
         />
         <Space size={3} />
         <div style={{ width: 300 }}>
-          {fetchingBranches && (
+          {loading && (
             <div style={{ width: "100%", height: textInputHeight }}>
               <Skeleton />
             </div>
           )}
-          {!fetchingBranches && (
+          {!loading && (
             <SearchInput
               autoFocus
               className="branch-search t--branch-search-input"
+              // @ts-expect-error Fix this the next time the file is edited
               fill
               onChange={changeSearchText}
               placeholder={createMessage(FIND_OR_CREATE_A_BRANCH)}
@@ -366,9 +378,11 @@ export default function BranchList(props: {
           )}
         </div>
         <Space size={3} />
-        {fetchingBranches && <BranchesLoading />}
-        {!fetchingBranches && (
+
+        {loading && <BranchesLoading />}
+        {!loading && (
           <ListContainer>
+            <Space size={5} />
             {isCreateNewBranchInputValid && (
               <CreateNewBranch
                 branch={searchText}
@@ -381,6 +395,7 @@ export default function BranchList(props: {
               />
             )}
             {localBranchList}
+            <Space size={5} />
             {remoteBranchList}
           </ListContainer>
         )}

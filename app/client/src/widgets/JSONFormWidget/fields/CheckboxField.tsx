@@ -7,7 +7,7 @@ import FormContext from "../FormContext";
 import Field from "../component/Field";
 import useEvents from "./useBlurAndFocusEvents";
 import useRegisterFieldValidity from "./useRegisterFieldValidity";
-import type { AlignWidget } from "widgets/constants";
+import type { AlignWidget } from "WidgetProvider/constants";
 import type {
   BaseFieldComponentProps,
   FieldComponentBaseProps,
@@ -18,6 +18,7 @@ import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
 import { Colors } from "constants/Colors";
 import { BASE_LABEL_TEXT_SIZE } from "../component/FieldLabel";
 import { LabelPosition } from "components/constants";
+import useUnmountFieldValidation from "./useUnmountFieldValidation";
 
 type CheckboxComponentProps = FieldComponentBaseProps &
   FieldEventProps & {
@@ -82,6 +83,7 @@ function CheckboxField({
     fieldType: schemaItem.fieldType,
     isValid: isValueValid,
   });
+  useUnmountFieldValidation({ fieldName: name });
 
   const onCheckChange = useCallback(
     (isChecked: boolean) => {

@@ -1,15 +1,19 @@
 import React from "react";
-import { importSvg } from "design-system-old";
+import { importSvg } from "@appsmith/ads-old";
 import styled from "styled-components";
-import { Text } from "design-system";
+import { Text } from "@appsmith/ads";
 const AppsmithLogo = importSvg(
-  () => import("assets/svg/appsmith-logo-no-pad.svg"),
+  async () => import("assets/svg/appsmith-logo-no-pad.svg"),
 );
 
 const Wrapper = styled.span`
   border-radius: var(--ads-v2-border-radius);
   border: 1px solid var(--ads-v2-color-border);
   background-color: var(--ads-v2-color-bg);
+
+  svg {
+    margin-top: 2px;
+  }
 `;
 
 function BrandingBadge() {

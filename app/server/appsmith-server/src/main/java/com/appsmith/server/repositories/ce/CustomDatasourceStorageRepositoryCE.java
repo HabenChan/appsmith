@@ -5,7 +5,8 @@ import com.appsmith.server.repositories.AppsmithRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
-
 public interface CustomDatasourceStorageRepositoryCE extends AppsmithRepository<DatasourceStorage> {
+    Mono<DatasourceStorage> findByDatasourceIdAndEnvironmentId(String datasourceId, String environmentId);
+
+    Flux<DatasourceStorage> findByDatasourceId(String datasourceId);
 }

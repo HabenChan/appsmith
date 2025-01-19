@@ -1,4 +1,4 @@
-import { PluginPackageName } from "entities/Action";
+import { PluginPackageName } from "entities/Plugin";
 
 export const DROPDOWN_TRIGGER_DIMENSION = {
   HEIGHT: "36px",
@@ -37,3 +37,5 @@ export const PluginFormInputFieldMap: Record<
     COLUMN: "column",
   },
 };
+
+export const DEFAULT_QUERY_OPTIONS_COUNTS_TO_SHOW = 4;

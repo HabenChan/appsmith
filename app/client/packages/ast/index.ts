@@ -3,6 +3,9 @@ import type {
   PropertyNode,
   MemberExpressionData,
   IdentifierInfo,
+  AssignmentExpressionData,
+  CallExpressionData,
+  MemberCallExpressionData,
 } from "./src";
 import {
   isIdentifierNode,
@@ -15,18 +18,28 @@ import {
   getAST,
   extractIdentifierInfoFromCode,
   entityRefactorFromCode,
-  extractInvalidTopLevelMemberExpressionsFromCode,
+  extractExpressionsFromCode,
   getFunctionalParamsFromNode,
   isTypeOfFunction,
   isFunctionPresent,
+  getMemberExpressionObjectFromProperty,
 } from "./src";
 
 // constants
 import { ECMA_VERSION, SourceType, NodeTypes } from "./src/constants";
 
 // JSObjects
-import type { TParsedJSProperty, JSPropertyPosition } from "./src/jsObject";
-import { parseJSObject, isJSFunctionProperty } from "./src/jsObject";
+import type {
+  TParsedJSProperty,
+  JSPropertyPosition,
+  JSVarProperty,
+  JSFunctionProperty,
+} from "./src/jsObject";
+import {
+  parseJSObject,
+  isJSFunctionProperty,
+  addPropertiesToJSObjectCode,
+} from "./src/jsObject";
 
 // action creator
 import {
@@ -60,6 +73,10 @@ import {
   checkIfArgumentExistAtPosition,
 } from "./src/actionCreator";
 
+// peekOverlay
+import type { PeekOverlayExpressionIdentifierOptions } from "./src/peekOverlay";
+import { PeekOverlayExpressionIdentifier } from "./src/peekOverlay";
+
 // types or interfaces should be exported with type keyword, while enums can be exported like normal functions
 export type {
   ObjectExpression,
@@ -68,6 +85,12 @@ export type {
   IdentifierInfo,
   TParsedJSProperty,
   JSPropertyPosition,
+  PeekOverlayExpressionIdentifierOptions,
+  AssignmentExpressionData,
+  JSVarProperty,
+  JSFunctionProperty,
+  CallExpressionData,
+  MemberCallExpressionData,
 };
 
 export {
@@ -81,7 +104,7 @@ export {
   getAST,
   extractIdentifierInfoFromCode,
   entityRefactorFromCode,
-  extractInvalidTopLevelMemberExpressionsFromCode,
+  extractExpressionsFromCode,
   getFunctionalParamsFromNode,
   isTypeOfFunction,
   parseJSObject,
@@ -118,4 +141,7 @@ export {
   checkIfArgumentExistAtPosition,
   isJSFunctionProperty,
   isFunctionPresent,
+  PeekOverlayExpressionIdentifier,
+  getMemberExpressionObjectFromProperty,
+  addPropertiesToJSObjectCode,
 };

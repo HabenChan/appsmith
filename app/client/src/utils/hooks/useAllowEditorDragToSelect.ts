@@ -1,19 +1,20 @@
-import type { AppState } from "@appsmith/reducers";
-import {
-  snipingModeSelector,
-  previewModeSelector,
-  getIsAutoLayout,
-} from "selectors/editorSelectors";
+import type { AppState } from "ee/reducers";
+import { snipingModeSelector } from "selectors/editorSelectors";
 import { useSelector } from "react-redux";
 import { getIsAppSettingsPaneWithNavigationTabOpen } from "selectors/appSettingsPaneSelectors";
+import { getLayoutSystemType } from "selectors/layoutSystemSelectors";
+import { LayoutSystemTypes } from "layoutSystems/types";
+import { getWidgetSelectionBlock } from "../../selectors/ui";
+import { selectCombinedPreviewMode } from "selectors/gitModSelectors";
 
 export const useAllowEditorDragToSelect = () => {
   // This state tells us whether a `ResizableComponent` is resizing
   const isResizing = useSelector(
     (state: AppState) => state.ui.widgetDragResize.isResizing,
   );
+  const layoutSystemType = useSelector(getLayoutSystemType);
 
-  const isAutoLayout = useSelector(getIsAutoLayout);
+  const isFixedLayout = layoutSystemType === LayoutSystemTypes.FIXED;
 
   // This state tells us whether a `DraggableComponent` is dragging
   const isDragging = useSelector(
@@ -39,18 +40,21 @@ export const useAllowEditorDragToSelect = () => {
   // True when any widget is dragging or resizing, including this one
   const isResizingOrDragging = !!isResizing || !!isDragging || !!isSelecting;
   const isSnipingMode = useSelector(snipingModeSelector);
-  const isPreviewMode = useSelector(previewModeSelector);
+  const isPreviewMode = useSelector(selectCombinedPreviewMode);
   const isAppSettingsPaneWithNavigationTabOpen = useSelector(
     getIsAppSettingsPaneWithNavigationTabOpen,
   );
 
+  const isWidgetSelectionBlocked = useSelector(getWidgetSelectionBlock);
+
   return (
-    !isAutoLayout &&
+    isFixedLayout &&
     !isAutoCanvasResizing &&
     !isResizingOrDragging &&
     !isDraggingDisabled &&
     !isSnipingMode &&
     !isPreviewMode &&
-    !isAppSettingsPaneWithNavigationTabOpen
+    !isAppSettingsPaneWithNavigationTabOpen &&
+    !isWidgetSelectionBlocked
   );
 };

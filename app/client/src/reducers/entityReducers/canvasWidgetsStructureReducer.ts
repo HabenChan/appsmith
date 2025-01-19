@@ -1,14 +1,13 @@
 import { createImmerReducer } from "utils/ReducerUtils";
-import type {
-  UpdateCanvasPayload,
-  ReduxAction,
-} from "@appsmith/constants/ReduxActionConstants";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import type { WidgetProps } from "widgets/BaseWidget";
 import type { WidgetType } from "constants/WidgetConstants";
 import { MAIN_CONTAINER_WIDGET_ID } from "constants/WidgetConstants";
 import { CANVAS_DEFAULT_MIN_ROWS } from "constants/AppConstants";
 import { denormalize } from "utils/canvasStructureHelpers";
+import { klona } from "klona";
+import type { UpdateCanvasPayload } from "actions/pageActions";
 
 export type FlattenedWidgetProps<orType = never> =
   | (WidgetProps & {
@@ -16,14 +15,14 @@ export type FlattenedWidgetProps<orType = never> =
     })
   | orType;
 
-export type CanvasWidgetsStructureReduxState = {
+export interface CanvasWidgetsStructureReduxState {
   children?: CanvasWidgetsStructureReduxState[];
   type: WidgetType;
   widgetId: string;
   parentId?: string;
   bottomRow: number;
   topRow: number;
-};
+}
 
 const initialState: CanvasWidgetsStructureReduxState = {
   type: "CANVAS_WIDGET",
@@ -44,6 +43,9 @@ const canvasWidgetsStructureReducer = createImmerReducer(initialState, {
     action: ReduxAction<UpdateCanvasPayload>,
   ) => {
     return denormalize("0", action.payload.widgets);
+  },
+  [ReduxActionTypes.RESET_EDITOR_REQUEST]: () => {
+    return klona(initialState);
   },
 });
 

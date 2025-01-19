@@ -1,10 +1,9 @@
 package com.appsmith.external.models;
 
 import com.appsmith.external.annotations.encryption.Encrypted;
+import com.appsmith.external.views.FromRequest;
 import com.appsmith.external.views.Views;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonView;
-
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -27,9 +26,7 @@ public class UploadedFile implements AppsmithDomain {
     @JsonView(Views.Public.class)
     String name;
 
-    @Encrypted
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    @JsonView(Views.Public.class)
+    @Encrypted @JsonView({Views.Internal.class, FromRequest.class})
     String base64Content;
 
     @JsonView(Views.Internal.class)
@@ -44,5 +41,4 @@ public class UploadedFile implements AppsmithDomain {
 
         return Base64.getDecoder().decode(base64Content);
     }
-
 }

@@ -6,9 +6,9 @@ import { Provider } from "react-redux";
 import type { EditorContextType } from "./EditorContextProvider";
 import EditorContextProvider, { EditorContext } from "./EditorContextProvider";
 
-type TestChildProps = {
+interface TestChildProps {
   editorContext: EditorContextType;
-};
+}
 
 const TestChild = (props: TestChildProps) => {
   return <div>{Object.keys(props)}</div>;
@@ -43,6 +43,8 @@ describe("EditorContextProvider", () => {
       "updateWidgetDimension",
       "checkContainersForAutoHeight",
       "updatePositionsOnTabChange",
+      "updateOneClickBindingOptionsVisibility",
+      "unfocusWidget",
     ].sort();
 
     const testRenderer = TestRenderer.create(
@@ -54,7 +56,10 @@ describe("EditorContextProvider", () => {
     );
     const testInstance = testRenderer.root;
     const result = (
-      Object.keys(testInstance.findByType(TestChild).props.editorContext) || []
+      Object.keys(
+        // eslint-disable-next-line testing-library/await-async-queries
+        testInstance.findByType(TestChild).props.editorContext,
+      ) || []
     ).sort();
 
     expect(result).toEqual(expectedMethods);
@@ -78,6 +83,7 @@ describe("EditorContextProvider", () => {
       "updateWidgetDimension",
       "checkContainersForAutoHeight",
       "updatePositionsOnTabChange",
+      "unfocusWidget",
     ].sort();
 
     const testRenderer = TestRenderer.create(
@@ -89,7 +95,10 @@ describe("EditorContextProvider", () => {
     );
     const testInstance = testRenderer.root;
     const result = (
-      Object.keys(testInstance.findByType(TestChild).props.editorContext) || []
+      Object.keys(
+        // eslint-disable-next-line testing-library/await-async-queries
+        testInstance.findByType(TestChild).props.editorContext,
+      ) || []
     ).sort();
 
     expect(result).toEqual(expectedMethods);

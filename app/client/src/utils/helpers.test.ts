@@ -1,6 +1,7 @@
 import { RenderModes } from "constants/WidgetConstants";
 import { ValidationTypes } from "constants/WidgetValidation";
 import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
+import type { CanvasWidgetsReduxState } from "../reducers/entityReducers/canvasWidgetsReducer";
 import { AutocompleteDataType } from "./autocomplete/AutocompleteDataType";
 import {
   flattenObject,
@@ -13,7 +14,7 @@ import {
   pushToArray,
   concatWithArray,
 } from "./helpers";
-import WidgetFactory from "./WidgetFactory";
+import WidgetFactory from "../WidgetProvider/factory";
 import * as Sentry from "@sentry/react";
 import { Colors } from "constants/Colors";
 
@@ -244,6 +245,7 @@ describe("#captureInvalidDynamicBindingPath", () => {
       WidgetFactory,
       "getWidgetPropertyPaneConfig",
     );
+
     getPropertyConfig.mockReturnValueOnce([
       {
         sectionName: "General",
@@ -368,6 +370,7 @@ describe("#captureInvalidDynamicBindingPath", () => {
       },
     ]);
     const newDsl = captureInvalidDynamicBindingPath(baseDSL);
+
     expect(baseDSL).toEqual(newDsl);
   });
 
@@ -413,6 +416,7 @@ describe("#captureInvalidDynamicBindingPath", () => {
       WidgetFactory,
       "getWidgetPropertyPaneConfig",
     );
+
     getPropertyConfig.mockReturnValueOnce([
       {
         sectionName: "General",
@@ -550,20 +554,30 @@ describe("#captureInvalidDynamicBindingPath", () => {
 
 describe("#extractColorsFromString", () => {
   it("Check if the extractColorsFromString returns rgb, rgb, hex color strings", () => {
-    const borderWithHex = `2px solid ${Colors.GREEN}`;
-    const borderWithRgb = "2px solid rgb(0,0,0)";
-    const borderWithRgba = `2px solid ${Colors.BOX_SHADOW_DEFAULT_VARIANT1}`;
+    const widgets = {
+      0: { color: `${Colors.GREEN}` },
+      1: { color: "rgb(0,0,0)" },
+      2: { color: `${Colors.BOX_SHADOW_DEFAULT_VARIANT1}` },
+      3: { color: `LightGoldenrodYellow` },
+      4: { color: `lch(54.292% 106.839 40.853)` },
+    } as unknown as CanvasWidgetsReduxState;
 
     //Check Hex value
-    expect(extractColorsFromString(borderWithHex)[0]).toEqual("#03b365");
-
-    //Check rgba value
-    expect(extractColorsFromString(borderWithRgba)[0]).toEqual(
-      "rgba(0, 0, 0, 0.25)",
-    );
+    expect(extractColorsFromString(widgets)[0]).toEqual("#03B365");
 
     //Check rgb
-    expect(extractColorsFromString(borderWithRgb)[0]).toEqual("rgb(0,0,0)");
+    expect(extractColorsFromString(widgets)[1]).toEqual("rgb(0,0,0)");
+
+    //Check rgba value
+    expect(extractColorsFromString(widgets)[2]).toEqual("rgba(0, 0, 0, 0.25)");
+
+    //Check name value
+    expect(extractColorsFromString(widgets)[3]).toEqual("LightGoldenrodYellow");
+
+    //Check lch value
+    expect(extractColorsFromString(widgets)[4]).toEqual(
+      "lch(54.292% 106.839 40.853)",
+    );
   });
 });
 
@@ -585,9 +599,11 @@ describe("isNameValid()", () => {
     // Some window object methods and properties names should be valid entity names since evaluation is done
     // in the worker thread, and some of the window methods and properties are not available there.
     const validEntityNames = ["history", "parent", "screen"];
+
     for (const invalidName of invalidEntityNames) {
       expect(isNameValid(invalidName, {})).toBe(false);
     }
+
     for (const validName of validEntityNames) {
       expect(isNameValid(validName, {})).toBe(true);
     }
@@ -599,6 +615,7 @@ describe("pushToArray", () => {
     const item = "something";
     const expected = ["something"];
     const result = pushToArray(item);
+
     expect(result).toStrictEqual(expected);
   });
   it("adds to an existing array", () => {
@@ -606,6 +623,7 @@ describe("pushToArray", () => {
     const arr1 = ["another"];
     const expected = ["another", "something"];
     const result = pushToArray(item, arr1);
+
     expect(result).toStrictEqual(expected);
   });
   it("adds to an existing array and make unique", () => {
@@ -613,6 +631,7 @@ describe("pushToArray", () => {
     const arr1 = ["another", "another"];
     const expected = ["another", "something"];
     const result = pushToArray(item, arr1, true);
+
     expect(result).toStrictEqual(expected);
   });
 });
@@ -622,6 +641,7 @@ describe("concatWithArray", () => {
     const items = ["something"];
     const expected = ["something"];
     const result = concatWithArray(items);
+
     expect(result).toStrictEqual(expected);
   });
   it("adds to an existing array", () => {
@@ -629,6 +649,7 @@ describe("concatWithArray", () => {
     const arr1 = ["another"];
     const expected = ["another", "something"];
     const result = concatWithArray(items, arr1);
+
     expect(result).toStrictEqual(expected);
   });
   it("adds to an existing array and make unique", () => {
@@ -636,6 +657,7 @@ describe("concatWithArray", () => {
     const arr1 = ["another", "another"];
     const expected = ["another", "something"];
     const result = concatWithArray(items, arr1, true);
+
     expect(result).toStrictEqual(expected);
   });
 });

@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/extend-expect";
 import { Provider } from "react-redux";
 import { ThemeProvider } from "styled-components";
@@ -7,8 +7,14 @@ import { lightTheme } from "selectors/themeSelectors";
 import PrimaryCTA from "./PrimaryCTA";
 import configureStore from "redux-mock-store";
 
+jest.mock("pages/Editor/gitSync/hooks/modHooks", () => ({
+  ...jest.requireActual("pages/Editor/gitSync/hooks/modHooks"),
+  useGitProtectedMode: jest.fn(() => false),
+}));
+
 jest.mock("react-router", () => ({
   ...jest.requireActual("react-router"),
+  useHistory: () => ({ push: jest.fn() }),
   useLocation: () => ({
     pathname: "/app/test-3/page1-63cccd44463c535b9fbc297c",
     search: "?fork=true",
@@ -16,19 +22,24 @@ jest.mock("react-router", () => ({
 }));
 
 const mockDispatch = jest.fn();
+
 jest.mock("react-redux", () => ({
   ...jest.requireActual("react-redux"),
   useDispatch: () => mockDispatch,
 }));
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const initialState: any = {
   entities: {
     pageList: {
       applicationId: 1,
-      currentPageId: 1,
+      currentPageId: "0123456789abcdef00000000",
+      currentBasePageId: "0123456789abcdef00000123",
       pages: [
         {
-          pageId: 1,
+          pageId: "0123456789abcdef00000000",
+          basePageId: "0123456789abcdef00000123",
           slug: "pageSlug",
         },
       ],
@@ -42,6 +53,9 @@ export const initialState: any = {
     },
   },
   ui: {
+    gitSync: {
+      protectedBranches: [],
+    },
     editor: {
       isPreviewMode: false,
     },
@@ -63,6 +77,7 @@ export const initialState: any = {
     applications: {
       currentApplication: {
         id: "605c435a91dea93f0eaf91b8",
+        baseId: "605c435a91dea93f0eaf9123",
         name: "My Application",
         slug: "my-application",
         workspaceId: "",
@@ -73,7 +88,15 @@ export const initialState: any = {
         forkingEnabled: true,
         isPublic: true,
       },
-      userWorkspaces: [],
+      workspaces: [],
+    },
+    workspaces: {
+      list: [],
+    },
+    selectedWorkspace: {
+      loadingStates: {
+        isFetchingApplications: false,
+      },
     },
     theme: {
       theme: {
@@ -103,6 +126,7 @@ export function getStore(action?: string) {
       };
       break;
   }
+
   return mockStore(state);
 }
 
@@ -114,6 +138,7 @@ export const fetchApplicationMockResponse = {
   data: {
     application: {
       id: "605c435a91dea93f0eaf91b8",
+      baseId: "605c435a91dea93f0eaf9123",
       name: "My Application",
       slug: "my-application",
       workspaceId: "",
@@ -127,12 +152,14 @@ export const fetchApplicationMockResponse = {
     pages: [
       {
         id: "605c435a91dea93f0eaf91ba",
+        baseId: "605c435a91dea93f0eaf9123",
         name: "Page1",
         isDefault: true,
         slug: "page-1",
       },
       {
         id: "605c435a91dea93f0eaf91bc",
+        baseId: "605c435a91dea93f0eaf9123",
         name: "Page2",
         isDefault: false,
         slug: "page-2",
@@ -143,8 +170,6 @@ export const fetchApplicationMockResponse = {
 };
 
 describe("App viewer fork button", () => {
-  afterEach(cleanup);
-
   it("Fork modal trigger should not be displayed until user details are fetched", () => {
     render(
       <Provider store={getStore()}>
@@ -152,7 +177,7 @@ describe("App viewer fork button", () => {
           <PrimaryCTA
             navColorStyle="solid"
             primaryColor="red"
-            url={"/app/test-3/page1-63cccd44463c535b9fbc297c/edit"}
+            url={"/app/test-3/page1-605c435a91dea93f0eaf9123/edit"}
           />
         </ThemeProvider>
       </Provider>,
@@ -168,7 +193,7 @@ describe("App viewer fork button", () => {
           <PrimaryCTA
             navColorStyle="solid"
             primaryColor="red"
-            url={"/app/test-3/page1-63cccd44463c535b9fbc297c/edit"}
+            url={"/app/test-3/page1-605c435a91dea93f0eaf9123/edit"}
           />
         </ThemeProvider>
       </Provider>,

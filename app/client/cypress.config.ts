@@ -1,14 +1,15 @@
 import { defineConfig } from "cypress";
+import { addMatchImageSnapshotPlugin } from "@simonsmith/cypress-image-snapshot/plugin";
 
 export default defineConfig({
   watchForFileChanges: false,
   defaultCommandTimeout: 30000,
-  requestTimeout: 21000,
-  responseTimeout: 30000,
-  pageLoadTimeout: 30000,
-  videoUploadOnPasses: false,
-  videoCompression: false,
-  numTestsKeptInMemory: 10,
+  requestTimeout: 60000,
+  responseTimeout: 60000,
+  pageLoadTimeout: 60000,
+  video: true,
+  numTestsKeptInMemory: 5,
+  experimentalMemoryManagement: true,
   reporterOptions: {
     reportDir: "results",
     overwrite: false,
@@ -17,9 +18,10 @@ export default defineConfig({
   },
   chromeWebSecurity: false,
   viewportHeight: 1200,
-  viewportWidth: 1600,
+  viewportWidth: 1400,
+  scrollBehavior: "center",
   retries: {
-    runMode: 1,
+    runMode: 0,
     openMode: 0,
   },
   e2e: {
@@ -27,10 +29,17 @@ export default defineConfig({
     env: {
       USERNAME: "xxxx",
       PASSWORD: "xxx",
+      grepFilterSpecs: true,
+      grepOmitFiltered: true,
     },
     setupNodeEvents(on, config) {
-      return require("./cypress/plugins/index.js")(on, config);
+      addMatchImageSnapshotPlugin(on);
+      require("@cypress/grep/src/plugin")(config);
+      require("./cypress/plugins/index.js")(on, config);
+      return config;
     },
     specPattern: "cypress/e2e/**/*.{js,ts}",
+    testIsolation: false,
+    excludeSpecPattern: "cypress/e2e/**/spec_utility.ts",
   },
 });

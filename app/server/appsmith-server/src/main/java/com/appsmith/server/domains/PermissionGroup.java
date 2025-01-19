@@ -6,12 +6,14 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.experimental.FieldNameConstants;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.HashSet;
 import java.util.Set;
 
 @Document
+@FieldNameConstants
 @NoArgsConstructor
 @Getter
 @Setter
@@ -23,8 +25,8 @@ public class PermissionGroup extends BaseDomain {
 
     String description;
 
-    //TODO: refactor this to defaultDocumentId, as we can use this to store associated document id for 
-    //which we are auto creating this permission group.
+    // TODO: refactor this to defaultDocumentId, as we can use this to store associated document id for
+    // which we are auto creating this permission group.
     @Deprecated
     String defaultWorkspaceId;
 
@@ -37,4 +39,6 @@ public class PermissionGroup extends BaseDomain {
     Set<String> assignedToUserIds = new HashSet<>();
 
     Set<String> assignedToGroupIds = new HashSet<>();
+
+    public static class Fields extends BaseDomain.Fields {}
 }

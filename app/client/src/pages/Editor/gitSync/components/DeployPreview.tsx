@@ -3,22 +3,24 @@ import React from "react";
 import styled from "styled-components";
 import { useSelector } from "react-redux";
 import {
-  getCurrentPageId,
   getApplicationLastDeployedAt,
+  getCurrentBasePageId,
 } from "selectors/editorSelectors";
 import {
   createMessage,
   LATEST_DP_SUBTITLE,
   LATEST_DP_TITLE,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import SuccessTick from "pages/common/SuccessTick";
 import { howMuchTimeBeforeText } from "utils/helpers";
-import AnalyticsUtil from "utils/AnalyticsUtil";
-import { viewerURL } from "RouteBuilder";
-import { Link, Text } from "design-system";
-import { importSvg } from "design-system-old";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { viewerURL } from "ee/RouteBuilder";
+import { Link, Text } from "@appsmith/ads";
+import { importSvg } from "@appsmith/ads-old";
 
-const CloudyIcon = importSvg(() => import("assets/icons/ads/cloudy-line.svg"));
+const CloudyIcon = importSvg(
+  async () => import("assets/icons/ads/cloudy-line.svg"),
+);
 
 const Container = styled.div`
   display: flex;
@@ -32,17 +34,17 @@ const Container = styled.div`
 `;
 
 export default function DeployPreview(props: { showSuccess: boolean }) {
-  const pageId = useSelector(getCurrentPageId) as string;
+  const basePageId = useSelector(getCurrentBasePageId);
   const lastDeployedAt = useSelector(getApplicationLastDeployedAt);
 
-  const showDeployPreview = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const showDeployPreview = () => {
     AnalyticsUtil.logEvent("GS_LAST_DEPLOYED_PREVIEW_LINK_CLICK", {
       source: "GIT_DEPLOY_MODAL",
     });
     const path = viewerURL({
-      pageId,
+      basePageId,
     });
+
     window.open(path, "_blank");
   };
 
@@ -54,6 +56,7 @@ export default function DeployPreview(props: { showSuccess: boolean }) {
         },
       )} ago`
     : "";
+
   return lastDeployedAt ? (
     <Container className="t--git-deploy-preview">
       <div>

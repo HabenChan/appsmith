@@ -1,5 +1,5 @@
 import React from "react";
-import styled, { css } from "styled-components";
+import styled from "styled-components";
 import type { Alignment } from "@blueprintjs/core";
 
 import { Classes } from "@blueprintjs/core";
@@ -19,8 +19,8 @@ import LabelWithTooltip, {
   labelLayoutStyles,
   LABEL_CONTAINER_CLASS,
 } from "widgets/components/LabelWithTooltip";
-import type { ThemeProp } from "widgets/constants";
-import { AlignWidgetTypes } from "widgets/constants";
+import type { ThemeProp } from "WidgetProvider/constants";
+import { AlignWidgetTypes } from "WidgetProvider/constants";
 
 export interface InputContainerProps {
   inline?: boolean;
@@ -28,7 +28,7 @@ export interface InputContainerProps {
   valid?: boolean;
   optionAlignment?: string;
   isDynamicHeightEnabled?: boolean;
-  isAutoLayout: boolean;
+  minWidth?: number;
 }
 
 const InputContainer = styled.div<ThemeProp & InputContainerProps>`
@@ -42,20 +42,17 @@ const InputContainer = styled.div<ThemeProp & InputContainerProps>`
     !!optionAlignment
       ? optionAlignment
       : optionCount > 1
-      ? `space-between`
-      : inline
-      ? `flex-start`
-      : `center`};
+        ? `space-between`
+        : inline
+          ? `flex-start`
+          : `center`};
   width: 100%;
   flex-grow: 1;
   height: 100%;
   border: 1px solid transparent;
 
-  ${({ isAutoLayout }) =>
-    isAutoLayout &&
-    css`
-      min-width: 232px;
-    `}
+  ${({ minWidth }) => `
+    ${minWidth ? `min-width: ${minWidth}px;` : ""}`};
 
   .${Classes.CONTROL} {
     display: flex;
@@ -103,6 +100,7 @@ function SelectAll(props: SelectAllProps) {
     inline,
     onChange,
   } = props;
+
   return (
     <StyledCheckbox
       accentColor={accentColor}
@@ -152,14 +150,14 @@ export interface CheckboxGroupComponentProps extends ComponentProps {
   labelTooltip?: string;
   accentColor: string;
   borderRadius: string;
-  isAutoLayout: boolean;
+  minWidth?: number;
 }
+
 function CheckboxGroupComponent(props: CheckboxGroupComponentProps) {
   const {
     accentColor,
     borderRadius,
     compactMode,
-    isAutoLayout,
     isDisabled,
     isDynamicHeightEnabled,
     isInline,
@@ -187,10 +185,11 @@ function CheckboxGroupComponent(props: CheckboxGroupComponentProps) {
   const selectAllState = selectAllChecked
     ? SelectAllStates.CHECKED
     : selectAllIndeterminate
-    ? SelectAllStates.INDETERMINATE
-    : SelectAllStates.UNCHECKED;
+      ? SelectAllStates.INDETERMINATE
+      : SelectAllStates.UNCHECKED;
 
   let optionCount = (options || []).length;
+
   if (isSelectAll) {
     optionCount += 1;
   }
@@ -222,8 +221,8 @@ function CheckboxGroupComponent(props: CheckboxGroupComponentProps) {
       <InputContainer
         data-testid="checkbox-group-container"
         inline={isInline}
-        isAutoLayout={isAutoLayout}
         isDynamicHeightEnabled={isDynamicHeightEnabled}
+        minWidth={props.minWidth}
         optionAlignment={optionAlignment}
         optionCount={options.length}
       >

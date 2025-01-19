@@ -4,6 +4,7 @@ import com.appsmith.external.exceptions.pluginExceptions.AppsmithPluginException
 import com.appsmith.external.helpers.PluginUtils;
 import com.appsmith.external.models.ActionConfiguration;
 import com.appsmith.external.models.DatasourceStructure;
+import com.appsmith.util.SerializationUtils;
 import com.external.plugins.exceptions.MongoPluginError;
 import com.external.plugins.exceptions.MongoPluginErrorMessages;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,7 +33,7 @@ import static com.external.plugins.constants.FieldName.COLLECTION;
 public abstract class MongoCommand {
     String collection;
     List<String> fieldNamesWithNoConfiguration;
-    protected static final ObjectMapper objectMapper = new ObjectMapper();
+    protected static final ObjectMapper objectMapper = SerializationUtils.getObjectMapperWithSourceInLocationEnabled();
 
     public MongoCommand(ActionConfiguration actionConfiguration) {
 
@@ -54,14 +55,20 @@ public abstract class MongoCommand {
     }
 
     public Document parseCommand() {
-        throw new AppsmithPluginException(MongoPluginError.UNSUPPORTED_OPERATION, MongoPluginErrorMessages.UNSUPPORTED_OPERATION_PARSE_COMMAND_ERROR_MSG);
+        throw new AppsmithPluginException(
+                MongoPluginError.UNSUPPORTED_OPERATION,
+                MongoPluginErrorMessages.UNSUPPORTED_OPERATION_PARSE_COMMAND_ERROR_MSG);
     }
 
     public List<DatasourceStructure.Template> generateTemplate(Map<String, Object> templateConfiguration) {
-        throw new AppsmithPluginException(MongoPluginError.UNSUPPORTED_OPERATION, MongoPluginErrorMessages.UNSUPPORTED_OPERATION_GENERATE_TEMPLATE_ERROR_MSG);
+        throw new AppsmithPluginException(
+                MongoPluginError.UNSUPPORTED_OPERATION,
+                MongoPluginErrorMessages.UNSUPPORTED_OPERATION_GENERATE_TEMPLATE_ERROR_MSG);
     }
 
     public String getRawQuery() {
-        throw new AppsmithPluginException(MongoPluginError.UNSUPPORTED_OPERATION, MongoPluginErrorMessages.UNSUPPORTED_OPERATION_GET_RAW_QUERY_ERROR_MSG);
+        throw new AppsmithPluginException(
+                MongoPluginError.UNSUPPORTED_OPERATION,
+                MongoPluginErrorMessages.UNSUPPORTED_OPERATION_GET_RAW_QUERY_ERROR_MSG);
     }
 }

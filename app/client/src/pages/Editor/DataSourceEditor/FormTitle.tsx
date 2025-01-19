@@ -1,12 +1,10 @@
 import styled from "styled-components";
 import React, { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 import EditableText, {
   EditInteractionKind,
 } from "components/editorComponents/EditableText";
-
-import type { AppState } from "@appsmith/reducers";
-import { getDatasource, getDatasources } from "selectors/entitiesSelector";
+import type { AppState } from "ee/reducers";
+import { getDatasource, getDatasources } from "ee/selectors/entitiesSelector";
 import { useSelector, useDispatch } from "react-redux";
 import type { Datasource } from "entities/Datasource";
 import { isNameValid } from "utils/helpers";
@@ -14,7 +12,6 @@ import {
   saveDatasourceName,
   updateDatasourceName,
 } from "actions/datasourceActions";
-import { Spinner } from "@blueprintjs/core";
 import { TEMP_DATASOURCE_ID } from "constants/Datasource";
 
 const Wrapper = styled.div`
@@ -28,14 +25,14 @@ const Wrapper = styled.div`
 interface ComponentProps {
   focusOnMount: boolean;
   disabled?: boolean;
+  datasourceId: string;
 }
 
 type FormTitleProps = ComponentProps;
 
 function FormTitle(props: FormTitleProps) {
-  const params = useParams<{ datasourceId: string }>();
   const currentDatasource: Datasource | undefined = useSelector(
-    (state: AppState) => getDatasource(state, params.datasourceId),
+    (state: AppState) => getDatasource(state, props.datasourceId),
   );
   const datasources: Datasource[] = useSelector(getDatasources);
   const [forceUpdate, setForceUpdate] = useState(false);
@@ -54,7 +51,10 @@ function FormTitle(props: FormTitleProps) {
 
   const hasNameConflict = React.useCallback(
     (name: string) => {
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const datasourcesNames: Record<string, any> = {};
+
       datasources
         // in case of REST API and Authenticated GraphQL API, when user clicks on save as datasource
         // we first need to update the action and then redirect to action page,
@@ -67,6 +67,8 @@ function FormTitle(props: FormTitleProps) {
             !(
               datasource.name === currentDatasource?.name &&
               ["REST API", "Authenticated GraphQL API"].includes(
+                // TODO: Fix this the next time the file is edited
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (datasource as any).pluginName,
               ) &&
               datasource.pluginId === currentDatasource?.pluginId
@@ -88,6 +90,7 @@ function FormTitle(props: FormTitleProps) {
       } else if (hasNameConflict(name)) {
         return `${name} is already being used or is a restricted keyword.`;
       }
+
       return false;
     },
     [hasNameConflict],
@@ -97,6 +100,7 @@ function FormTitle(props: FormTitleProps) {
     (name: string) => {
       // Check if the datasource name equals "Untitled datasource ABC" if no , use the name passed.
       const datsourceName = name || "Untitled datasource ABC";
+
       if (
         !isInvalidDatasourceName(name) &&
         currentDatasource &&
@@ -150,7 +154,6 @@ function FormTitle(props: FormTitleProps) {
         underline
         updating={saveStatus.isSaving}
       />
-      {saveStatus.isSaving && <Spinner size={16} />}
     </Wrapper>
   );
 }

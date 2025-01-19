@@ -23,6 +23,8 @@ import {
   ROOT_SCHEMA_KEY,
 } from "widgets/JSONFormWidget/constants";
 import LazyCodeEditor from "components/editorComponents/LazyCodeEditor";
+import { bindingHintHelper } from "components/editorComponents/CodeEditor/hintHelpers";
+import { slashCommandHintHelper } from "components/editorComponents/CodeEditor/commandsHelper";
 
 const PromptMessage = styled.span`
   line-height: 17px;
@@ -44,7 +46,11 @@ const CurlyBraces = styled.span`
 `;
 
 // Auxiliary function for processArray, which returns the value for an object field
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function processObject(schema: Schema, defaultValue?: any) {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const obj: Record<string, any> = {};
 
   Object.values(schema).forEach((schemaItem) => {
@@ -58,6 +64,8 @@ function processObject(schema: Schema, defaultValue?: any) {
 }
 
 // Auxiliary function for processArray, which returns the value for an array field
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function processArray(schema: Schema, defaultValue?: any): any[] {
   if (schema[ARRAY_ITEM_KEY]) {
     return [
@@ -96,6 +104,8 @@ function processArray(schema: Schema, defaultValue?: any): any[] {
  */
 export function processSchemaItemAutocomplete(
   schemaItem: SchemaItem,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   defaultValue?: any,
 ) {
   if (schemaItem.dataType === DataType.OBJECT) {
@@ -113,10 +123,14 @@ export function InputText(props: {
   label: string;
   value: string;
   onChange: (event: React.ChangeEvent<HTMLTextAreaElement> | string) => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluatedValue?: any;
   expected?: CodeEditorExpected;
   placeholder?: string;
   dataTreePath?: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   additionalDynamicData: Record<string, Record<string, any>>;
   theme: EditorTheme;
 }) {
@@ -130,6 +144,7 @@ export function InputText(props: {
     theme,
     value,
   } = props;
+
   return (
     <StyledDynamicInput>
       <LazyCodeEditor
@@ -138,12 +153,14 @@ export function InputText(props: {
         dataTreePath={dataTreePath}
         evaluatedValue={evaluatedValue}
         expected={expected}
+        hinting={[bindingHintHelper, slashCommandHintHelper]}
         input={{
           value: value,
           onChange: onChange,
         }}
         mode={EditorModes.TEXT_WITH_BINDING}
         placeholder={placeholder}
+        positionCursorInsideBinding
         promptMessage={
           <PromptMessage>
             Access the current form using{" "}
@@ -173,11 +190,13 @@ export const stringToJS = (string: string): string => {
       }
     })
     .join(" + ");
+
   return js;
 };
 
 export const JSToString = (js: string): string => {
   const segments = js.split(" + ");
+
   return segments
     .map((segment) => {
       if (segment.charAt(0) === "`") {
@@ -267,6 +286,7 @@ class JSONFormComputeControl extends BaseControl<JSONFormComputeControlProps> {
     const value = (() => {
       if (propertyValue && isDynamicValue(propertyValue)) {
         const { widgetName } = this.props.widgetProperties;
+
         return JSONFormComputeControl.getInputComputedValue(
           propertyValue,
           widgetName,

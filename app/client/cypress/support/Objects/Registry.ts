@@ -22,9 +22,20 @@ import { ThemeSettings } from "../Pages/AppSettings/ThemeSettings";
 import { EmbedSettings } from "../Pages/AppSettings/EmbedSettings";
 import { Templates } from "../Pages/Templates";
 import { Onboarding } from "../Pages/Onboarding";
+import { AutoLayout } from "../Pages/AutoLayout";
+import { DataManager } from "./DataManager";
+import { AssertHelper } from "../Pages/AssertHelper";
+import { Tabs } from "../Pages/Tabs";
+import { GsheetHelper } from "../Pages/GSheetHelper";
+import { CommunityTemplates } from "../Pages/CommunityTemplates";
+import { AnvilLayout } from "../Pages/Anvil/AnvilLayout";
+import PartialImportExport from "../Pages/PartialImportExport";
+import { WDSWidgets } from "../Pages/WDSWidgets";
+import { AnvilSnapshot } from "../Pages/Anvil/AnvilSnapshot";
 
 export class ObjectsRegistry {
   private static aggregateHelper__: AggregateHelper;
+
   static get AggregateHelper(): AggregateHelper {
     if (ObjectsRegistry.aggregateHelper__ === undefined) {
       ObjectsRegistry.aggregateHelper__ = new AggregateHelper();
@@ -32,7 +43,17 @@ export class ObjectsRegistry {
     return ObjectsRegistry.aggregateHelper__;
   }
 
+  private static assertHelper__: AssertHelper;
+
+  static get AssertHelper(): AssertHelper {
+    if (ObjectsRegistry.assertHelper__ === undefined) {
+      ObjectsRegistry.assertHelper__ = new AssertHelper();
+    }
+    return ObjectsRegistry.assertHelper__;
+  }
+
   private static jsEditor__: JSEditor;
+
   static get JSEditor(): JSEditor {
     if (ObjectsRegistry.jsEditor__ === undefined) {
       ObjectsRegistry.jsEditor__ = new JSEditor();
@@ -41,6 +62,7 @@ export class ObjectsRegistry {
   }
 
   private static commonLocators__: CommonLocators;
+
   static get CommonLocators(): CommonLocators {
     if (ObjectsRegistry.commonLocators__ === undefined) {
       ObjectsRegistry.commonLocators__ = new CommonLocators();
@@ -49,6 +71,7 @@ export class ObjectsRegistry {
   }
 
   private static entityExplorer__: EntityExplorer;
+
   static get EntityExplorer(): EntityExplorer {
     if (ObjectsRegistry.entityExplorer__ === undefined) {
       ObjectsRegistry.entityExplorer__ = new EntityExplorer();
@@ -57,6 +80,7 @@ export class ObjectsRegistry {
   }
 
   private static apiPage__: ApiPage;
+
   static get ApiPage(): ApiPage {
     if (ObjectsRegistry.apiPage__ === undefined) {
       ObjectsRegistry.apiPage__ = new ApiPage();
@@ -65,6 +89,7 @@ export class ObjectsRegistry {
   }
 
   private static adminSettings__: AdminSettings;
+
   static get AdminSettings(): AdminSettings {
     if (ObjectsRegistry.adminSettings__ === undefined) {
       ObjectsRegistry.adminSettings__ = new AdminSettings();
@@ -73,6 +98,7 @@ export class ObjectsRegistry {
   }
 
   private static homePage__: HomePage;
+
   static get HomePage(): HomePage {
     if (ObjectsRegistry.homePage__ === undefined) {
       ObjectsRegistry.homePage__ = new HomePage();
@@ -81,6 +107,7 @@ export class ObjectsRegistry {
   }
 
   private static dataSources__: DataSources;
+
   static get DataSources(): DataSources {
     if (ObjectsRegistry.dataSources__ === undefined) {
       ObjectsRegistry.dataSources__ = new DataSources();
@@ -89,6 +116,7 @@ export class ObjectsRegistry {
   }
 
   private static table__: Table;
+
   static get Table(): Table {
     if (ObjectsRegistry.table__ === undefined) {
       ObjectsRegistry.table__ = new Table();
@@ -96,7 +124,17 @@ export class ObjectsRegistry {
     return ObjectsRegistry.table__;
   }
 
+  private static tabs__: Tabs;
+
+  static get Tabs(): Tabs {
+    if (ObjectsRegistry.tabs__ === undefined) {
+      ObjectsRegistry.tabs__ = new Tabs();
+    }
+    return ObjectsRegistry.tabs__;
+  }
+
   private static propertyPane__: PropertyPane;
+
   static get PropertyPane(): PropertyPane {
     if (ObjectsRegistry.propertyPane__ === undefined) {
       ObjectsRegistry.propertyPane__ = new PropertyPane();
@@ -105,6 +143,7 @@ export class ObjectsRegistry {
   }
 
   private static deployMode__: DeployMode;
+
   static get DeployMode(): DeployMode {
     if (ObjectsRegistry.deployMode__ === undefined) {
       ObjectsRegistry.deployMode__ = new DeployMode();
@@ -113,6 +152,7 @@ export class ObjectsRegistry {
   }
 
   private static gitSync__: GitSync;
+
   static get GitSync(): GitSync {
     if (ObjectsRegistry.gitSync__ === undefined) {
       ObjectsRegistry.gitSync__ = new GitSync();
@@ -121,6 +161,7 @@ export class ObjectsRegistry {
   }
 
   private static fakerHelper__: FakerHelper;
+
   static get FakerHelper(): FakerHelper {
     if (ObjectsRegistry.fakerHelper__ === undefined) {
       ObjectsRegistry.fakerHelper__ = new FakerHelper();
@@ -129,6 +170,7 @@ export class ObjectsRegistry {
   }
 
   private static debuggerHelper__: DebuggerHelper;
+
   static get DebuggerHelper(): DebuggerHelper {
     if (ObjectsRegistry.debuggerHelper__ === undefined) {
       ObjectsRegistry.debuggerHelper__ = new DebuggerHelper();
@@ -137,6 +179,7 @@ export class ObjectsRegistry {
   }
 
   private static appSettings__: AppSettings;
+
   static get AppSettings(): AppSettings {
     if (ObjectsRegistry.appSettings__ === undefined) {
       ObjectsRegistry.appSettings__ = new AppSettings();
@@ -145,6 +188,7 @@ export class ObjectsRegistry {
   }
 
   private static generalSettings__: GeneralSettings;
+
   static get GeneralSettings(): GeneralSettings {
     if (ObjectsRegistry.generalSettings__ === undefined) {
       ObjectsRegistry.generalSettings__ = new GeneralSettings();
@@ -153,6 +197,7 @@ export class ObjectsRegistry {
   }
 
   private static pageSettings__: PageSettings;
+
   static get PageSettings(): PageSettings {
     if (ObjectsRegistry.pageSettings__ === undefined) {
       ObjectsRegistry.pageSettings__ = new PageSettings();
@@ -161,6 +206,7 @@ export class ObjectsRegistry {
   }
 
   private static themeSettings__: ThemeSettings;
+
   static get ThemeSettings(): ThemeSettings {
     if (ObjectsRegistry.themeSettings__ === undefined) {
       ObjectsRegistry.themeSettings__ = new ThemeSettings();
@@ -169,6 +215,7 @@ export class ObjectsRegistry {
   }
 
   private static embedSettings__: EmbedSettings;
+
   static get EmbedSettings(): EmbedSettings {
     if (ObjectsRegistry.embedSettings__ === undefined) {
       ObjectsRegistry.embedSettings__ = new EmbedSettings();
@@ -177,6 +224,7 @@ export class ObjectsRegistry {
   }
 
   private static LibraryInstaller__: LibraryInstaller;
+
   static get LibraryInstaller(): LibraryInstaller {
     if (ObjectsRegistry.LibraryInstaller__ === undefined) {
       ObjectsRegistry.LibraryInstaller__ = new LibraryInstaller();
@@ -185,6 +233,7 @@ export class ObjectsRegistry {
   }
 
   private static peekOverlay__: PeekOverlay;
+
   static get PeekOverlay(): PeekOverlay {
     if (ObjectsRegistry.peekOverlay__ === undefined) {
       ObjectsRegistry.peekOverlay__ = new PeekOverlay();
@@ -193,6 +242,7 @@ export class ObjectsRegistry {
   }
 
   private static inviteModal__: InviteModal;
+
   static get InviteModal(): InviteModal {
     if (ObjectsRegistry.inviteModal__ === undefined) {
       ObjectsRegistry.inviteModal__ = new InviteModal();
@@ -201,6 +251,7 @@ export class ObjectsRegistry {
   }
 
   private static templates__: Templates;
+
   static get Templates(): Templates {
     if (ObjectsRegistry.templates__ === undefined) {
       ObjectsRegistry.templates__ = new Templates();
@@ -209,11 +260,84 @@ export class ObjectsRegistry {
   }
 
   private static onboarding__: Onboarding;
+
   static get Onboarding(): Onboarding {
     if (ObjectsRegistry.onboarding__ === undefined) {
       ObjectsRegistry.onboarding__ = new Onboarding();
     }
     return ObjectsRegistry.onboarding__;
+  }
+
+  private static autoLayout__: AutoLayout;
+
+  static get AutoLayout(): AutoLayout {
+    if (ObjectsRegistry.autoLayout__ === undefined) {
+      ObjectsRegistry.autoLayout__ = new AutoLayout();
+    }
+    return ObjectsRegistry.autoLayout__;
+  }
+
+  private static anvilLayout__: AnvilLayout;
+
+  static get AnvilLayout(): AnvilLayout {
+    if (ObjectsRegistry.anvilLayout__ === undefined) {
+      ObjectsRegistry.anvilLayout__ = new AnvilLayout();
+    }
+    return ObjectsRegistry.anvilLayout__;
+  }
+
+  private static wdsWidgets__: WDSWidgets;
+
+  static get WDSWidgets(): WDSWidgets {
+    if (ObjectsRegistry.wdsWidgets__ === undefined) {
+      ObjectsRegistry.wdsWidgets__ = new WDSWidgets();
+    }
+    return ObjectsRegistry.wdsWidgets__;
+  }
+
+  private static anvilSnapshot__: AnvilSnapshot;
+
+  static get AnvilSnapshot(): AnvilSnapshot {
+    if (ObjectsRegistry.anvilSnapshot__ === undefined) {
+      ObjectsRegistry.anvilSnapshot__ = new AnvilSnapshot();
+    }
+    return ObjectsRegistry.anvilSnapshot__;
+  }
+
+  private static dataManager__: DataManager;
+
+  static get DataManager(): DataManager {
+    if (ObjectsRegistry.dataManager__ === undefined) {
+      ObjectsRegistry.dataManager__ = new DataManager();
+    }
+    return ObjectsRegistry.dataManager__;
+  }
+
+  private static gsheetHelper__: GsheetHelper;
+
+  static get GSheetHelper(): GsheetHelper {
+    if (ObjectsRegistry.gsheetHelper__ === undefined) {
+      ObjectsRegistry.gsheetHelper__ = new GsheetHelper();
+    }
+    return ObjectsRegistry.gsheetHelper__;
+  }
+
+  private static communityTemplates__: CommunityTemplates;
+
+  static get CommunityTemplates(): CommunityTemplates {
+    if (ObjectsRegistry.communityTemplates__ === undefined) {
+      ObjectsRegistry.communityTemplates__ = new CommunityTemplates();
+    }
+    return ObjectsRegistry.communityTemplates__;
+  }
+
+  private static partialImportExport__: PartialImportExport;
+
+  static get PartialImportExport(): PartialImportExport {
+    if (ObjectsRegistry.partialImportExport__ === undefined) {
+      ObjectsRegistry.partialImportExport__ = new PartialImportExport();
+    }
+    return ObjectsRegistry.partialImportExport__;
   }
 }
 
@@ -221,6 +345,7 @@ export const initLocalstorageRegistry = () => {
   cy.window().then((window) => {
     window.localStorage.setItem("ShowCommentsButtonToolTip", "");
     window.localStorage.setItem("updateDismissed", "true");
+    window.localStorage.setItem("NUDGE_SHOWN_SPLIT_PANE", "true");
   });
   localStorage.setItem("inDeployedMode", "false");
 };

@@ -1,4 +1,4 @@
-import type { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 
 export const getGsheetSpreadsheets =
   (id = "") =>
@@ -27,3 +27,14 @@ export const getGsheetsColumns =
 export const getIsFetchingGsheetsColumns = (state: AppState) => {
   return state.entities.datasources.gsheetStructure.isFetchingColumns;
 };
+
+export const getFirstDatasourceId = (state: AppState) => {
+  const { list } = state.entities.datasources;
+
+  if (list.length) {
+    return list[0].id;
+  }
+};
+
+export const getLoadingTokenForDatasourceId = (state: AppState) =>
+  state.entities.datasources.loadingTokenForDatasourceId;

@@ -18,7 +18,7 @@ import type { ColumnTypes } from "../constants";
 import type { TimePrecision } from "widgets/DatePickerWidget2/constants";
 import { generateReactKey } from "widgets/WidgetUtils";
 
-export type TableSizes = {
+export interface TableSizes {
   COLUMN_HEADER_HEIGHT: number;
   TABLE_HEADER_HEIGHT: number;
   ROW_HEIGHT: number;
@@ -27,7 +27,8 @@ export type TableSizes = {
   EDIT_ICON_TOP: number;
   ROW_VIRTUAL_OFFSET: number;
   VERTICAL_EDITOR_PADDING: number;
-};
+  EDITABLE_CELL_HEIGHT: number;
+}
 
 export enum CompactModeTypes {
   SHORT = "SHORT",
@@ -63,6 +64,7 @@ export const TABLE_SIZES: { [key: string]: TableSizes } = {
     VERTICAL_EDITOR_PADDING: 0,
     EDIT_ICON_TOP: 10,
     ROW_VIRTUAL_OFFSET: 3,
+    EDITABLE_CELL_HEIGHT: 30,
   },
   [CompactModeTypes.SHORT]: {
     COLUMN_HEADER_HEIGHT: 32,
@@ -73,6 +75,7 @@ export const TABLE_SIZES: { [key: string]: TableSizes } = {
     VERTICAL_EDITOR_PADDING: 0,
     EDIT_ICON_TOP: 5,
     ROW_VIRTUAL_OFFSET: 1,
+    EDITABLE_CELL_HEIGHT: 20,
   },
   [CompactModeTypes.TALL]: {
     COLUMN_HEADER_HEIGHT: 32,
@@ -83,6 +86,7 @@ export const TABLE_SIZES: { [key: string]: TableSizes } = {
     VERTICAL_EDITOR_PADDING: 16,
     EDIT_ICON_TOP: 21,
     ROW_VIRTUAL_OFFSET: 3,
+    EDITABLE_CELL_HEIGHT: 30,
   },
 };
 
@@ -117,6 +121,8 @@ export interface ReactTableFilter {
   column: string;
   operator: Operator;
   condition: Condition;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any;
 }
 
@@ -179,6 +185,7 @@ export interface SelectCellProperties {
   placeholderText?: string;
   resetFilterTextOnClose?: boolean;
   selectOptions?: DropdownOption[];
+  sortBy?: string;
 }
 
 export interface ImageCellProperties {
@@ -190,6 +197,13 @@ export interface DateCellProperties {
   outputFormat: string;
   shortcuts: boolean;
   timePrecision?: TimePrecision;
+}
+
+export interface CurrencyCellProperties {
+  currencyCode: string;
+  decimals: number;
+  thousandSeparator: boolean;
+  notation: Intl.NumberFormatOptions["notation"];
 }
 
 export interface BaseCellProperties {
@@ -217,6 +231,7 @@ export interface CellLayoutProperties
     SelectCellProperties,
     ImageCellProperties,
     DateCellProperties,
+    CurrencyCellProperties,
     BaseCellProperties {}
 
 export interface TableColumnMetaProps {
@@ -224,6 +239,7 @@ export interface TableColumnMetaProps {
   format?: string;
   inputFormat?: string;
   type: ColumnTypes;
+  decimals?: number;
 }
 
 export enum StickyType {
@@ -241,6 +257,8 @@ export interface TableColumnProps {
   id: string;
   Header: string;
   alias: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   accessor: any;
   width?: number;
   minWidth: number;
@@ -253,6 +271,8 @@ export interface TableColumnProps {
   sticky?: StickyType;
 }
 export interface ReactTableColumnProps extends TableColumnProps {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Cell: (props: any) => JSX.Element;
 }
 
@@ -328,6 +348,14 @@ export interface EditActionColumnProperties {
   placeholderText?: string;
   resetFilterTextOnClose?: boolean;
   selectOptions?: DropdownOption[] | DropdownOption[][];
+  sortBy?: string;
+}
+
+export interface CurrencyColumnProperties {
+  currencyCode?: string;
+  decimals?: number;
+  thousandSeparator?: boolean;
+  notation?: Intl.NumberFormatOptions["notation"];
 }
 
 export interface ColumnProperties
@@ -335,6 +363,7 @@ export interface ColumnProperties
     ColumnStyleProperties,
     DateColumnProperties,
     ColumnEditabilityProperties,
+    CurrencyColumnProperties,
     EditActionColumnProperties {
   allowSameOptionsInNewRow?: boolean;
   newRowSelectOptions?: DropdownOption[];
@@ -367,76 +396,120 @@ export interface ColumnProperties
 }
 
 export const ConditionFunctions: {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: (a: any, b: any) => boolean;
 } = {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   isExactly: (a: any, b: any) => {
     return a.toString() === b.toString();
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   empty: (a: any) => {
     return a === "" || a === undefined || a === null;
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   notEmpty: (a: any) => {
     return a !== "" && a !== undefined && a !== null;
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   notEqualTo: (a: any, b: any) => {
     return a.toString() !== b.toString();
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   isEqualTo: (a: any, b: any) => {
     return a.toString() === b.toString();
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lessThan: (a: any, b: any) => {
     const numericB = Number(b);
     const numericA = Number(a);
+
     return numericA < numericB;
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lessThanEqualTo: (a: any, b: any) => {
     const numericB = Number(b);
     const numericA = Number(a);
+
     return numericA <= numericB;
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   greaterThan: (a: any, b: any) => {
     const numericB = Number(b);
     const numericA = Number(a);
+
     return numericA > numericB;
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   greaterThanEqualTo: (a: any, b: any) => {
     const numericB = Number(b);
     const numericA = Number(a);
+
     return numericA >= numericB;
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contains: (a: any, b: any) => {
     if (isString(a) && isString(b)) {
       return a.includes(b);
     }
+
     return false;
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   doesNotContain: (a: any, b: any) => {
     if (isString(a) && isString(b)) {
       return !a.includes(b);
     }
+
     return false;
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   startsWith: (a: any, b: any) => {
     if (isString(a) && isString(b)) {
       return a.indexOf(b) === 0;
     }
+
     return false;
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   endsWith: (a: any, b: any) => {
     if (isString(a) && isString(b)) {
       return a.length === a.lastIndexOf(b) + b.length;
     }
+
     return false;
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   is: (a: any, b: any) => {
     return moment(a).isSame(moment(b), "d");
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   isNot: (a: any, b: any) => {
     return !moment(a).isSame(moment(b), "d");
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   isAfter: (a: any, b: any) => {
     return !moment(a).isAfter(moment(b), "d");
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   isBefore: (a: any, b: any) => {
     return !moment(a).isBefore(moment(b), "d");
   },
@@ -472,8 +545,8 @@ export enum IMAGE_VERTICAL_ALIGN {
   BOTTOM = "flex-end",
 }
 
-export type BaseCellComponentProps = {
-  compactMode: string;
+export interface BaseCellComponentProps {
+  compactMode: CompactMode;
   isHidden: boolean;
   allowCellWrapping?: boolean;
   horizontalAlignment?: CellAlignment;
@@ -484,7 +557,7 @@ export type BaseCellComponentProps = {
   textColor?: string;
   textSize?: string;
   isCellDisabled?: boolean;
-};
+}
 
 export enum CheckboxState {
   UNCHECKED = 0,
@@ -543,3 +616,15 @@ export const DEFAULT_FILTER = {
   value: "",
   condition: "",
 };
+
+export const itemHeight = 45;
+
+export const noOfItemsToDisplay = 4;
+
+// 12px for the (noOfItemsToDisplay+ 1) item to let the user know there are more items to scroll
+export const extraSpace = 12;
+
+export enum TableSelectColumnOptionKeys {
+  LABEL = "label",
+  VALUE = "value",
+}

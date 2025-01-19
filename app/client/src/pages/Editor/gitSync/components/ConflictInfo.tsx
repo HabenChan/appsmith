@@ -5,8 +5,8 @@ import {
   GIT_CONFLICTING_INFO,
   LEARN_MORE,
   OPEN_REPO,
-} from "@appsmith/constants/messages";
-import { Button, Callout } from "design-system";
+} from "ee/constants/messages";
+import { Button, Callout } from "@appsmith/ads";
 import { Space } from "./StyledComponents";
 
 const Row = styled.div`
@@ -18,10 +18,10 @@ const StyledButton = styled(Button)`
   margin-right: ${(props) => props.theme.spaces[3]}px;
 `;
 
-type Props = {
+interface Props {
   browserSupportedRemoteUrl: string;
   learnMoreLink: string;
-};
+}
 
 const ConflictInfoContainer = styled.div`
   margin-top: ${(props) => props.theme.spaces[7]}px;
@@ -32,6 +32,10 @@ export default function ConflictInfo({
   browserSupportedRemoteUrl,
   learnMoreLink,
 }: Props) {
+  const handleClickOnOpenRepo = () => {
+    window.open(browserSupportedRemoteUrl, "_blank");
+  };
+
   return (
     <ConflictInfoContainer data-testid="t--conflict-info-container">
       <Callout
@@ -49,9 +53,9 @@ export default function ConflictInfo({
       <Space size={3} />
       <Row>
         <StyledButton
-          className="t--commit-button"
-          href={browserSupportedRemoteUrl}
+          data-testid="t--git-repo-button"
           kind="secondary"
+          onClick={handleClickOnOpenRepo}
         >
           {createMessage(OPEN_REPO)}
         </StyledButton>

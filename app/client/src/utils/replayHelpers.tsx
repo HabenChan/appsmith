@@ -13,10 +13,10 @@ import {
   BULK_WIDGET_ADDED,
   WIDGET_REMOVED,
   BULK_WIDGET_REMOVED,
-} from "@appsmith/constants/messages";
-import { toast } from "design-system";
-import { setApiPaneConfigSelectedTabIndex } from "../actions/apiPaneActions";
-import { API_EDITOR_TABS } from "../constants/ApiEditorConstants/CommonApiConstants";
+  ACTION_CONFIGURATION_CHANGED,
+} from "ee/constants/messages";
+import { toast } from "@appsmith/ads";
+import { setPluginActionEditorSelectedTab } from "PluginActionEditor/store";
 import store from "../store";
 
 /**
@@ -44,39 +44,66 @@ export const processUndoRedoToasts = (
       100,
       1000,
     );
+
   showUndoRedoToast(widgetName, isMultipleToasts, isCreated, !isUndo);
 };
+
+// context can be extended.
+export enum UndoRedoToastContext {
+  WIDGET = "widget",
+  QUERY_TEMPLATES = "query-templates",
+}
 
 /**
  * shows a toast for undo/redo
  *
- * @param widgetName
+ * @param actionName
  * @param isMultiple
  * @param isCreated
  * @param shouldUndo
+ * @param toastContext
  * @returns
  */
 export const showUndoRedoToast = (
-  widgetName: string | undefined,
+  actionName: string | undefined,
   isMultiple: boolean,
   isCreated: boolean,
   shouldUndo: boolean,
+  toastContext = UndoRedoToastContext.WIDGET,
 ) => {
-  if (shouldDisallowToast(shouldUndo)) return;
+  if (
+    shouldDisallowToast(shouldUndo) &&
+    toastContext === UndoRedoToastContext.WIDGET
+  )
+    return;
 
-  const actionDescription = getActionDescription(isCreated, isMultiple);
-  const widgetText = createMessage(actionDescription, widgetName);
+  let actionDescription;
+  let actionText = "";
+
+  switch (toastContext) {
+    case UndoRedoToastContext.WIDGET:
+      actionDescription = getWidgetDescription(isCreated, isMultiple);
+      actionText = createMessage(actionDescription, actionName);
+      break;
+    case UndoRedoToastContext.QUERY_TEMPLATES:
+      actionDescription = ACTION_CONFIGURATION_CHANGED;
+      actionText = createMessage(actionDescription, actionName);
+      break;
+    default:
+      actionText = "";
+  }
+
   const action = shouldUndo ? "undo" : "redo";
   const actionKey = shouldUndo
     ? `${modText()} Z`
     : isMacOrIOS()
-    ? `REDO (${modText()} ${shiftText()} Z)`
-    : `REDO (${modText()} Y)`;
+      ? `${modText()} ${shiftText()} Z`
+      : `${modText()} Y`;
 
-  toast.show(`${widgetText} Press ${actionKey} to ${action}`);
+  toast.show(`${actionText}. Press ${actionKey} to ${action}`);
 };
 
-function getActionDescription(isCreated: boolean, isMultiple: boolean) {
+function getWidgetDescription(isCreated: boolean, isMultiple: boolean) {
   if (isCreated) return isMultiple ? BULK_WIDGET_ADDED : WIDGET_ADDED;
   else return isMultiple ? BULK_WIDGET_REMOVED : WIDGET_REMOVED;
 }
@@ -88,6 +115,7 @@ function getActionDescription(isCreated: boolean, isMultiple: boolean) {
  */
 export const scrollWidgetIntoView = (id: string) => {
   const el = document.getElementById(id);
+
   if (el)
     scrollIntoView(el, {
       scrollMode: "if-needed",
@@ -110,6 +138,7 @@ export function shouldDisallowToast(shouldUndo: boolean): boolean {
 
   if (flag === null || !flag) {
     localStorage.setItem(itemKey, "true");
+
     return false;
   }
 
@@ -120,40 +149,50 @@ export function highlightReplayElement(configProperties: Array<string> = []) {
   const elements = configProperties
     .map((configProperty: string) => {
       const replayId = btoa(configProperty);
+
       return document.querySelector(
-        `[data-replay-id="${replayId}"]`,
+        `[data-location-id="${replayId}"]`,
       ) as HTMLElement;
     })
     .filter((el) => Boolean(el));
+
   if (elements.length === 1) {
     elements[0].scrollIntoView({ behavior: "smooth" });
   }
+
   elements.forEach((element) => flashElement(element));
 }
 
 export function switchTab(replayId: string): boolean {
   if (!replayId) return false;
+
   const element = document.querySelector(`[id$="${replayId}"]`) as HTMLElement;
+
   if (!element) return false;
+
   if (element.getAttribute("data-state") == "active") return false;
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  const index = Object.values(API_EDITOR_TABS).indexOf(replayId);
-  store.dispatch(setApiPaneConfigSelectedTabIndex(index));
+
+  store.dispatch(setPluginActionEditorSelectedTab(replayId));
 
   return true;
 }
 
 export function expandAccordion(replayId: string): boolean {
   if (!replayId) return false;
+
   const element = document.querySelector(
-    `[data-replay-id="section-${replayId}"]`,
+    `[data-location-id="section-${replayId}"]`,
   );
+
   if (!element) return false;
+
   const accordion = element.querySelector(
     ".bp3-icon-chevron-down",
   ) as HTMLElement;
+
   if (!accordion) return false;
+
   accordion.click();
+
   return true;
 }

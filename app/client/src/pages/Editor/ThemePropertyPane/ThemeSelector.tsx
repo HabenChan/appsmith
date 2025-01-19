@@ -10,7 +10,7 @@ import { ThemeCard } from "./ThemeCard";
 import { SettingSection } from "./SettingSection";
 import { setAppThemingModeStackAction } from "actions/appThemingActions";
 import styled from "styled-components";
-import { Link } from "design-system";
+import { Link } from "@appsmith/ads";
 
 const Title = styled.h3`
   color: var(--ads-v2-color-fg-emphasis);
@@ -32,14 +32,17 @@ function ThemeSelector() {
   /**
    * stores user saved themes
    */
-  const userSavedThemes = themes.filter(
-    (theme) => theme.isSystemTheme === false,
-  );
+  const userSavedThemes = themes
+    .filter((theme) => theme.isSystemTheme === false)
+    .filter((theme) => !theme.config.isDeprecated);
 
   /**
    * stores default system themes
    */
-  const systemThemes = themes.filter((theme) => theme.isSystemTheme === true);
+  const systemThemes = themes
+    .filter((theme) => theme.isSystemTheme === true)
+    .filter((theme) => !theme.config.isDeprecated)
+    .sort((a, b) => a.config.order - b.config.order);
 
   return (
     <div className="relative">
@@ -49,14 +52,13 @@ function ThemeSelector() {
           kind="secondary"
           onClick={onClickBack}
           startIcon="back-control"
-          to="#"
         >
           Back
         </Link>
         <SettingSection
           className="px-4 py-3 border-t border-b"
           isDefaultOpen={false}
-          title="Applied Theme"
+          title="Applied theme"
         >
           <ThemeCard theme={selectedTheme} />
         </SettingSection>
@@ -74,7 +76,10 @@ function ThemeSelector() {
           ))}
         </section>
       )}
-      <section className="relative p-4 space-y-3">
+      <section
+        className="relative p-4 space-y-3"
+        data-testid="t--featured-themes"
+      >
         <Title className="text-sm font-medium">Featured themes</Title>
         {systemThemes.map((theme) => (
           <ThemeCard

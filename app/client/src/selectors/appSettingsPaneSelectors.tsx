@@ -1,14 +1,9 @@
 import { AppSettingsTabs } from "pages/Editor/AppSettingsPane/AppSettings";
-import type { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import type { AppSettingsPaneReduxState } from "reducers/uiReducers/appSettingsPaneReducer";
 import { createSelector } from "reselect";
 
 export const getAppSettingsPane = (state: AppState) => state.ui.appSettingsPane;
-
-export const getIsAppSettingsPaneOpen = createSelector(
-  getAppSettingsPane,
-  (appSettingsPane: AppSettingsPaneReduxState) => appSettingsPane.isOpen,
-);
 
 export const getAppSettingsPaneContext = createSelector(
   getAppSettingsPane,

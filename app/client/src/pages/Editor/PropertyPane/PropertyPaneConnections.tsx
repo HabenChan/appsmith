@@ -1,12 +1,9 @@
 import React, { memo, useMemo, useCallback, useEffect, useRef } from "react";
 import styled from "styled-components";
-import type { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import { useDispatch, useSelector } from "react-redux";
 import { getDataTree } from "selectors/dataTreeSelectors";
-import {
-  isAction,
-  isWidget,
-} from "@appsmith/workers/Evaluation/evaluationUtils";
+import { isAction, isWidget } from "ee/workers/Evaluation/evaluationUtils";
 import { useEntityLink } from "components/editorComponents/Debugger/hooks/debuggerHooks";
 import { useGetEntityInfo } from "components/editorComponents/Debugger/hooks/useGetEntityInfo";
 import {
@@ -15,11 +12,10 @@ import {
 } from "components/editorComponents/Debugger/helpers";
 import { getFilteredErrors } from "selectors/debuggerSelectors";
 import type { Log } from "entities/AppsmithConsole";
-import { ENTITY_TYPE } from "entities/AppsmithConsole";
+import { ENTITY_TYPE } from "ee/entities/AppsmithConsole/utils";
 import { DebugButton } from "components/editorComponents/Debugger/DebugCTA";
 import { showDebugger } from "actions/debuggerActions";
-import AnalyticsUtil from "utils/AnalyticsUtil";
-import { inGuidedTour } from "selectors/onboardingSelectors";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 import type { InteractionAnalyticsEventDetail } from "utils/AppsmithUtils";
 import {
   interactionAnalyticsEvent,
@@ -28,7 +24,7 @@ import {
 import equal from "fast-deep-equal";
 import { mapValues, pick } from "lodash";
 import { createSelector } from "reselect";
-import type { TooltipPlacement } from "design-system";
+import type { TooltipPlacement } from "@appsmith/ads";
 import {
   Button,
   Menu,
@@ -38,13 +34,13 @@ import {
   MenuSeparator,
   Text,
   Tooltip,
-} from "design-system";
+} from "@appsmith/ads";
 
-type DropdownOption = {
+interface DropdownOption {
   label?: string;
   value?: string;
   id?: string;
-};
+}
 
 const TopLayer = styled.div`
   display: flex;
@@ -72,12 +68,12 @@ const OptionContentWrapper = styled.div<{
   gap: 10px;
 `;
 
-type PropertyPaneConnectionsProps = {
+interface PropertyPaneConnectionsProps {
   widgetName: string;
   widgetType: string;
-};
+}
 
-type TriggerNodeProps = {
+interface TriggerNodeProps {
   entityCount: number;
   iconAlignment: "LEFT" | "RIGHT";
   connectionType: "INCOMING" | "OUTGOING";
@@ -85,7 +81,7 @@ type TriggerNodeProps = {
   justifyContent: string;
   tooltipPosition?: TooltipPlacement;
   disabled?: boolean;
-};
+}
 
 const doConnectionsHaveErrors = (
   options: DropdownOption[],
@@ -106,33 +102,40 @@ const useDependencyList = (name: string) => {
     (state: AppState) => state.evaluations.dependencies.inverseDependencyMap,
     equal,
   );
-  const guidedTour = useSelector(inGuidedTour);
 
-  const getEntityId = useCallback((name) => {
-    const entity = dataTree[name];
+  const getEntityId = useCallback(
+    (name) => {
+      const entity = dataTree[name];
 
-    if (isWidget(entity)) {
-      return entity.widgetId;
-    } else if (isAction(entity)) {
-      return entity.actionId;
-    }
-  }, []);
+      if (isWidget(entity)) {
+        return entity.widgetId;
+      } else if (isAction(entity)) {
+        return entity.actionId;
+      }
+    },
+    [dataTree],
+  );
 
   const entityDependencies = useMemo(() => {
-    if (guidedTour) return null;
     return getDependenciesFromInverseDependencies(inverseDependencyMap, name);
-  }, [name, inverseDependencyMap, guidedTour]);
+  }, [name, inverseDependencyMap]);
 
-  const dependencyOptions =
-    entityDependencies?.directDependencies.map((e) => ({
-      label: e,
-      value: getEntityId(e) ?? e,
-    })) ?? [];
-  const inverseDependencyOptions =
-    entityDependencies?.inverseDependencies.map((e) => ({
-      label: e,
-      value: getEntityId(e),
-    })) ?? [];
+  const dependencyOptions = useMemo(
+    () =>
+      entityDependencies?.directDependencies.map((e) => ({
+        label: e,
+        value: getEntityId(e) ?? e,
+      })) ?? [],
+    [entityDependencies?.directDependencies, getEntityId],
+  );
+  const inverseDependencyOptions = useMemo(
+    () =>
+      entityDependencies?.inverseDependencies.map((e) => ({
+        label: e,
+        value: getEntityId(e),
+      })) ?? [],
+    [entityDependencies?.inverseDependencies, getEntityId],
+  );
 
   return {
     dependencyOptions,
@@ -140,6 +143,8 @@ const useDependencyList = (name: string) => {
   };
 };
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function OptionNode(props: any) {
   const getEntityInfo = useGetEntityInfo(props.option.label);
   const entityInfo = getEntityInfo();
@@ -152,6 +157,7 @@ function OptionNode(props: any) {
         dispatch(showDebugger(true));
       }
     }
+
     navigateToEntity(props.option.label);
     AnalyticsUtil.logEvent("ASSOCIATED_ENTITY_CLICK", {
       source: "PROPERTY_PANE",
@@ -161,6 +167,7 @@ function OptionNode(props: any) {
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (!props.isSelectedNode && !props.isHighlighted) return;
+
     if (
       (props.isSelectedNode || props.isHighlighted) &&
       (e.key === " " || e.key === "Enter")
@@ -170,6 +177,7 @@ function OptionNode(props: any) {
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
+
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
@@ -248,6 +256,7 @@ function PropertyPaneConnections(props: PropertyPaneConnectionsProps) {
       INTERACTION_ANALYTICS_EVENT,
       handleKbdEvent,
     );
+
     return () => {
       topLayerRef.current?.removeEventListener(
         INTERACTION_ANALYTICS_EVENT,
@@ -258,6 +267,7 @@ function PropertyPaneConnections(props: PropertyPaneConnectionsProps) {
 
   const handleKbdEvent = (e: Event) => {
     const event = e as CustomEvent<InteractionAnalyticsEventDetail>;
+
     if (!event.detail?.propertyName) {
       e.stopPropagation();
       topLayerRef.current?.dispatchEvent(

@@ -1,45 +1,64 @@
-import React from "react";
-import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
-import BaseWidget from "widgets/BaseWidget";
-import { Alignment } from "@blueprintjs/core";
-import type { IconName } from "@blueprintjs/icons";
-import type { WidgetType, TextSize } from "constants/WidgetConstants";
-import { RenderModes } from "constants/WidgetConstants";
-import type { InputComponentProps } from "../component";
-import InputComponent from "../component";
-import type { ExecutionResult } from "constants/AppsmithActionConstants/ActionConstants";
-import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
-import type { ValidationResponse } from "constants/WidgetValidation";
-import { ValidationTypes } from "constants/WidgetValidation";
 import {
-  createMessage,
   FIELD_REQUIRED_ERROR,
   INPUT_DEFAULT_TEXT_MAX_CHAR_ERROR,
-} from "@appsmith/constants/messages";
-import type { DerivedPropertiesMap } from "utils/WidgetFactory";
-import type { InputType } from "../constants";
-import { InputTypes } from "../constants";
-import { GRID_DENSITY_MIGRATION_V1 } from "widgets/constants";
-import { ISDCodeDropdownOptions } from "../component/ISDCodeDropdown";
-import { CurrencyDropdownOptions } from "../component/CurrencyCodeDropdown";
+  createMessage,
+} from "ee/constants/messages";
+import { Alignment } from "@blueprintjs/core";
+import type { IconName } from "@blueprintjs/icons";
+import type {
+  AutocompletionDefinitions,
+  PropertyUpdates,
+  SnipingModeProperty,
+  WidgetCallout,
+} from "WidgetProvider/constants";
+import { COMPACT_MODE_MIN_ROWS } from "WidgetProvider/constants";
+import type { DerivedPropertiesMap } from "WidgetProvider/factory";
+import { LabelPosition } from "components/constants";
+import type { ExecutionResult } from "constants/AppsmithActionConstants/ActionConstants";
+import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import type { TextSize } from "constants/WidgetConstants";
+import {
+  GridDefaults,
+  RenderModes,
+  WIDGET_TAGS,
+} from "constants/WidgetConstants";
+import type { ValidationResponse } from "constants/WidgetValidation";
+import { ValidationTypes } from "constants/WidgetValidation";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import { buildDeprecationWidgetMessage } from "pages/Editor/utils";
+import React from "react";
 import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
+import { checkInputTypeTextByProps } from "widgets/BaseInputWidget/utils";
+import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import BaseWidget from "widgets/BaseWidget";
+import {
+  DefaultAutocompleteDefinitions,
+  isCompactMode,
+} from "widgets/WidgetUtils";
+import type { InputComponentProps } from "../component";
+import InputComponent from "../component";
+import { CurrencyDropdownOptions } from "../component/CurrencyCodeDropdown";
+import { ISDCodeDropdownOptions } from "../component/ISDCodeDropdown";
 import {
   formatCurrencyNumber,
   getDecimalSeparator,
   getLocale,
 } from "../component/utilities";
-import { LabelPosition } from "components/constants";
-import type { Stylesheet } from "entities/AppTheming";
-import { checkInputTypeTextByProps } from "widgets/BaseInputWidget/utils";
-import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
-import type { AutocompletionDefinitions } from "widgets/constants";
+import type { InputType } from "../constants";
+import { InputTypes } from "../constants";
+import IconSVG from "../icon.svg";
 
 export function defaultValueValidation(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   props: InputWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _?: any,
 ): ValidationResponse {
   const { inputType } = props;
+
   if (
     inputType === "INTEGER" ||
     inputType === "NUMBER" ||
@@ -81,6 +100,7 @@ export function defaultValueValidation(
       messages: [{ name: "", message: "" }],
     };
   }
+
   if (_.isObject(value)) {
     return {
       isValid: false,
@@ -93,8 +113,10 @@ export function defaultValueValidation(
       ],
     };
   }
+
   let parsed = value;
   const isValid = _.isString(parsed);
+
   if (!isValid) {
     try {
       parsed = _.toString(parsed);
@@ -111,6 +133,7 @@ export function defaultValueValidation(
       };
     }
   }
+
   return {
     isValid,
     parsed: parsed,
@@ -126,8 +149,70 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
     };
   }
 
-  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+  static type = "INPUT_WIDGET";
+
+  static getConfig() {
     return {
+      name: "Input",
+      iconSVG: IconSVG,
+      needsMeta: true,
+      hideCard: true,
+      isDeprecated: true,
+      replacement: "INPUT_WIDGET_V2",
+      tags: [WIDGET_TAGS.SUGGESTED_WIDGETS, WIDGET_TAGS.INPUTS],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      inputType: "TEXT",
+      rows: 4,
+      label: "",
+      labelPosition: LabelPosition.Left,
+      labelAlignment: Alignment.LEFT,
+      labelWidth: 5,
+      columns: 20,
+      widgetName: "Input",
+      version: 1,
+      defaultText: "",
+      iconAlign: "left",
+      autoFocus: false,
+      labelStyle: "",
+      resetOnSubmit: true,
+      isRequired: false,
+      isDisabled: false,
+      allowCurrencyChange: false,
+      animateLoading: true,
+    };
+  }
+
+  static getMethods() {
+    return {
+      getSnipingModeUpdates: (
+        propValueMap: SnipingModeProperty,
+      ): PropertyUpdates[] => {
+        return [
+          {
+            propertyPath: "defaultText",
+            propertyValue: propValueMap.data,
+            isDynamicPropertyPath: true,
+          },
+        ];
+      },
+      getEditorCallouts(): WidgetCallout[] {
+        return [
+          {
+            message: buildDeprecationWidgetMessage(
+              InputWidget.getConfig().name,
+            ),
+          },
+        ];
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    const definitions = {
       "!doc":
         "An input text field is used to capture a users textual input such as their names, numbers, emails etc. Inputs are used in forms and can have custom validations.",
       "!url": "https://docs.appsmith.com/widget-reference/input",
@@ -148,6 +233,8 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
         "!doc": "Selected country code for Currency type input",
       },
     };
+
+    return definitions;
   }
 
   static getPropertyPaneConfig() {
@@ -606,6 +693,7 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
         sectionName: "Icon Options",
         hidden: (props: InputWidgetProps) => {
           const { inputType } = props;
+
           return inputType === "CURRENCY" || inputType === "PHONE_NUMBER";
         },
         dependencies: ["inputType"],
@@ -624,6 +712,7 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
             label: "Icon alignment",
             helpText: "Sets the icon alignment of input field",
             controlType: "ICON_TABS",
+            defaultValue: "left",
             options: [
               {
                 startIcon: "align-left",
@@ -744,6 +833,8 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
     };
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       text: undefined,
@@ -762,6 +853,30 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
     };
   }
 
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+        setDisabled: {
+          path: "isDisabled",
+          type: "boolean",
+        },
+        setRequired: {
+          path: "isRequired",
+          type: "boolean",
+        },
+        setValue: {
+          path: "defaultText",
+          type: "string",
+          accessor: "text",
+        },
+      },
+    };
+  }
+
   onValueChange = (value: string) => {
     this.props.updateWidgetMetaProperty("text", value, {
       triggerPropertyName: "onTextChanged",
@@ -770,6 +885,7 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
         type: EventType.ON_TEXT_CHANGE,
       },
     });
+
     if (!this.props.isDirty) {
       this.props.updateWidgetMetaProperty("isDirty", true);
     }
@@ -777,6 +893,7 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
 
   onCurrencyTypeChange = (code?: string) => {
     const currencyCountryCode = code;
+
     if (this.props.renderMode === RenderModes.CANVAS) {
       super.updateWidgetProperty("currencyCountryCode", currencyCountryCode);
     } else {
@@ -789,6 +906,7 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
 
   onISDCodeChange = (code?: string) => {
     const countryCode = code;
+
     if (this.props.renderMode === RenderModes.CANVAS) {
       super.updateWidgetProperty("phoneNumberCountryCode", countryCode);
     } else {
@@ -834,6 +952,7 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
   ) => {
     const { isValid, onSubmit } = this.props;
     const isEnterKey = e.key === "Enter" || e.keyCode === 13;
+
     if (isEnterKey && onSubmit && isValid) {
       super.executeAction({
         triggerPropertyName: "onSubmit",
@@ -850,11 +969,14 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
     if (this.props.isFocused || this.props.inputType !== InputTypes.CURRENCY) {
       return this.props.text !== undefined ? this.props.text : "";
     }
+
     if (this.props.text === "" || this.props.text === undefined) return "";
+
     const valueToFormat = String(this.props.text);
 
     const locale = getLocale();
     const decimalSeparator = getDecimalSeparator(locale);
+
     return formatCurrencyNumber(
       this.props.decimalsInCurrency,
       valueToFormat,
@@ -862,7 +984,7 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
     );
   };
 
-  getPageView() {
+  getWidgetView() {
     const value = this.getFormattedText();
     let isInvalid =
       "isValid" in this.props && !this.props.isValid && !!this.props.isDirty;
@@ -873,13 +995,17 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
       ? this.props.selectedPhoneNumberCountryCode
       : this.props.phoneNumberCountryCode;
     const conditionalProps: Partial<InputComponentProps> = {};
+
     conditionalProps.errorMessage = this.props.errorMessage;
+
     if (this.props.isRequired && value.length === 0) {
       conditionalProps.errorMessage = createMessage(FIELD_REQUIRED_ERROR);
     }
+
     if (this.props.inputType === "TEXT" && this.props.maxChars) {
       // pass maxChars only for Text type inputs, undefined for other types
       conditionalProps.maxChars = this.props.maxChars;
+
       if (
         this.props.defaultText &&
         this.props.defaultText.toString().length > this.props.maxChars
@@ -891,14 +1017,18 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
         );
       }
     }
+
     if (this.props.maxNum) conditionalProps.maxNum = this.props.maxNum;
+
     if (this.props.minNum) conditionalProps.minNum = this.props.minNum;
+
+    const { componentHeight } = this.props;
     const minInputSingleLineHeight =
       this.props.label || this.props.tooltip
         ? // adjust height for label | tooltip extra div
-          GRID_DENSITY_MIGRATION_V1 + 4
+          COMPACT_MODE_MIN_ROWS + 4
         : // GRID_DENSITY_MIGRATION_V1 used to adjust code as per new scaled canvas.
-          GRID_DENSITY_MIGRATION_V1;
+          COMPACT_MODE_MIN_ROWS;
 
     return (
       <InputComponent
@@ -909,13 +1039,7 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
         borderRadius={this.props.borderRadius}
         boxShadow={this.props.boxShadow}
         // show label and Input side by side if true
-        compactMode={
-          !(
-            (this.props.bottomRow - this.props.topRow) /
-              GRID_DENSITY_MIGRATION_V1 >
-            1
-          )
-        }
+        compactMode={isCompactMode(componentHeight)}
         currencyCountryCode={currencyCountryCode}
         decimalsInCurrency={this.props.decimalsInCurrency}
         defaultValue={this.props.defaultText}
@@ -932,11 +1056,11 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
         labelStyle={this.props.labelStyle}
         labelTextColor={this.props.labelTextColor}
         labelTextSize={this.props.labelTextSize}
-        labelWidth={(this.props.labelWidth || 0) * this.props.parentColumnSpace}
+        labelWidth={this.props.labelComponentWidth}
         multiline={
-          (this.props.bottomRow - this.props.topRow) /
-            minInputSingleLineHeight >
-            1 && this.props.inputType === "TEXT"
+          componentHeight >
+            minInputSingleLineHeight * GridDefaults.DEFAULT_GRID_ROW_HEIGHT &&
+          this.props.inputType === "TEXT"
         }
         onCurrencyTypeChange={this.onCurrencyTypeChange}
         onFocusChange={this.handleFocusChange}
@@ -954,10 +1078,6 @@ class InputWidget extends BaseWidget<InputWidgetProps, WidgetState> {
         {...conditionalProps}
       />
     );
-  }
-
-  static getWidgetType(): WidgetType {
-    return "INPUT_WIDGET";
   }
 }
 
@@ -1006,6 +1126,7 @@ export interface InputWidgetProps extends WidgetProps {
   borderRadius: string;
   boxShadow?: string;
   primaryColor: string;
+  labelComponentWidth?: number;
 }
 
 export default InputWidget;

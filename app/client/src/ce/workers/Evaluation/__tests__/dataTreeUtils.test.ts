@@ -1,5 +1,5 @@
-import type { DataTree } from "entities/DataTree/dataTreeFactory";
-import { makeEntityConfigsAsObjProperties } from "@appsmith/workers/Evaluation/dataTreeUtils";
+import type { DataTree } from "entities/DataTree/dataTreeTypes";
+import { makeEntityConfigsAsObjProperties } from "ee/workers/Evaluation/dataTreeUtils";
 
 const unevalTreeFromMainThread = {
   Api2: {
@@ -72,22 +72,6 @@ const unevalTreeFromMainThread = {
     meta: {},
     type: "BUTTON_WIDGET",
   },
-  pageList: [
-    {
-      pageName: "Page1",
-      pageId: "63349fb5d39f215f89b8245e",
-      isDefault: false,
-      isHidden: false,
-      slug: "page1",
-    },
-    {
-      pageName: "Page2",
-      pageId: "637cc6b4a3664a7fe679b7b0",
-      isDefault: true,
-      isHidden: false,
-      slug: "page2",
-    },
-  ],
   appsmith: {
     user: {
       email: "someuser@appsmith.com",
@@ -143,11 +127,23 @@ const unevalTreeFromMainThread = {
 };
 
 describe("7. Test util methods", () => {
-  it("3. makeDataTreeEntityConfigAsProperty method", () => {
-    const dataTree = makeEntityConfigsAsObjProperties(
-      unevalTreeFromMainThread as unknown as DataTree,
-    );
+  describe("makeDataTreeEntityConfigAsProperty", () => {
+    it("should not introduce __evaluation__ property to the widget state when the corresponding evalProps isn't there for a widget", () => {
+      const dataTree = makeEntityConfigsAsObjProperties(
+        unevalTreeFromMainThread as unknown as DataTree,
+      );
 
-    expect(dataTree.Api2).not.toHaveProperty("__evaluation__");
+      expect(dataTree.Api2).not.toHaveProperty("__evaluation__");
+    });
+    it("should introduce __evaluation__ property to the widget state when it has a corresponding evalProps", () => {
+      const dataTree = makeEntityConfigsAsObjProperties(
+        unevalTreeFromMainThread as unknown as DataTree,
+        {
+          evalProps: { Api2: { __evaluation__: { errors: { someVal: [] } } } },
+        },
+      );
+
+      expect(dataTree.Api2).toHaveProperty("__evaluation__");
+    });
   });
 });

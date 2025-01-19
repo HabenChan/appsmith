@@ -10,13 +10,13 @@ import {
   DEDICATED_WORKER_GLOBAL_SCOPE_IDENTIFIERS,
   JAVASCRIPT_KEYWORDS,
 } from "constants/WidgetValidation";
-import { get, set, isNil, has, uniq } from "lodash";
-import type { Workspace } from "@appsmith/constants/workspaceConstants";
-import { hasCreateNewAppPermission } from "@appsmith/utils/permissionHelpers";
+import { get, has, isNil, uniq } from "lodash";
+import type { Workspace } from "ee/constants/workspaceConstants";
+import { hasCreateNewAppPermission } from "ee/utils/permissionHelpers";
 import moment from "moment";
 import { isDynamicValue } from "./DynamicBindingUtils";
 import type { ApiResponse } from "api/ApiResponses";
-import type { DSLWidget } from "widgets/constants";
+import type { DSLWidget } from "WidgetProvider/constants";
 import * as Sentry from "@sentry/react";
 import { matchPath } from "react-router";
 import {
@@ -29,12 +29,21 @@ import {
 } from "constants/routes";
 import history from "./history";
 import { APPSMITH_GLOBAL_FUNCTIONS } from "components/editorComponents/ActionCreator/constants";
-import type { CanvasWidgetsReduxState } from "reducers/entityReducers/canvasWidgetsReducer";
+import type {
+  CanvasWidgetsReduxState,
+  FlattenedWidgetProps,
+} from "reducers/entityReducers/canvasWidgetsReducer";
 import { checkContainerScrollable } from "widgets/WidgetUtils";
-import type { ContainerWidgetProps } from "widgets/ContainerWidget/widget";
-import type { WidgetProps } from "widgets/BaseWidget";
 import { getContainerIdForCanvas } from "sagas/WidgetOperationUtils";
 import scrollIntoView from "scroll-into-view-if-needed";
+import validateColor from "validate-color";
+import { CANVAS_VIEWPORT } from "constants/componentClassNameConstants";
+import { klona as klonaFull } from "klona/full";
+import { klona as klonaRegular } from "klona";
+import { klona as klonaLite } from "klona/lite";
+import { klona as klonaJson } from "klona/json";
+
+import { startAndEndSpanForFn } from "instrumentation/generateTraces";
 
 export const snapToGrid = (
   columnWidth: number,
@@ -44,23 +53,17 @@ export const snapToGrid = (
 ) => {
   const snappedX = Math.round(x / columnWidth);
   const snappedY = Math.round(y / rowHeight);
-  return [snappedX, snappedY];
-};
 
-export const formatBytes = (bytes: string | number) => {
-  if (!bytes) return;
-  const value = typeof bytes === "string" ? parseInt(bytes) : bytes;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-  if (value === 0) return "0 bytes";
-  const i = parseInt(String(Math.floor(Math.log(value) / Math.log(1024))));
-  if (i === 0) return bytes + " " + sizes[i];
-  return (value / Math.pow(1024, i)).toFixed(1) + " " + sizes[i];
+  return [snappedX, snappedY];
 };
 
 export const getAbsolutePixels = (size?: string | null) => {
   if (!size) return 0;
+
   const _dex = size.indexOf("px");
+
   if (_dex === -1) return 0;
+
   return parseInt(size.slice(0, _dex), 10);
 };
 
@@ -102,26 +105,31 @@ export const getScrollByPixels = function (
   const bottomBuff =
     scrollParentBounds.bottom -
     (elem.top + elem.height + scrollChildBounds.top + SCROLL_THRESHOLD);
+
   if (topBuff < SCROLL_THRESHOLD) {
     const speed = Math.max(
       (SCROLL_THRESHOLD - topBuff) / (2 * SCROLL_THRESHOLD),
       0.1,
     );
+
     return {
       scrollAmount: 0 - scrollAmount,
       speed,
     };
   }
+
   if (bottomBuff < SCROLL_THRESHOLD) {
     const speed = Math.max(
       (SCROLL_THRESHOLD - bottomBuff) / (2 * SCROLL_THRESHOLD),
       0.1,
     );
+
     return {
       scrollAmount,
       speed,
     };
   }
+
   return {
     scrollAmount: 0,
     speed: 0,
@@ -138,15 +146,18 @@ export const scrollElementIntoParentCanvasView = (
 ) => {
   if (el) {
     const scrollParent = parent;
+
     if (scrollParent && child) {
       const { scrollAmount: scrollBy } = getScrollByPixels(
         el,
         scrollParent,
         child,
       );
+
       if (scrollBy < 0 && scrollParent.scrollTop > 0) {
         scrollParent.scrollBy({ top: scrollBy, behavior: "smooth" });
       }
+
       if (scrollBy > 0) {
         scrollParent.scrollBy({ top: scrollBy, behavior: "smooth" });
       }
@@ -170,6 +181,7 @@ function removeClass(ele: HTMLElement, cls: string) {
 
 export const removeSpecialChars = (value: string, limit?: number) => {
   const separatorRegex = /\W+/;
+
   return value
     .split(separatorRegex)
     .join("_")
@@ -182,6 +194,7 @@ export const flashElement = (
   flashClass = "flash",
 ) => {
   if (!el) return;
+
   addClass(el, flashClass);
   setTimeout(() => {
     removeClass(el, flashClass);
@@ -226,15 +239,22 @@ export const flashElementsById = (
  */
 export const quickScrollToWidget = (
   widgetId: string,
+  widgetIdSelector: string,
   canvasWidgets: CanvasWidgetsReduxState,
 ) => {
   if (!widgetId || widgetId === "") return;
-  window.requestIdleCallback(() => {
-    const el = document.getElementById(widgetId);
-    const canvas = document.getElementById("canvas-viewport");
 
-    if (el && canvas && !isElementVisibleInContainer(el, canvas)) {
-      const scrollElement = getWidgetElementToScroll(widgetId, canvasWidgets);
+  window.requestIdleCallback(() => {
+    const el = document.getElementById(widgetIdSelector);
+    const canvas = document.getElementById(CANVAS_VIEWPORT);
+
+    if (el && canvas && !isElementVisibleInContainer(el, canvas, 5)) {
+      const scrollElement = getWidgetElementToScroll(
+        widgetId,
+        widgetIdSelector,
+        canvasWidgets,
+      );
+
       if (scrollElement) {
         scrollIntoView(scrollElement, {
           block: "center",
@@ -288,40 +308,65 @@ function isElementVisibleInContainer(
   return visiblePercentage >= percentage;
 }
 
+/**
+ * This function provides the correct DOM element to scroll to
+ * such that the widget (argument) is visible in the viewport.
+ * This function has been implemented to run when the viewer or editor
+ * is loaded with a widget ID in the URL.
+ * This is a part of the Context preserving logic
+ *
+ * @param widgetId : Widget ID to scroll to
+ * @param canvasWidgets : Canvas widgets redux state
+ * @returns HTMLElement to scroll to or null
+ */
 function getWidgetElementToScroll(
   widgetId: string,
+  widgetIdSelector: string,
   canvasWidgets: CanvasWidgetsReduxState,
-) {
+): HTMLElement | null {
   const widget = canvasWidgets[widgetId];
-  const parentId = widget.parentId || "";
+  const parentId = widget.parentId;
+
+  // If the widget doesn't have a parent, scroll to the widget itself
+  // This is the case for the main container widget, however,
+  // this scenario is not likely to occur in a normal use case.
+  if (parentId == undefined) return document.getElementById(widgetIdSelector);
+
+  // Get the containing container like widget for the widget
+  // Note: The parentId is usually pointing to a CANVAS_WIDGET
+  // However, we can only scroll a container like widget which is the parent
+  // of the CANVAS_WIDGET. Hence, we need to get the container like widget's Id.
   const containerId = getContainerIdForCanvas(parentId);
-  if (containerId === MAIN_CONTAINER_WIDGET_ID) {
-    if (widget.type !== "MODAL_WIDGET") {
-      return document.getElementById(widgetId);
-    }
-  }
-  const containerWidget = canvasWidgets[
-    containerId
-  ] as ContainerWidgetProps<WidgetProps>;
-  if (checkContainerScrollable(containerWidget)) {
-    return document.getElementById(widgetId);
+
+  // If we failed to get the container, try to scroll to the widget itself
+  if (containerId === undefined) {
+    return document.getElementById(widgetIdSelector);
   } else {
-    return document.getElementById(containerId);
+    // If the widget is not within a modal widget,
+    // but is the child of the main container widget,
+    // scroll to the widget itself
+    if (containerId === MAIN_CONTAINER_WIDGET_ID) {
+      if (widget.detachFromLayout) {
+        return document.getElementById(widgetIdSelector);
+      }
+    }
+
+    // Get the container widget props from the redux state
+    const containerWidget: FlattenedWidgetProps = canvasWidgets[containerId];
+
+    // If the widget is within a container, check if the container is scrollable
+    if (checkContainerScrollable(containerWidget)) {
+      return document.getElementById(widgetIdSelector);
+    } else {
+      // If the container is not scrollable, scroll to the container itself
+      return document.getElementById(containerId);
+    }
   }
 }
 
-export const resolveAsSpaceChar = (value: string, limit?: number) => {
-  // ensures that all special characters are disallowed
-  // while allowing all utf-8 characters
-  const removeSpecialCharsRegex =
-    /`|\~|\!|\@|\#|\$|\%|\^|\&|\*|\(|\)|\+|\=|\[|\{|\]|\}|\||\\|\'|\<|\,|\.|\>|\?|\/|\""|\;|\:|\s/;
-  const duplicateSpaceRegex = /\s+/;
-  return value
-    .split(removeSpecialCharsRegex)
-    .join(" ")
-    .split(duplicateSpaceRegex)
-    .join(" ")
-    .slice(0, limit || 30);
+export const toValidPageName = (value: string) => {
+  // Ensure that `/`, `\` and `:` are not allowed in page names, aligning with server-side validation.
+  return value.replaceAll(/[\\/:<>"|?*\x00-\x1f]+/g, "").slice(0, 30);
 };
 
 export const PLATFORM_OS = {
@@ -343,18 +388,22 @@ const platformOSRegex = {
 export const getPlatformOS = () => {
   const browserPlatform =
     typeof navigator !== "undefined" ? navigator.platform : null;
+
   if (browserPlatform) {
     const platformOSList = Object.entries(platformOSRegex);
     const platform = platformOSList.find(([, regex]) =>
       regex.test(browserPlatform),
     );
+
     return platform ? platform[0] : null;
   }
+
   return null;
 };
 
 export const isMacOrIOS = () => {
   const platformOS = getPlatformOS();
+
   return platformOS === PLATFORM_OS.MAC || platformOS === PLATFORM_OS.IOS;
 };
 
@@ -374,8 +423,10 @@ export const getBrowserInfo = () => {
 
     if (match[1] === "Chrome") {
       specificMatch = userAgent.match(/\b(OPR|Edge)\/(\d+)/);
+
       if (specificMatch) {
         const opera = specificMatch.slice(1);
+
         return {
           browser: opera[0].replace("OPR", "Opera"),
           version: opera[1],
@@ -383,8 +434,10 @@ export const getBrowserInfo = () => {
       }
 
       specificMatch = userAgent.match(/\b(Edg)\/(\d+)/);
+
       if (specificMatch) {
         const edge = specificMatch.slice(1);
+
         return {
           browser: edge[0].replace("Edg", "Edge (Chromium)"),
           version: edge[1],
@@ -402,6 +455,7 @@ export const getBrowserInfo = () => {
 
     return { browser: match[0], version: match[1] };
   }
+
   return null;
 };
 
@@ -421,6 +475,7 @@ export const getBrowserInfo = () => {
  */
 export const trimTrailingSlash = (path: string) => {
   const trailingUrlRegex = /\/+$/;
+
   return path.replace(trailingUrlRegex, "");
 };
 
@@ -463,6 +518,8 @@ export const convertArrayToSentence = (arr: string[]) => {
  */
 export const isNameValid = (
   name: string,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   invalidNames: Record<string, any>,
 ) => {
   return !(
@@ -480,6 +537,8 @@ export const isNameValid = (
  *
  * @param array any[]
  */
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const removeFalsyEntries = (arr: any[]): any[] => {
   return arr.filter(Boolean);
 };
@@ -491,7 +550,9 @@ export const removeFalsyEntries = (arr: any[]): any[] => {
  * ['Pawan', 'Goku'] -> false
  * { name: "Pawan"} -> false
  */
-export const isString = (str: any) => {
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const isString = (str: any): str is string => {
   return typeof str === "string" || str instanceof String;
 };
 
@@ -521,12 +582,16 @@ export const playWelcomeAnimation = (container: string) => {
 const playLottieAnimation = (
   selector: string,
   animationURL: string,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   styles?: any,
 ) => {
   const container: Element = document.querySelector(selector) as Element;
 
   if (!container) return;
+
   const el = document.createElement("div");
+
   Object.assign(el.style, {
     position: "absolute",
     left: 0,
@@ -556,6 +621,7 @@ const playLottieAnimation = (
 export const getSelectedText = () => {
   if (typeof window.getSelection === "function") {
     const selectionObj = window.getSelection();
+
     return selectionObj && selectionObj.toString();
   }
 };
@@ -567,63 +633,61 @@ export const getSelectedText = () => {
  */
 export const scrollbarWidth = () => {
   const scrollDiv = document.createElement("div");
+
   scrollDiv.setAttribute(
     "style",
     "width: 100px; height: 100px; overflow: scroll; position:absolute; top:-9999px;",
   );
   document.body.appendChild(scrollDiv);
   const scrollbarWidth = scrollDiv.offsetWidth - scrollDiv.clientWidth;
+
   document.body.removeChild(scrollDiv);
+
   return scrollbarWidth;
 };
 
 // Flatten object
 // From { isValid: false, settings: { color: false}}
 // To { isValid: false, settings.color: false}
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const flattenObject = (data: Record<string, any>) => {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result: Record<string, any> = {};
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function recurse(cur: any, prop: any) {
     if (Object(cur) !== cur) {
       result[prop] = cur;
     } else if (Array.isArray(cur)) {
       for (let i = 0, l = cur.length; i < l; i++)
         recurse(cur[i], prop + "[" + i + "]");
+
       if (cur.length == 0) result[prop] = [];
     } else {
       let isEmpty = true;
+
       for (const p in cur) {
         isEmpty = false;
         recurse(cur[p], prop ? prop + "." + p : p);
       }
+
       if (isEmpty && prop) result[prop] = {};
     }
   }
 
   recurse(data, "");
+
   return result;
-};
-
-/**
- * renames key in object
- *
- * @param object
- * @param key
- * @param newKey
- * @returns
- */
-export const renameKeyInObject = (object: any, key: string, newKey: string) => {
-  if (object[key]) {
-    set(object, newKey, object[key]);
-  }
-
-  return object;
 };
 
 // Can be used to check if the user has developer role access to workspace
 export const getCanCreateApplications = (currentWorkspace: Workspace) => {
   const userWorkspacePermissions = currentWorkspace.userPermissions || [];
   const canManage = hasCreateNewAppPermission(userWorkspacePermissions ?? []);
+
   return canManage;
 };
 
@@ -670,6 +734,7 @@ export const howMuchTimeBeforeText = (
   const hours = now.diff(checkDate, "hours");
   const minutes = now.diff(checkDate, "minutes");
   const seconds = now.diff(checkDate, "seconds");
+
   if (years > 0) return `${years} yr${years > 1 ? "s" : ""}`;
   else if (months > 0) return `${months} mth${months > 1 ? "s" : ""}`;
   else if (days > 0) return `${days} day${days > 1 ? "s" : ""}`;
@@ -694,8 +759,11 @@ export const truncateString = (
   appendStr = "...",
 ) => {
   if (str.length <= limit) return str;
+
   let _subString = str.substring(0, limit);
+
   _subString = _subString.trim() + appendStr;
+
   return _subString;
 };
 
@@ -724,7 +792,9 @@ export const redoShortCut = () =>
  */
 export const trimQueryString = (value = "") => {
   const index = value.indexOf("?");
+
   if (index === -1) return value;
+
   return value.slice(0, index);
 };
 
@@ -733,6 +803,7 @@ export const trimQueryString = (value = "") => {
  */
 export const getSearchQuery = (search = "", key: string) => {
   const params = new URLSearchParams(search);
+
   return decodeURIComponent(params.get(key) || "");
 };
 
@@ -757,50 +828,97 @@ export function getLogToSentryFromResponse(response?: ApiResponse) {
   return response && response?.responseMeta?.status >= 500;
 }
 
-const BLACKLIST_COLORS = ["#ffffff"];
-const HEX_REGEX = /#[0-9a-fA-F]{6}/gi;
-const RGB_REGEX = /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+(?:\.\d+)?))?\)/gi;
-
 /**
  * extract colors from string
  *
- * @param text
  * @returns
+ * @param widgets
  */
-export function extractColorsFromString(text: string) {
+export function extractColorsFromString(widgets: CanvasWidgetsReduxState) {
   const colors = new Set();
 
-  [...(text.match(RGB_REGEX) || []), ...(text.match(HEX_REGEX) || [])]
-    .filter((d) => BLACKLIST_COLORS.indexOf(d.toLowerCase()) === -1)
-    .forEach((color) => {
-      colors.add(color.toLowerCase());
+  Object.values(widgets).forEach((widget) => {
+    Object.values(widget).forEach((widgetProp) => {
+      if (isString(widgetProp) && validateColor(widgetProp)) {
+        colors.add(widgetProp);
+      }
     });
+  });
 
   return Array.from(colors) as Array<string>;
+}
+
+/**
+ * validate color string
+ *
+ * @returns {boolean} true if empty string or includes url or is valid color
+ * @param color
+ */
+export function isValidColor(color: string) {
+  return color?.includes("url") || validateColor(color) || isEmptyOrNill(color);
+}
+
+function klonaWithTelemetryWrapper<T>(
+  value: T,
+  codeSegment: string,
+  variant: string,
+  klonaFn: (input: T) => T,
+): T {
+  return startAndEndSpanForFn(
+    "klona",
+    {
+      codeSegment,
+      variant,
+    },
+    () => klonaFn(value),
+  );
+}
+
+export function klonaFullWithTelemetry<T>(value: T, codeSegment: string): T {
+  return klonaWithTelemetryWrapper(value, codeSegment, "full", klonaFull);
+}
+export function klonaRegularWithTelemetry<T>(value: T, codeSegment: string): T {
+  return klonaWithTelemetryWrapper(value, codeSegment, "regular", klonaRegular);
+}
+export function klonaLiteWithTelemetry<T>(value: T, codeSegment: string): T {
+  return klonaWithTelemetryWrapper(value, codeSegment, "lite", klonaLite);
+}
+export function klonaJsonWithTelemetry<T>(value: T, codeSegment: string): T {
+  return klonaWithTelemetryWrapper(value, codeSegment, "json", klonaJson);
 }
 
 /*
  *  Function to merge property pane config of a widget
  *
  */
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const mergeWidgetConfig = (target: any, source: any) => {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sectionMap: Record<string, any> = {};
+  const mergedConfig = klonaFullWithTelemetry(
+    target,
+    "helpers.mergeWidgetConfig",
+  );
 
-  target.forEach((section: { sectionName: string }) => {
+  mergedConfig.forEach((section: { sectionName: string }) => {
     sectionMap[section.sectionName] = section;
   });
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   source.forEach((section: { sectionName: string; children: any[] }) => {
     const targetSection = sectionMap[section.sectionName];
 
     if (targetSection) {
       Array.prototype.push.apply(targetSection.children, section.children);
     } else {
-      target.push(section);
+      mergedConfig.push(section);
     }
   });
 
-  return target;
+  return mergedConfig;
 };
 
 export const getLocale = () => {
@@ -817,8 +935,10 @@ export const captureInvalidDynamicBindingPath = (
 ) => {
   //Get the dynamicBindingPathList of the current DSL
   const dynamicBindingPathList = get(currentDSL, "dynamicBindingPathList");
+
   dynamicBindingPathList?.forEach((dBindingPath) => {
     const pathValue = get(currentDSL, dBindingPath.key); //Gets the value for the given dynamic binding path
+
     /**
      * Checks if dynamicBindingPathList contains a property path that doesn't have a binding
      */
@@ -828,6 +948,7 @@ export const captureInvalidDynamicBindingPath = (
           `INVALID_DynamicPathBinding_CLIENT_ERROR: Invalid dynamic path binding list: ${currentDSL.widgetName}.${dBindingPath.key}`,
         ),
       );
+
       return;
     }
   });
@@ -835,6 +956,7 @@ export const captureInvalidDynamicBindingPath = (
   if (currentDSL.children) {
     currentDSL.children.map(captureInvalidDynamicBindingPath);
   }
+
   return currentDSL;
 };
 
@@ -860,6 +982,8 @@ export function shouldBeDefined<T>(
  *
  * @param value: any
  */
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const isEmptyOrNill = (value: any) => {
   return isNil(value) || (isString(value) && value === "");
 };
@@ -948,6 +1072,7 @@ export const getUpdatedRoute = (
       params,
     );
   }
+
   return updatedPath;
 };
 
@@ -957,6 +1082,7 @@ const getUpdatedRouteForCustomSlugPath = (
   params: Record<string, string>,
 ) => {
   let updatedPath = path;
+
   if (params.customSlug) {
     updatedPath = updatedPath.replace(`${customSlug}`, `${params.customSlug}-`);
   } else if (params.applicationSlug && params.pageSlug) {
@@ -965,6 +1091,7 @@ const getUpdatedRouteForCustomSlugPath = (
       `${params.applicationSlug}/${params.pageSlug}-`,
     );
   }
+
   return updatedPath;
 };
 
@@ -975,17 +1102,22 @@ const getUpdateRouteForSlugPath = (
   params: Record<string, string>,
 ) => {
   let updatedPath = path;
+
   if (params.customSlug) {
     updatedPath = updatedPath.replace(
       `${applicationSlug}/${pageSlug}`,
       `${params.customSlug}-`,
     );
+
     return updatedPath;
   }
+
   if (params.applicationSlug)
     updatedPath = updatedPath.replace(applicationSlug, params.applicationSlug);
+
   if (params.pageSlug)
     updatedPath = updatedPath.replace(pageSlug, `${params.pageSlug}-`);
+
   return updatedPath;
 };
 
@@ -1007,22 +1139,26 @@ export const splitPathPreview = (
   if (!customSlug && slugMatch?.isExact) {
     const { pageSlug } = slugMatch.params;
     const splitUrl = url.split(pageSlug);
+
     splitUrl.splice(
       1,
       0,
       pageSlug.slice(0, pageSlug.length - 1), // to split -
       pageSlug.slice(pageSlug.length - 1),
     );
+
     return splitUrl;
   } else if (customSlug && customSlugMatch?.isExact) {
     const { customSlug } = customSlugMatch.params;
     const splitUrl = url.split(customSlug);
+
     splitUrl.splice(
       1,
       0,
       customSlug.slice(0, customSlug.length - 1), // to split -
       customSlug.slice(customSlug.length - 1),
     );
+
     return splitUrl;
   }
 
@@ -1031,9 +1167,12 @@ export const splitPathPreview = (
 
 export const updateSlugNamesInURL = (params: Record<string, string>) => {
   const { pathname, search } = window.location;
+
   // Do not update old URLs
   if (isURLDeprecated(pathname)) return;
+
   const newURL = getUpdatedRoute(pathname, params);
+
   history.replace(newURL + search);
 };
 
@@ -1069,6 +1208,7 @@ export const getSupportedMimeTypes = (media: "video" | "audio") => {
 
   types.forEach((type: string) => {
     const mimeType = `${media}/${type}`;
+
     // without codecs
     isSupported(mimeType) && supported.push(mimeType);
 
@@ -1082,12 +1222,16 @@ export const getSupportedMimeTypes = (media: "video" | "audio") => {
       ),
     );
   });
+
   return supported[0];
 };
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function AutoBind(target: any, _: string, descriptor: any) {
   if (typeof descriptor.value === "function")
     descriptor.value = descriptor.value.bind(target);
+
   return descriptor;
 }
 
@@ -1107,6 +1251,7 @@ export function pushToArray(
   else return [item];
 
   if (makeUnique) return uniq(arr1);
+
   return arr1;
 }
 
@@ -1123,10 +1268,12 @@ export function concatWithArray(
   makeUnique = false,
 ) {
   let finalArr: unknown[] = [];
+
   if (Array.isArray(arr1)) finalArr = arr1.concat(items);
   else finalArr = finalArr.concat(items);
 
   if (makeUnique) return uniq(finalArr);
+
   return finalArr;
 }
 
@@ -1146,3 +1293,11 @@ export const capitalizeFirstLetter = (str: string) => {
     str.slice(firstLetterIndex + 1).toLocaleLowerCase()
   );
 };
+
+export function getDomainFromEmail(email: string) {
+  const email_string_array = email.split("@");
+  const domain_string_location = email_string_array.length - 1;
+  const final_domain = email_string_array[domain_string_location];
+
+  return final_domain;
+}

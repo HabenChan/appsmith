@@ -1,6 +1,6 @@
 import styled from "styled-components";
 import React, { useEffect, useState } from "react";
-import { Icon, Text } from "design-system";
+import { Icon, Text } from "@appsmith/ads";
 import type { CarouselProps } from "./types";
 
 const CarouselContainer = styled.div`
@@ -23,7 +23,7 @@ const CarouselContainer = styled.div`
     & .carousel-trigger {
       padding: 16px;
       width: 100%;
-      height: 56px;
+      height: max-content;
       cursor: pointer;
 
       .icon-container {
@@ -65,8 +65,8 @@ const CarouselContainer = styled.div`
 
       &.active {
         height: max-content;
-        min-height: 156px;
-        box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.06),
+        box-shadow:
+          0 2px 4px -2px rgba(0, 0, 0, 0.06),
           0 4px 8px -2px rgba(0, 0, 0, 0.1);
 
         background-color: var(--ads-v2-color-bg);
@@ -112,6 +112,7 @@ export function CarouselComponent(props: CarouselProps) {
   const [active, setActive] = useState(0);
   const [targetContent, setTargetContent] = useState(null);
   const { design, targets, triggers } = props;
+
   useEffect(() => {
     setTargetContent(targets[active]);
   }, [active]);
@@ -190,6 +191,7 @@ export function CarouselComponent(props: CarouselProps) {
       {targetsComponent}
     </>
   );
+
   switch (design) {
     case "no-target":
       display = triggersComponent;

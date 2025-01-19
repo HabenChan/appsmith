@@ -60,12 +60,14 @@ export default [
           propertyValue: string,
         ) => {
           const propertiesToUpdate = [{ propertyPath, propertyValue }];
+
           if (!props.iconAlign) {
             propertiesToUpdate.push({
               propertyPath: "iconAlign",
               propertyValue: Alignment.LEFT,
             });
           }
+
           return propertiesToUpdate;
         },
         dependencies: ["iconAlign"],
@@ -78,6 +80,7 @@ export default [
         label: "Position",
         helpText: "Sets the icon alignment of the menu button",
         controlType: "ICON_TABS",
+        defaultValue: "left",
         fullWidth: false,
         options: [
           {

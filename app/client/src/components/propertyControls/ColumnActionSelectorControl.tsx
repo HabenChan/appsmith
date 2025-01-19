@@ -6,7 +6,7 @@ import BaseControl from "./BaseControl";
 import { generateReactKey } from "utils/generators";
 import { InputText } from "components/propertyControls/InputTextControl";
 import ActionCreator from "components/editorComponents/ActionCreator";
-import { Button } from "design-system";
+import { Button } from "@appsmith/ads";
 
 export interface ColumnAction {
   label?: string;
@@ -32,6 +32,8 @@ const Wrapper = styled.div`
 
 class ColumnActionSelectorControl extends BaseControl<ColumnActionSelectorControlProps> {
   render() {
+    const { propertyName, widgetProperties } = this.props;
+
     return (
       <>
         {this.props.propertyValue &&
@@ -59,11 +61,15 @@ class ColumnActionSelectorControl extends BaseControl<ColumnActionSelectorContro
                   <ActionCreator
                     action={this.props.label}
                     additionalControlData={{}}
+                    dataTreePath=""
                     onValueChange={this.updateColumnActionFunction.bind(
                       this,
                       columnAction,
                     )}
+                    propertyName={propertyName}
                     value={columnAction.dynamicTrigger}
+                    widgetName={widgetProperties.widgetName}
+                    widgetType={widgetProperties.type}
                   />
                 </Wrapper>
                 <StyledDeleteButton
@@ -94,13 +100,17 @@ class ColumnActionSelectorControl extends BaseControl<ColumnActionSelectorContro
     newValue: React.ChangeEvent<HTMLTextAreaElement> | string,
   ) => {
     let value = newValue;
+
     if (typeof newValue !== "string") {
       value = newValue.target.value;
     }
+
     const update = this.props.propertyValue.map((a: ColumnAction) => {
       if (a.id === columnAction.id) return { ...a, label: value };
+
       return a;
     });
+
     this.updateProperty(this.props.propertyName, update);
   };
 
@@ -110,8 +120,10 @@ class ColumnActionSelectorControl extends BaseControl<ColumnActionSelectorContro
   ) => {
     const update = this.props.propertyValue.map((a: ColumnAction) => {
       if (a.id === columnAction.id) return { ...a, dynamicTrigger: newValue };
+
       return a;
     });
+
     this.updateProperty(this.props.propertyName, update);
   };
 
@@ -119,6 +131,7 @@ class ColumnActionSelectorControl extends BaseControl<ColumnActionSelectorContro
     const update = this.props.propertyValue.filter(
       (a: ColumnAction) => a.id !== columnAction.id,
     );
+
     this.updateProperty(this.props.propertyName, update);
   };
   addColumnAction = () => {

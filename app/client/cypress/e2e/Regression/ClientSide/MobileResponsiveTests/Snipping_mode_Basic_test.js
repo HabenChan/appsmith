@@ -1,49 +1,38 @@
-const queryLocators = require("../../../../locators/QueryEditor.json");
-const queryEditor = require("../../../../locators/QueryEditor.json");
-const commonlocators = require("../../../../locators/commonlocators.json");
+import * as _ from "../../../../support/Objects/ObjectsCore";
+import { Widgets } from "../../../../support/Pages/DataSources";
+import {
+  AppSidebar,
+  AppSidebarButton,
+} from "../../../../support/Pages/EditorNavigation";
 
 let datasourceName;
 
-describe("Add widget - Postgress DataSource", function () {
-  beforeEach(() => {
-    cy.startRoutesForDatasource();
-    cy.createPostgresDatasource();
-    cy.get("@saveDatasource").then((httpResponse) => {
-      datasourceName = httpResponse.response.body.data.name;
+describe(
+  "Add widget - Postgress DataSource",
+  { tags: ["@tag.MobileResponsive"] },
+  function () {
+    beforeEach(() => {
+      _.dataSources.CreateDataSource("Postgres");
+      cy.get("@dsName").then(($dsName) => {
+        datasourceName = $dsName;
+      });
+      AppSidebar.navigate(AppSidebarButton.Editor);
     });
-  });
 
-  it("1. Validate Snipping with query and table widget on canvas", () => {
-    cy.get(".t--close-editor span:contains('Back')").click({ force: true });
-    cy.get(".t--back-button span:contains('Back')").click({ force: true });
-    cy.get(commonlocators.autoConvert).click({
-      force: true,
+    it("1. Validate Snipping with query and table widget on canvas", () => {
+      _.autoLayout.ConvertToAutoLayoutAndVerify(false);
+      _.dataSources.CreateQueryForDS(
+        datasourceName,
+        "select * from public.configs",
+      );
+      cy.WaitAutoSave();
+      cy.runQuery();
+      _.dataSources.AddSuggestedWidget(Widgets.Table);
+      _.table.SelectTableRow(1, 0, true, "v2");
+      cy.readTableV2dataPublish("1", "0").then((tabData) => {
+        cy.log("the value is " + tabData);
+        expect(tabData).to.be.equal("5");
+      });
     });
-    cy.wait(2000);
-    cy.get(commonlocators.convert).click({
-      force: true,
-    });
-    cy.wait(2000);
-    cy.get(commonlocators.refreshApp).click({
-      force: true,
-    });
-    cy.wait(2000);
-    cy.NavigateToActiveDSQueryPane(datasourceName);
-    cy.get(queryLocators.templateMenu).click();
-    cy.wait(500);
-    cy.get(".CodeMirror textarea")
-      .first()
-      .focus()
-      .type("select * from public.configs");
-    cy.WaitAutoSave();
-    cy.runQuery();
-    cy.get(queryEditor.suggestedTableWidget).click();
-    cy.CheckAndUnfoldEntityItem("Widgets");
-    cy.selectEntityByName("Table1");
-    cy.isSelectRow(1);
-    cy.readTableV2dataPublish("1", "0").then((tabData) => {
-      cy.log("the value is " + tabData);
-      expect(tabData).to.be.equal("5");
-    });
-  });
-});
+  },
+);

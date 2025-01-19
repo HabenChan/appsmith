@@ -4,7 +4,7 @@ import type { TableWidgetProps } from "widgets/TableWidgetV2/constants";
 import { ColumnTypes } from "widgets/TableWidgetV2/constants";
 import { hideByColumnType, getBasePropertyPath } from "../../propertyUtils";
 import { ButtonVariantTypes } from "components/constants";
-import { ICON_NAMES } from "widgets/constants";
+import { ICON_NAMES } from "WidgetProvider/constants";
 
 export default {
   sectionName: "Save Button",
@@ -44,6 +44,7 @@ export default {
           hidden: (props: TableWidgetProps, propertyPath: string) => {
             const baseProperty = getBasePropertyPath(propertyPath);
             const columnType = get(props, `${baseProperty}.columnType`, "");
+
             return columnType !== ColumnTypes.EDIT_ACTIONS;
           },
           dependencies: ["primaryColumns"],

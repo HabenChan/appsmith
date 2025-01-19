@@ -12,18 +12,14 @@ describe("Form Login test functionality", function () {
     cy.get(adminSettings.formloginButton).click();
     cy.wait(2000);
     // disable form signup
-    cy.get(adminSettings.formSignupDisabled)
-      .get("input")
-      .should("have.value", "on");
+    cy.get(adminSettings.formSignupDisabled).should("have.value", "on");
     cy.get(adminSettings.formSignupDisabled).click({ force: true });
     cy.wait(2000);
     // assert server is restarting
     cy.get(adminSettings.saveButton).should("be.visible");
     cy.get(adminSettings.saveButton).should("not.be.disabled");
     cy.get(adminSettings.saveButton).click();
-    cy.get(adminSettings.restartNotice).should("be.visible");
-    // adding wait for server to restart
-    cy.wait(120000);
+    cy.waitForServerRestart();
     cy.waitUntil(() => cy.get(homePage.profileMenu).should("be.visible"));
     cy.get(homePage.profileMenu).click();
     cy.get(homePage.signOutIcon).click();
@@ -47,8 +43,7 @@ describe("Form Login test functionality", function () {
       cy.get(adminSettings.formSignupDisabled).click({ force: true });
       cy.wait(2000);
       cy.get(adminSettings.saveButton).click();
-      cy.get(adminSettings.restartNotice).should("be.visible");
-      cy.wait(120000);
+      cy.waitForServerRestart();
       cy.waitUntil(() => cy.get(homePage.profileMenu).should("be.visible"));
       cy.get(homePage.profileMenu).click();
       cy.get(homePage.signOutIcon).click();
@@ -65,10 +60,10 @@ describe("Form Login test functionality", function () {
   });
 
   it(
-    "excludeForAirgap",
     "2. Go to admin settings and disable Form Login",
+    { tags: ["@tag.excludeForAirgap"] },
     function () {
-      cy.LogOut();
+      cy.LogOut(false);
       cy.LoginFromAPI(Cypress.env("USERNAME"), Cypress.env("PASSWORD"));
       cy.openAuthentication();
       cy.get(adminSettings.formloginButton)
@@ -88,18 +83,14 @@ describe("Form Login test functionality", function () {
       cy.get(adminSettings.formloginButton).click();
       cy.wait(2000);
       // disable form signup
-      cy.get(adminSettings.formLoginDisabled)
-        .get("input")
-        .should("have.value", "on");
+      cy.get(adminSettings.formLoginDisabled).should("have.value", "on");
       cy.get(adminSettings.formLoginDisabled).click({ force: true });
       cy.wait(2000);
       // assert server is restarting
       cy.get(adminSettings.saveButton).should("be.visible");
       cy.get(adminSettings.saveButton).should("not.be.disabled");
       cy.get(adminSettings.saveButton).click();
-      cy.get(adminSettings.restartNotice).should("be.visible");
-      // adding wait for server to restart
-      cy.wait(120000);
+      cy.waitForServerRestart();
       cy.waitUntil(() => cy.get(homePage.profileMenu).should("be.visible"));
       cy.get(homePage.profileMenu).click();
       cy.get(homePage.signOutIcon).click();
@@ -124,9 +115,7 @@ describe("Form Login test functionality", function () {
       cy.get(adminSettings.saveButton).should("be.visible");
       cy.get(adminSettings.saveButton).should("not.be.disabled");
       cy.get(adminSettings.saveButton).click();
-      cy.get(adminSettings.restartNotice).should("be.visible");
-      // adding wait for server to restart
-      cy.wait(120000);
+      cy.waitForServerRestart();
       cy.waitUntil(() => cy.get(homePage.profileMenu).should("be.visible"));
       cy.reload();
 

@@ -2,12 +2,12 @@ import React from "react";
 import styled, { createGlobalStyle } from "styled-components";
 import { useHistory } from "react-router-dom";
 import { truncateTextUsingEllipsis } from "constants/DefaultTheme";
-import { Link, Text } from "design-system";
+import { Link, Text } from "@appsmith/ads";
 
 export const HelpPopoverStyle = createGlobalStyle`
   .bp3-portal {
     .delete-menu-item {
-      .cs-icon, .cs-text {
+      .ads-v2-icon, .cs-text {
         color: var(--appsmith-color-red-500) !important;
         svg {
           path {
@@ -42,12 +42,13 @@ export const StickyHeader = styled.div`
 export function BackButton({ goTo }: { goTo?: string }) {
   const history = useHistory();
 
-  const onBack = (e: any) => {
-    e.preventDefault();
+  const onBack = () => {
     if (goTo) {
       history.push(goTo);
+
       return;
     }
+
     history.goBack();
   };
 
@@ -55,7 +56,7 @@ export function BackButton({ goTo }: { goTo?: string }) {
     <StyledBackLink
       className="t--admin-settings-back-button"
       kind="secondary"
-      onClick={(e) => onBack(e)}
+      onClick={onBack}
       startIcon="back-control"
     >
       Back

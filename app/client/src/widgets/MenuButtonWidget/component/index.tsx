@@ -33,7 +33,7 @@ import type {
   MenuItem,
   PopoverContentProps,
 } from "../constants";
-import type { ThemeProp } from "widgets/constants";
+import type { ThemeProp } from "WidgetProvider/constants";
 
 const PopoverStyles = createGlobalStyle<{
   parentWidth: number;
@@ -42,15 +42,15 @@ const PopoverStyles = createGlobalStyle<{
   borderRadius: string;
 }>`
   .menu-button-popover, .${BlueprintClasses.MINIMAL}.menu-button-popover.${
-  Classes.POPOVER2
-} {
+    Classes.POPOVER2
+  } {
     background: none;
     box-shadow: 0 6px 20px 0px rgba(0, 0, 0, 0.15) !important;
     margin-top: 8px !important;
     margin-bottom: 8px !important;
     border-radius: ${({ borderRadius }) =>
       borderRadius >= THEMEING_TEXT_SIZES.lg ? `0.375rem` : borderRadius};
-    overflow-y: scroll;
+    overflow-y: auto;
     max-height: 384px;
   }
 
@@ -59,7 +59,7 @@ const PopoverStyles = createGlobalStyle<{
     border-radius: 0;
   }
 
-  & > .${Classes.POPOVER2_TARGET} {
+  .menu-button-popover-target {
     height: 100%;
   }
 
@@ -105,8 +105,8 @@ const BaseButton = styled(Button)<ThemeProp & BaseStyleProps>`
         getCustomBackgroundColor(buttonVariant, buttonColor) !== "none"
           ? getCustomBackgroundColor(buttonVariant, buttonColor)
           : buttonVariant === ButtonVariantTypes.PRIMARY
-          ? theme.colors.button.primary.primary.bgColor
-          : "none"
+            ? theme.colors.button.primary.primary.bgColor
+            : "none"
       } !important;
 
     &:hover, &:active, &:focus {
@@ -114,10 +114,10 @@ const BaseButton = styled(Button)<ThemeProp & BaseStyleProps>`
         getCustomHoverColor(theme, buttonVariant, buttonColor) !== "none"
           ? getCustomHoverColor(theme, buttonVariant, buttonColor)
           : buttonVariant === ButtonVariantTypes.SECONDARY
-          ? theme.colors.button.primary.secondary.hoverColor
-          : buttonVariant === ButtonVariantTypes.TERTIARY
-          ? theme.colors.button.primary.tertiary.hoverColor
-          : theme.colors.button.primary.primary.hoverColor
+            ? theme.colors.button.primary.secondary.hoverColor
+            : buttonVariant === ButtonVariantTypes.TERTIARY
+              ? theme.colors.button.primary.tertiary.hoverColor
+              : theme.colors.button.primary.primary.hoverColor
       } !important;
     }
 
@@ -143,8 +143,8 @@ const BaseButton = styled(Button)<ThemeProp & BaseStyleProps>`
       getCustomBorderColor(buttonVariant, buttonColor) !== "none"
         ? `1px solid ${getCustomBorderColor(buttonVariant, buttonColor)}`
         : buttonVariant === ButtonVariantTypes.SECONDARY
-        ? `1px solid ${theme.colors.button.primary.secondary.borderColor}`
-        : "none"
+          ? `1px solid ${theme.colors.button.primary.secondary.borderColor}`
+          : "none"
     } !important;
 
     & > span {
@@ -158,11 +158,11 @@ const BaseButton = styled(Button)<ThemeProp & BaseStyleProps>`
         buttonVariant === ButtonVariantTypes.PRIMARY
           ? getComplementaryGrayscaleColor(buttonColor)
           : getCustomBackgroundColor(
-              ButtonVariantTypes.PRIMARY,
-              buttonColor,
-            ) !== "none"
-          ? getCustomBackgroundColor(ButtonVariantTypes.PRIMARY, buttonColor)
-          : `${theme.colors.button.primary.secondary.textColor}`
+                ButtonVariantTypes.PRIMARY,
+                buttonColor,
+              ) !== "none"
+            ? getCustomBackgroundColor(ButtonVariantTypes.PRIMARY, buttonColor)
+            : `${theme.colors.button.primary.secondary.textColor}`
       } !important;
     }
   `}
@@ -294,10 +294,14 @@ export interface PopoverTargetButtonProps {
   buttonVariant?: ButtonVariant;
   iconName?: IconName;
   iconAlign?: Alignment;
+  shouldFitContent: boolean;
   isDisabled?: boolean;
   label?: string;
   placement?: ButtonPlacement;
   renderMode?: RenderMode;
+  maxWidth?: number;
+  minWidth?: number;
+  minHeight?: number;
 }
 
 function PopoverTargetButton(props: PopoverTargetButtonProps) {
@@ -310,8 +314,12 @@ function PopoverTargetButton(props: PopoverTargetButtonProps) {
     iconName,
     isDisabled,
     label,
+    maxWidth,
+    minHeight,
+    minWidth,
     placement,
     renderMode,
+    shouldFitContent,
   } = props;
 
   const isRightAlign = iconAlign === Alignment.RIGHT;
@@ -321,7 +329,11 @@ function PopoverTargetButton(props: PopoverTargetButtonProps) {
       buttonColor={buttonColor}
       buttonVariant={buttonVariant}
       disabled={isDisabled}
+      maxWidth={maxWidth}
+      minHeight={minHeight}
+      minWidth={minWidth}
       renderMode={renderMode}
+      shouldFitContent={shouldFitContent}
     >
       <BaseButton
         alignText={getAlignText(isRightAlign, iconName)}
@@ -351,14 +363,18 @@ function MenuButtonComponent(props: MenuButtonComponentProps) {
     isCompact,
     isDisabled,
     label,
+    maxWidth,
     menuColor,
     menuDropDownWidth,
     menuItems,
     menuItemsSource,
     menuVariant,
+    minHeight,
+    minWidth,
     onItemClicked,
     placement,
     renderMode,
+    shouldFitContent,
     sourceData,
     widgetId,
     width,
@@ -373,6 +389,7 @@ function MenuButtonComponent(props: MenuButtonComponentProps) {
         parentWidth={width - WidgetContainerDiff}
       />
       <Popover2
+        className="menu-button-popover-target"
         content={
           <PopoverContent
             backgroundColor={menuColor}
@@ -401,8 +418,12 @@ function MenuButtonComponent(props: MenuButtonComponentProps) {
           iconName={iconName}
           isDisabled={isDisabled}
           label={label}
+          maxWidth={maxWidth}
+          minHeight={minHeight}
+          minWidth={minWidth}
           placement={placement}
           renderMode={renderMode}
+          shouldFitContent={shouldFitContent}
         />
       </Popover2>
     </>

@@ -33,6 +33,10 @@ export const JsonWrapper = styled.div`
     }
   }
 
+  .pretty-json-container {
+    font-family: ${(props) => props.theme.fonts.code};
+  }
+
   // collapse icon color change and alignment
   .icon-container {
     width: 10px !important;
@@ -51,7 +55,6 @@ export const JsonWrapper = styled.div`
         padding-bottom: 0 !important;
         border-left: 0 !important;
         .variable-value div {
-          text-transform: lowercase;
           font-size: 10px !important;
           padding-top: 0 !important;
           padding-bottom: 0 !important;

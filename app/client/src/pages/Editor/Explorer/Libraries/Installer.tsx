@@ -18,61 +18,31 @@ import {
   Avatar,
   Callout,
   Tooltip,
-} from "design-system";
-import {
-  createMessage,
-  customJSLibraryMessages,
-} from "@appsmith/constants/messages";
+} from "@appsmith/ads";
+import { createMessage, customJSLibraryMessages } from "ee/constants/messages";
 import { useDispatch, useSelector } from "react-redux";
 import {
   selectInstallationStatus,
   selectInstalledLibraries,
-  selectIsInstallerOpen,
   selectIsLibraryInstalled,
   selectQueuedLibraries,
   selectStatusForURL,
-} from "selectors/entitiesSelector";
+} from "ee/selectors/entitiesSelector";
 import { InstallState } from "reducers/uiReducers/libraryReducer";
 import recommendedLibraries from "pages/Editor/Explorer/Libraries/recommendedLibraries";
-import type { AppState } from "@appsmith/reducers";
-import {
-  clearInstalls,
-  installLibraryInit,
-  toggleInstaller,
-} from "actions/JSLibraryActions";
+import type { AppState } from "ee/reducers";
+import { installLibraryInit } from "actions/JSLibraryActions";
 import classNames from "classnames";
-import type { TJSLibrary } from "workers/common/JSLibrary";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import type { JSLibrary } from "workers/common/JSLibrary";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 import { EntityClassNames } from "pages/Editor/Explorer/Entity";
 
-const openDoc = (e: React.MouseEvent, url: string) => {
-  e.preventDefault();
-  e.stopPropagation();
-  window.open(url, "_blank");
-};
-
-const Wrapper = styled.div<{ left: number }>`
+const Wrapper = styled.div`
   display: flex;
-  height: auto;
-  width: 400px;
-  max-height: 80vh;
   flex-direction: column;
-  padding: 0 20px 4px 22px;
-  position: absolute;
-  background: white;
-  z-index: 25;
-  left: ${(props) => props.left}px;
-  bottom: 15px;
-  border-radius: var(--ads-v2-border-radius);
-  border-color: var(--ads-v2-color-border);
-  box-shadow: var(--ads-v2-shadow-popovers);
-  .installation-header {
-    padding: 20px 0 0;
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    margin-bottom: 12px;
-  }
+  overflow-y: scroll;
+  max-height: calc(var(--popover-max-height) - 69px);
+
   .search-body {
     display: flex;
     padding-right: 4px;
@@ -82,7 +52,7 @@ const Wrapper = styled.div<{ left: number }>`
       margin-bottom: 16px;
       .left-icon {
         margin-left: 14px;
-        .cs-icon {
+        .ads-v2-icon {
           margin-right: 0;
         }
       }
@@ -91,9 +61,6 @@ const Wrapper = styled.div<{ left: number }>`
         .remixicon-icon {
           cursor: initial;
         }
-      }
-      .bp3-label {
-        font-size: 12px;
       }
       display: flex;
       flex-direction: column;
@@ -110,7 +77,6 @@ const Wrapper = styled.div<{ left: number }>`
         > span {
           font-size: inherit;
         }
-        /* font-size: 12px; */
       }
     }
     .search-results {
@@ -141,9 +107,6 @@ const Wrapper = styled.div<{ left: number }>`
     }
     .divider {
       margin: 0 0 16px 0;
-    }
-    .download {
-      cursor: pointer;
     }
     .library-name {
       /* font-family: var(--font-family); */
@@ -199,12 +162,15 @@ const InstallationProgressWrapper = styled.div<{ addBorder: boolean }>`
 function isValidJSFileURL(url: string) {
   const JS_FILE_REGEX =
     /(?:https?):\/\/(\w+:?\w*)?(\S+)(:\d+)?(\/|\/([\w#!:.?+=&%!\-\/]))?/;
+
   return JS_FILE_REGEX.test(url);
 }
 
 function StatusIcon(props: {
   status: InstallState;
   isInstalled?: boolean;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   action?: any;
 }) {
   const { action, isInstalled = false, status } = props;
@@ -212,6 +178,7 @@ function StatusIcon(props: {
     () => (action ? { onClick: action } : {}),
     [action],
   );
+
   if (status === InstallState.Success || isInstalled)
     return (
       <Tooltip content="Successfully installed" trigger="hover">
@@ -223,17 +190,20 @@ function StatusIcon(props: {
         />
       </Tooltip>
     );
+
   if (status === InstallState.Failed)
     return (
       <Tooltip content="Download failed, please try again." trigger="hover">
         <Icon className="failed" name="warning-line" size="md" />
       </Tooltip>
     );
+
   if (status === InstallState.Queued) return <Spinner className="queued" />;
+
   return (
     <Tooltip content="Install" trigger="hover">
       <Button
-        className="t--download download"
+        className="t--download"
         isIconButton
         kind="tertiary"
         {...actionProps}
@@ -276,13 +246,13 @@ function ProgressTracker({
             links={[
               {
                 children: createMessage(customJSLibraryMessages.REPORT_ISSUE),
-                to: "#",
-                onClick: (e) => openDoc(e, EXT_LINK.reportIssue),
+                to: EXT_LINK.reportIssue,
+                target: "_blank",
               },
               {
                 children: createMessage(customJSLibraryMessages.LEARN_MORE),
-                onClick: (e) => openDoc(e, EXT_LINK.learnMore),
-                to: "#",
+                to: EXT_LINK.learnMore,
+                target: "_blank",
               },
             ]}
           >
@@ -299,7 +269,9 @@ function InstallationProgress() {
   const urls = Object.keys(installStatusMap).filter(
     (url) => !recommendedLibraries.find((lib) => lib.url === url),
   );
+
   if (urls.length === 0) return null;
+
   return (
     <div>
       {urls.reverse().map((url, idx) => (
@@ -322,49 +294,25 @@ const EXT_LINK = {
   jsDelivr: "https://www.jsdelivr.com/",
 };
 
-export function Installer(props: { left: number }) {
-  const { left } = props;
+export function Installer() {
   const [URL, setURL] = useState("");
   const [isValid, setIsValid] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const dispatch = useDispatch();
   const installedLibraries = useSelector(selectInstalledLibraries);
   const queuedLibraries = useSelector(selectQueuedLibraries);
-  const isOpen = useSelector(selectIsInstallerOpen);
   const installerRef = useRef<HTMLDivElement>(null);
-
-  const closeInstaller = useCallback(() => {
-    setURL("");
-    dispatch(clearInstalls());
-    dispatch(toggleInstaller(false));
-  }, []);
-
-  const handleOutsideClick = useCallback((e: MouseEvent) => {
-    const paths = e.composedPath();
-    if (
-      installerRef &&
-      installerRef.current &&
-      !paths?.includes(installerRef.current)
-    )
-      closeInstaller();
-  }, []);
-
-  useEffect(() => {
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-    };
-  }, [isOpen]);
 
   const updateURL = useCallback((value: string) => {
     setURL(value);
-
     setErrorMessage(validate(value).message);
   }, []);
 
   const validate = useCallback((text) => {
     const isValid = !text || isValidJSFileURL(text);
+
     setIsValid(isValid);
+
     return {
       isValid,
       message: isValid ? "" : "Please enter a valid URL",
@@ -377,12 +325,14 @@ export function Installer(props: { left: number }) {
   }, [URL, isValid]);
 
   const installLibrary = useCallback(
-    (lib?: Partial<TJSLibrary>) => {
+    (lib?: Partial<JSLibrary>) => {
       const url = lib?.url || URL;
       const isQueued = queuedLibraries.find((libURL) => libURL === url);
+
       if (isQueued) return;
 
       const libInstalled = installedLibraries.find((lib) => lib.url === url);
+
       if (libInstalled) {
         toast.show(
           createMessage(
@@ -393,8 +343,10 @@ export function Installer(props: { left: number }) {
             kind: "info",
           },
         );
+
         return;
       }
+
       dispatch(
         installLibraryInit({
           url,
@@ -406,26 +358,12 @@ export function Installer(props: { left: number }) {
     [URL, installedLibraries, queuedLibraries],
   );
 
-  return !isOpen ? null : (
+  return (
     <Wrapper
-      className={`bp3-popover ${EntityClassNames.CONTEXT_MENU_CONTENT}`}
-      left={left}
+      className={`${EntityClassNames.CONTEXT_MENU_CONTENT}`}
       ref={installerRef}
     >
-      <div className="installation-header">
-        <Text kind="heading-m">
-          {createMessage(customJSLibraryMessages.ADD_JS_LIBRARY)}
-        </Text>
-        <Button
-          className="t--close-installer"
-          isIconButton
-          kind="tertiary"
-          onClick={closeInstaller}
-          size="md"
-          startIcon="close-line"
-        />
-      </div>
-      <div className="search-body overflow-auto">
+      <div className="search-body overflow-y-scroll">
         <div className="search-area t--library-container">
           <div className="flex flex-row gap-2 justify-between items-end">
             <div className="w-full h-[83px]">
@@ -442,7 +380,6 @@ export function Installer(props: { left: number }) {
                 type="text"
               />
             </div>
-
             <Button
               className="mb-[22px]"
               data-testid="install-library-btn"
@@ -459,20 +396,12 @@ export function Installer(props: { left: number }) {
         <div className="search-CTA mb-3 text-xs">
           <span>
             Explore libraries on{" "}
-            <Link
-              kind="primary"
-              onClick={(e) => openDoc(e, EXT_LINK.jsDelivr)}
-              to="#"
-            >
+            <Link kind="primary" target="_blank" to={EXT_LINK.jsDelivr}>
               jsDelivr
             </Link>
             {". "}
             {createMessage(customJSLibraryMessages.LEARN_MORE_DESC)}{" "}
-            <Link
-              kind="primary"
-              onClick={(e) => openDoc(e, EXT_LINK.learnMore)}
-              to="#"
-            >
+            <Link kind="primary" target="_blank" to={EXT_LINK.learnMore}>
               here
             </Link>
             {"."}
@@ -513,6 +442,7 @@ function LibraryCard({
   const isInstalled = useSelector((state: AppState) =>
     selectIsLibraryInstalled(state, lib.url),
   );
+
   return (
     <div
       className={classNames({
@@ -526,8 +456,8 @@ function LibraryCard({
             className="library-name"
             endIcon="share-box-line"
             kind="secondary"
-            onClick={(e) => openDoc(e, lib.docsURL)}
-            to="#"
+            target="_blank"
+            to={lib.docsURL}
           >
             {lib.name}
           </Link>

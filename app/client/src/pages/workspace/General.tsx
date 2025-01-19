@@ -4,23 +4,33 @@ import {
   deleteWorkspaceLogo,
   saveWorkspace,
   uploadWorkspaceLogo,
-} from "@appsmith/actions/workspaceActions";
-import type { SaveWorkspaceRequest } from "@appsmith/api/WorkspaceApi";
+} from "ee/actions/workspaceActions";
+import type { SaveWorkspaceRequest } from "ee/api/WorkspaceApi";
 import { debounce } from "lodash";
-import { Input } from "design-system";
+import { Input } from "@appsmith/ads";
 import { useSelector, useDispatch } from "react-redux";
 import {
   getCurrentError,
-  getCurrentWorkspace,
-  getWorkspaceLoadingStates,
-} from "@appsmith/selectors/workspaceSelectors";
+  getFetchedWorkspaces,
+} from "ee/selectors/workspaceSelectors";
 import { useParams } from "react-router-dom";
 import styled from "styled-components";
-import type { SetProgress, UploadCallback } from "design-system-old";
-import { FilePickerV2, FileType, Text, TextType } from "design-system-old";
+import type { SetProgress, UploadCallback } from "@appsmith/ads-old";
+import { FilePickerV2, FileType, Text, TextType } from "@appsmith/ads-old";
 import { Classes } from "@blueprintjs/core";
-import { getIsFetchingApplications } from "@appsmith/selectors/applicationSelectors";
 import { useMediaQuery } from "react-responsive";
+import {
+  getIsFetchingApplications,
+  selectedWorkspaceLoadingStates,
+} from "ee/selectors/selectedWorkspaceSelectors";
+import type { AxiosProgressEvent } from "axios";
+
+// This wrapper ensures that the scroll behaviour is consistent with the other tabs
+const ScrollWrapper = styled.div`
+  overflow: auto;
+  height: 100%;
+  width: 100%;
+`;
 
 // trigger tests
 const GeneralWrapper = styled.div<{
@@ -102,9 +112,10 @@ export const Row = styled.div`
 export function GeneralSettings() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const dispatch = useDispatch();
-  const currentWorkspace = useSelector(getCurrentWorkspace).filter(
+  const currentWorkspace = useSelector(getFetchedWorkspaces).filter(
     (el) => el.id === workspaceId,
   )[0];
+
   function saveChanges(settings: SaveWorkspaceRequest) {
     dispatch(saveWorkspace(settings));
   }
@@ -132,7 +143,9 @@ export function GeneralSettings() {
     });
   }, timeout);
 
-  const { isFetchingWorkspace } = useSelector(getWorkspaceLoadingStates);
+  const { isFetchingCurrentWorkspace } = useSelector(
+    selectedWorkspaceLoadingStates,
+  );
   const logoUploadError = useSelector(getCurrentError);
 
   const FileUploader = (
@@ -140,14 +153,18 @@ export function GeneralSettings() {
     setProgress: SetProgress,
     onUpload: UploadCallback,
   ) => {
-    const progress = (progressEvent: ProgressEvent) => {
-      const uploadPercentage = Math.round(
-        (progressEvent.loaded / progressEvent.total) * 100,
-      );
-      if (uploadPercentage === 100) {
-        onUpload(currentWorkspace.logoUrl || "");
+    const progress = (progressEvent: AxiosProgressEvent) => {
+      if (progressEvent.total) {
+        const uploadPercentage = Math.round(
+          (progressEvent.loaded / progressEvent.total) * 100,
+        );
+
+        if (uploadPercentage === 100) {
+          onUpload(currentWorkspace.logoUrl || "");
+        }
+
+        setProgress(uploadPercentage);
       }
-      setProgress(uploadPercentage);
     };
 
     dispatch(
@@ -170,86 +187,90 @@ export function GeneralSettings() {
   });
 
   return (
-    <GeneralWrapper isMobile={isMobile} isPortrait={isPortrait}>
-      <SettingWrapper>
-        <Row>
-          {isFetchingApplications && <Loader className={Classes.SKELETON} />}
-          {!isFetchingApplications && (
-            <Input
-              data-testid="t--workspace-name-input"
-              defaultValue={currentWorkspace && currentWorkspace.name}
-              isRequired
-              label="Workspace name"
-              labelPosition="top"
-              onChange={onWorkspaceNameChange}
-              placeholder="Workspace name"
-              renderAs="input"
-              size="md"
-              type="text"
-            />
-          )}
-        </Row>
-      </SettingWrapper>
+    <ScrollWrapper>
+      <GeneralWrapper isMobile={isMobile} isPortrait={isPortrait}>
+        <SettingWrapper>
+          <Row>
+            {isFetchingApplications && <Loader className={Classes.SKELETON} />}
+            {!isFetchingApplications && (
+              <Input
+                data-testid="t--workspace-name-input"
+                defaultValue={currentWorkspace && currentWorkspace.name}
+                isRequired
+                label="Workspace name"
+                labelPosition="top"
+                onChange={onWorkspaceNameChange}
+                placeholder="Workspace name"
+                renderAs="input"
+                size="md"
+                type="text"
+              />
+            )}
+          </Row>
+        </SettingWrapper>
 
-      <SettingWrapper>
-        <Row className="t--workspace-settings-filepicker">
-          <InputLabelWrapper>
-            <Text type={TextType.P1}>Upload logo</Text>
-          </InputLabelWrapper>
-          {isFetchingWorkspace && (
-            <FilePickerLoader className={Classes.SKELETON} />
-          )}
-          {!isFetchingWorkspace && (
-            <FilePickerV2
-              fileType={FileType.IMAGE}
-              fileUploader={FileUploader}
-              logoUploadError={logoUploadError.message}
-              onFileRemoved={DeleteLogo}
-              url={currentWorkspace && currentWorkspace.logoUrl}
-            />
-          )}
-        </Row>
-      </SettingWrapper>
+        <SettingWrapper>
+          <Row className="t--workspace-settings-filepicker">
+            <InputLabelWrapper>
+              <Text type={TextType.P1}>Upload logo</Text>
+            </InputLabelWrapper>
+            {isFetchingCurrentWorkspace && (
+              <FilePickerLoader className={Classes.SKELETON} />
+            )}
+            {!isFetchingCurrentWorkspace && (
+              <FilePickerV2
+                fileType={FileType.IMAGE}
+                fileUploader={FileUploader}
+                logoUploadError={logoUploadError.message}
+                onFileRemoved={DeleteLogo}
+                url={currentWorkspace && currentWorkspace.logoUrl}
+              />
+            )}
+          </Row>
+        </SettingWrapper>
 
-      <SettingWrapper>
-        <Row>
-          {isFetchingApplications && <Loader className={Classes.SKELETON} />}
-          {!isFetchingApplications && (
-            <Input
-              data-testid="t--workspace-website-input"
-              defaultValue={
-                (currentWorkspace && currentWorkspace.website) || ""
-              }
-              label="Website"
-              labelPosition="top"
-              onChange={onWebsiteChange}
-              placeholder="Your website"
-              renderAs="input"
-              size="md"
-              type="text"
-            />
-          )}
-        </Row>
-      </SettingWrapper>
+        <SettingWrapper>
+          <Row>
+            {isFetchingApplications && <Loader className={Classes.SKELETON} />}
+            {!isFetchingApplications && (
+              <Input
+                data-testid="t--workspace-website-input"
+                defaultValue={
+                  (currentWorkspace && currentWorkspace.website) || ""
+                }
+                label="Website"
+                labelPosition="top"
+                onChange={onWebsiteChange}
+                placeholder="Your website"
+                renderAs="input"
+                size="md"
+                type="text"
+              />
+            )}
+          </Row>
+        </SettingWrapper>
 
-      <SettingWrapper>
-        <Row>
-          {isFetchingApplications && <Loader className={Classes.SKELETON} />}
-          {!isFetchingApplications && (
-            <Input
-              data-testid="t--workspace-email-input"
-              defaultValue={(currentWorkspace && currentWorkspace.email) || ""}
-              label="Email"
-              labelPosition="top"
-              onChange={onEmailChange}
-              placeholder="Email"
-              renderAs="input"
-              size="md"
-              type="text"
-            />
-          )}
-        </Row>
-      </SettingWrapper>
-    </GeneralWrapper>
+        <SettingWrapper>
+          <Row>
+            {isFetchingApplications && <Loader className={Classes.SKELETON} />}
+            {!isFetchingApplications && (
+              <Input
+                data-testid="t--workspace-email-input"
+                defaultValue={
+                  (currentWorkspace && currentWorkspace.email) || ""
+                }
+                label="Email"
+                labelPosition="top"
+                onChange={onEmailChange}
+                placeholder="Email"
+                renderAs="input"
+                size="md"
+                type="text"
+              />
+            )}
+          </Row>
+        </SettingWrapper>
+      </GeneralWrapper>
+    </ScrollWrapper>
   );
 }

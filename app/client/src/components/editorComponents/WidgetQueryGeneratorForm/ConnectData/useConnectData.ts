@@ -1,40 +1,82 @@
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
-import { PluginPackageName } from "entities/Action";
-import { isNumber } from "lodash";
-import { useContext } from "react";
-import { useDispatch } from "react-redux";
-import { WidgetQueryGeneratorFormContext } from "..";
-import { DEFAULT_DROPDOWN_OPTION } from "../constants";
+import { useDispatch, useSelector } from "react-redux";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import { getWidget } from "sagas/selectors";
+import { getPluginPackageFromDatasourceId } from "ee/selectors/entitiesSelector";
+import { getisOneClickBindingConnectingForWidget } from "selectors/oneClickBindingSelectors";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { isValidGsheetConfig } from "../utils";
+import { useContext, useMemo } from "react";
+import { WidgetQueryGeneratorFormContext } from "../index";
+import { PluginPackageName } from "entities/Plugin";
+import { useFormConfig } from "../common/useFormConfig";
 
 export function useConnectData() {
   const dispatch = useDispatch();
 
-  const { config } = useContext(WidgetQueryGeneratorFormContext);
+  const { aliases, config, otherFields, propertyName, widgetId } = useContext(
+    WidgetQueryGeneratorFormContext,
+  );
+
+  const widget = useSelector((state) => getWidget(state, widgetId));
+
+  const formConfig = useFormConfig();
+
+  const isLoading = useSelector(
+    getisOneClickBindingConnectingForWidget(widgetId),
+  );
 
   const onClick = () => {
     dispatch({
       type: ReduxActionTypes.BIND_WIDGET_TO_DATASOURCE,
-      payload: config,
+      payload: formConfig, // Use the formConfig payload directly
+    });
+
+    AnalyticsUtil.logEvent(`GENERATE_QUERY_CONNECT_DATA_CLICK`, {
+      widgetName: widget.widgetName,
+      widgetType: widget.type,
+      propertyName: propertyName,
+      pluginType: config.datasourcePluginType,
+      pluginName: config.datasourcePluginName,
+      connectionMode: config.datasourceConnectionMode,
+      additionalData: {
+        dataTableName: config.table,
+        searchableColumn: config.searchableColumn,
+        alias: config.alias,
+        formType: config.otherFields?.formType,
+      },
     });
   };
 
-  const show =
-    config.datasource !== DEFAULT_DROPDOWN_OPTION &&
-    config.table !== DEFAULT_DROPDOWN_OPTION &&
-    (config.datasource.data.pluginPackageName !==
-      PluginPackageName.GOOGLE_SHEETS ||
-      config.sheet !== DEFAULT_DROPDOWN_OPTION);
+  const selectedDatasourcePluginPackageName = useSelector((state) =>
+    getPluginPackageFromDatasourceId(state, config.datasource),
+  );
 
-  const disabled =
-    config.datasource.data.pluginPackageName ===
-      PluginPackageName.GOOGLE_SHEETS &&
-    (!config.tableHeaderIndex ||
-      !isNumber(Number(config.tableHeaderIndex)) ||
-      isNaN(Number(config.tableHeaderIndex)));
+  const show = !!config.datasource;
+
+  const disabled = useMemo(() => {
+    return (
+      !config.table ||
+      (selectedDatasourcePluginPackageName ===
+        PluginPackageName.GOOGLE_SHEETS &&
+        !isValidGsheetConfig(config)) ||
+      aliases?.some((alias) => {
+        return alias.isRequired && !config.alias[alias.name];
+      }) ||
+      (otherFields &&
+        otherFields?.some((field) => {
+          return (
+            field.isRequired &&
+            field.isVisible?.(config) &&
+            !config.otherFields?.[field.name]
+          );
+        }))
+    );
+  }, [config, aliases]);
 
   return {
     show,
     disabled,
     onClick,
+    isLoading,
   };
 }

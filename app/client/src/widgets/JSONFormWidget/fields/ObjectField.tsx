@@ -37,9 +37,9 @@ type ObjectFieldProps = Omit<
   name: string;
 };
 
-type StyledWrapperProps = {
+interface StyledWrapperProps {
   withBottomMargin: boolean;
-};
+}
 
 const COMPONENT_DEFAULT_VALUES: ObjectComponentProps = {
   isDisabled: false,
@@ -81,6 +81,7 @@ function ObjectField({
 
   const objectPassedDefaultValue = useMemo(() => {
     let defaultValue: Record<string, unknown> = {};
+
     if (passedDefaultValue && typeof passedDefaultValue === "object") {
       defaultValue = passedDefaultValue as Record<string, unknown>;
     }
@@ -164,6 +165,7 @@ function ObjectField({
 }
 
 const MemoedObjectField: FieldComponent = React.memo(ObjectField);
+
 MemoedObjectField.componentDefaultValues = COMPONENT_DEFAULT_VALUES;
 
 export default MemoedObjectField;

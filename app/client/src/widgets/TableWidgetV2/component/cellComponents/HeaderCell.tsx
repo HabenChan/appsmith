@@ -24,13 +24,16 @@ import { isColumnTypeEditable } from "widgets/TableWidgetV2/widget/utilities";
 import { Popover2 } from "@blueprintjs/popover2";
 import { MenuDivider } from "@design-system/widgets-old";
 import { importRemixIcon, importSvg } from "@design-system/widgets-old";
+import { CANVAS_ART_BOARD } from "constants/componentClassNameConstants";
 
-const Check = importRemixIcon(() => import("remixicon-react/CheckFillIcon"));
+const Check = importRemixIcon(
+  async () => import("remixicon-react/CheckFillIcon"),
+);
 const ArrowDownIcon = importRemixIcon(
-  () => import("remixicon-react/ArrowDownSLineIcon"),
+  async () => import("remixicon-react/ArrowDownSLineIcon"),
 );
 const EditIcon = importSvg(
-  () => import("assets/icons/control/edit-variant1.svg"),
+  async () => import("assets/icons/control/edit-variant1.svg"),
 );
 
 const AscendingIcon = styled(ControlIcons.SORT_CONTROL)`
@@ -82,17 +85,19 @@ const TitleWrapper = styled.div`
   }
 `;
 
-type TitleProps = {
+interface TitleProps {
   children: React.ReactNode;
   tableWidth?: number;
   width?: number;
-};
+}
 
 function Title(props: TitleProps) {
   const ref = createRef<HTMLDivElement>();
   const [useToolTip, updateToolTip] = useState(false);
+
   useEffect(() => {
     const element = ref.current;
+
     if (element && element.offsetWidth < element.scrollWidth) {
       updateToolTip(true);
     } else {
@@ -124,7 +129,7 @@ function Title(props: TitleProps) {
 
 const ICON_SIZE = 16;
 
-type HeaderProps = {
+interface HeaderProps {
   canFreezeColumn?: boolean;
   columnName: string;
   columnIndex: number;
@@ -135,6 +140,8 @@ type HeaderProps = {
   columnOrder?: string[];
   sortTableColumn: (columnIndex: number, asc: boolean) => void;
   isResizingColumn: boolean;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   column: any;
   editMode?: boolean;
   isSortable?: boolean;
@@ -155,13 +162,14 @@ type HeaderProps = {
     e: React.DragEvent<HTMLDivElement>,
     destinationIndex: number,
   ) => void;
-};
+}
 
 const HeaderCellComponent = (props: HeaderProps) => {
   const { column, editMode, isSortable } = props;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const headerProps = { ...column.getHeaderProps() };
+
   headerProps["style"] = {
     ...headerProps.style,
     left:
@@ -171,12 +179,16 @@ const HeaderCellComponent = (props: HeaderProps) => {
   };
   const handleSortColumn = () => {
     if (props.isResizingColumn) return;
+
     let columnIndex = props.columnIndex;
+
     if (props.isAscOrder === true) {
       columnIndex = -1;
     }
+
     const sortOrder =
       props.isAscOrder === undefined ? false : !props.isAscOrder;
+
     props.sortTableColumn(columnIndex, sortOrder);
   };
 
@@ -266,7 +278,11 @@ const HeaderCellComponent = (props: HeaderProps) => {
           </Title>
         </ColumnNameContainer>
       </div>
-      <div className={`header-menu${!isMenuOpen ? " hide" : ""}`}>
+      <div
+        className={`header-menu ${
+          !isSortable && !props.canFreezeColumn && "hide-menu"
+        } ${!isMenuOpen && "hide"}`}
+      >
         <Popover2
           content={
             <Menu className={MENU_CONTENT_CLASS}>
@@ -322,7 +338,9 @@ const HeaderCellComponent = (props: HeaderProps) => {
           onInteraction={setIsMenuOpen}
           placement="bottom-end"
           portalClassName={`${HEADER_MENU_PORTAL_CLASS}-${props.widgetId}`}
-          portalContainer={document.getElementById("art-board") || undefined}
+          portalContainer={
+            document.getElementById(CANVAS_ART_BOARD) || undefined
+          }
         >
           <ArrowDownIcon className="w-5 h-5" color="var(--wds-color-icon)" />
         </Popover2>
@@ -347,4 +365,5 @@ const HeaderCellComponent = (props: HeaderProps) => {
     </div>
   );
 };
+
 export const HeaderCell = memo(HeaderCellComponent);

@@ -1,8 +1,11 @@
 import type { WidgetBaseProps } from "widgets/BaseWidget";
-import type { FlattenedWidgetProps } from "widgets/constants";
+import type { FlattenedWidgetProps } from "WidgetProvider/constants";
 import { MAIN_CONTAINER_WIDGET_ID } from "constants/WidgetConstants";
-import type { FlexLayer, LayerChild } from "utils/autoLayout/autoLayoutTypes";
 import { checkForOnClick } from "widgets/WidgetUtils";
+import type {
+  FlexLayer,
+  LayerChild,
+} from "layoutSystems/autolayout/utils/types";
 
 export const extractTillNestedListWidget = (
   flattenedWidgets: WidgetBaseProps["flattenedChildCanvasWidgets"],
@@ -58,6 +61,7 @@ export const getNumberOfChildListWidget = (
   widgets: { [widgetId: string]: FlattenedWidgetProps },
 ): number => {
   let numOfChildListWidget = 0;
+
   if (
     !widgetId ||
     !widgets[widgetId] ||
@@ -100,6 +104,7 @@ export function getMetaFlexLayers(
     for (const flexChild of children) {
       if (rowReferences[flexChild.id]) {
         const metaWidgetId = rowReferences[flexChild.id] || flexChild.id;
+
         metaFlexChildren.push({
           align: flexChild.align,
           id: metaWidgetId,

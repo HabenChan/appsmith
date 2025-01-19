@@ -1,10 +1,16 @@
 import React from "react";
-import { Text, TextType } from "design-system-old";
-import { Icon, Tooltip } from "design-system";
+import { Text, TextType } from "@appsmith/ads-old";
+import { Icon, Tooltip } from "@appsmith/ads";
 import type { Datasource } from "entities/Datasource";
 import styled from "styled-components";
-import { getAssetUrl } from "@appsmith/utils/airgapHelpers";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
 import { PluginImage } from "pages/Editor/DataSourceEditor/DSFormHeader";
+import { isEnvironmentConfigured } from "ee/utils/Environments";
+import type { Plugin } from "entities/Plugin";
+import {
+  isDatasourceAuthorizedForQueryCreation,
+  isGoogleSheetPluginDS,
+} from "utils/editorContextUtils";
 
 const ListItem = styled.div<{ disabled?: boolean }>`
   display: flex;
@@ -44,49 +50,56 @@ const DsTitle = styled.div`
     text-overflow: ellipsis;
     padding-right: 4px;
   }
-  .cs-icon {
+  .ads-v2-icon {
     margin-left: ${(props) => props.theme.spaces[2]}px;
   }
 `;
+
 function ListItemWrapper(props: {
+  currentEnvironment: string;
   ds: Datasource;
   selected?: boolean;
-  plugin: {
-    image: string;
-    name: string;
-  };
+  plugin: Plugin;
   onClick: (ds: Datasource) => void;
 }) {
-  const { ds, onClick, plugin, selected } = props;
+  const { currentEnvironment, ds, onClick, plugin, selected } = props;
+  const isPluginAuthorized = isGoogleSheetPluginDS(plugin?.packageName)
+    ? isDatasourceAuthorizedForQueryCreation(
+        ds,
+        plugin ?? {},
+        currentEnvironment,
+      )
+    : isEnvironmentConfigured(ds, currentEnvironment);
+
   return (
     <ListItem
       className={`t--ds-list ${selected ? "active" : ""}`}
       onClick={() => onClick(ds)}
     >
-      <PluginImage alt="Datasource" src={getAssetUrl(plugin.image)} />
+      <PluginImage alt="Datasource" src={getAssetUrl(plugin?.iconLocation)} />
       <ListLabels>
-        <DsTitle>
-          <Text
-            className="t--ds-list-title"
-            color="var(--ads-v2-color-fg-emphasis)"
-            type={TextType.H4}
-          >
-            {ds.name}
-          </Text>
-          <Tooltip content={ds.name} placement="left">
+        <Tooltip content={ds.name} placement="left">
+          <DsTitle>
+            <Text
+              className="t--ds-list-title"
+              color="var(--ads-v2-color-fg-emphasis)"
+              type={TextType.H4}
+            >
+              {ds.name}
+            </Text>
             <Icon
               color={
-                ds.isConfigured
+                isPluginAuthorized
                   ? "var(--ads-v2-color-fg-success)"
                   : "var(--ads-v2-color-fg-error)"
               }
-              name={ds.isConfigured ? "oval-check" : "info"}
+              name={isPluginAuthorized ? "oval-check" : "info"}
               size="md"
             />
-          </Tooltip>
-        </DsTitle>
+          </DsTitle>
+        </Tooltip>
         <Text color="var(--ads-v2-color-fg)" type={TextType.H5}>
-          {plugin.name}
+          {plugin?.name}
         </Text>
       </ListLabels>
     </ListItem>

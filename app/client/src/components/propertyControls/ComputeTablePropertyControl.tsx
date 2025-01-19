@@ -15,6 +15,8 @@ import styled from "styled-components";
 import { isString } from "utils/helpers";
 import { JSToString, stringToJS } from "./utils";
 import LazyCodeEditor from "components/editorComponents/LazyCodeEditor";
+import { bindingHintHelper } from "components/editorComponents/CodeEditor/hintHelpers";
+import { slashCommandHintHelper } from "components/editorComponents/CodeEditor/commandsHelper";
 
 const PromptMessage = styled.span`
   line-height: 17px;
@@ -39,6 +41,8 @@ export function InputText(props: {
   label: string;
   value: string;
   onChange: (event: React.ChangeEvent<HTMLTextAreaElement> | string) => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluatedValue?: any;
   expected?: CodeEditorExpected;
   placeholder?: string;
@@ -56,6 +60,7 @@ export function InputText(props: {
     theme,
     value,
   } = props;
+
   return (
     <StyledDynamicInput>
       <LazyCodeEditor
@@ -64,12 +69,14 @@ export function InputText(props: {
         dataTreePath={dataTreePath}
         evaluatedValue={evaluatedValue}
         expected={expected}
+        hinting={[bindingHintHelper, slashCommandHintHelper]}
         input={{
           value: value,
           onChange: onChange,
         }}
         mode={EditorModes.TEXT_WITH_BINDING}
         placeholder={placeholder}
+        positionCursorInsideBinding
         promptMessage={
           <PromptMessage>
             Access the current cell using{" "}
@@ -106,20 +113,25 @@ class ComputeTablePropertyControl extends BaseControl<ComputeTablePropertyContro
             tableId,
           )
         : propertyValue
-        ? propertyValue
-        : defaultValue;
+          ? propertyValue
+          : defaultValue;
     const evaluatedProperties = this.props.widgetProperties;
 
     const columns: Record<string, ColumnProperties> =
       evaluatedProperties.primaryColumns || {};
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const currentRow: { [key: string]: any } = {};
+
     Object.keys(columns).forEach((id: string) => {
       currentRow[id] = undefined;
     });
+
     // Load default value in evaluated value
     if (value && !propertyValue) {
       this.onTextChange(value);
     }
+
     return (
       <InputText
         additionalDynamicData={{
@@ -147,19 +159,23 @@ class ComputeTablePropertyControl extends BaseControl<ComputeTablePropertyContro
 
   getComputedValue = (value: string, tableId: string) => {
     const stringToEvaluate = stringToJS(value);
+
     if (stringToEvaluate === "") {
       return stringToEvaluate;
     }
+
     return `{{${tableId}.sanitizedTableData.map((currentRow) => ( ${stringToEvaluate}))}}`;
   };
 
   onTextChange = (event: React.ChangeEvent<HTMLTextAreaElement> | string) => {
     let value = "";
+
     if (typeof event !== "string") {
       value = event.target?.value;
     } else {
       value = event;
     }
+
     if (isString(value)) {
       const output = this.getComputedValue(
         value,

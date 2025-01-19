@@ -1,17 +1,19 @@
 import React from "react";
-import { Button } from "design-system";
+import { Button } from "@appsmith/ads";
 
 import Page from "./Page";
 import {
   createMessage,
   PAGE_CLIENT_ERROR_DESCRIPTION,
   PAGE_CLIENT_ERROR_TITLE,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import { flushErrors } from "actions/errorActions";
 import { useDispatch } from "react-redux";
+import { DISCORD_URL } from "constants/ThirdPartyConstants";
 
 function GenericError(props: { errorCode?: string }) {
   const dispatch = useDispatch();
+
   return (
     <Page
       cta={
@@ -21,7 +23,7 @@ function GenericError(props: { errorCode?: string }) {
           kind="primary"
           onClick={() => {
             dispatch(flushErrors());
-            window.open("https://discord.gg/rBTTVJp", "_blank");
+            window.open(DISCORD_URL, "_blank");
           }}
           size="md"
         >

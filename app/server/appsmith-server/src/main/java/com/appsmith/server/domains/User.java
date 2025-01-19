@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JsonView;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
+import lombok.experimental.FieldNameConstants;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.security.core.GrantedAuthority;
@@ -16,17 +17,17 @@ import org.springframework.security.oauth2.core.oidc.OidcUserInfo;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.util.StringUtils;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-
 
 @Getter
 @Setter
 @ToString
 @Document
+@FieldNameConstants
 public class User extends BaseDomain implements UserDetails, OidcUser {
 
     @JsonView(Views.Public.class)
@@ -38,12 +39,9 @@ public class User extends BaseDomain implements UserDetails, OidcUser {
     @JsonView(Views.Public.class)
     private String hashedEmail;
 
-    //TODO: This is deprecated in favour of groups
-    @JsonView(Views.Public.class)
-    private Set<Role> roles;
-
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @JsonView(Views.Public.class)
+    @ToString.Exclude
     private String password;
 
     @JsonView(Views.Internal.class)
@@ -58,40 +56,17 @@ public class User extends BaseDomain implements UserDetails, OidcUser {
     @JsonView(Views.Public.class)
     private Boolean isEnabled = true;
 
-    //Organizations migrated to workspaces, kept the field as depricated to support the old migration
-    @Deprecated
     @JsonView(Views.Public.class)
-    private String currentOrganizationId;
+    private Boolean emailVerificationRequired;
 
     @JsonView(Views.Public.class)
-    private String currentWorkspaceId;
-
-    //Organizations migrated to workspaces, kept the field as depricated to support the old migration
-    @Deprecated
-    @JsonView(Views.Public.class)
-    private Set<String> organizationIds;
+    private Boolean emailVerified;
 
     @JsonView(Views.Public.class)
     private Set<String> workspaceIds;
 
-    //Organizations migrated to workspaces, kept the field as depricated to support the old migration
-    @Deprecated
-    @JsonView(Views.Public.class)
-    private String examplesOrganizationId;
-
     @JsonView(Views.Public.class)
     private String examplesWorkspaceId;
-
-    // There is a many-to-many relationship with groups. If this value is modified, please also modify the list of
-    // users in that particular group document as well.
-    @JsonView(Views.Public.class)
-    private Set<String> groupIds = new HashSet<>();
-
-    // These permissions are in addition to the privileges provided by the groupIds. We can assign individual permissions
-    // to users instead of creating a group for them. To be used only for one-off permissions.
-    // During evaluation a union of the group permissions and user-specific permissions will take effect.
-    @JsonView(Views.Public.class)
-    private Set<String> permissions = new HashSet<>();
 
     // This field is used when a user is invited to appsmith. This inviteToken is used to confirm the identity in verify
     // token flow.
@@ -103,6 +78,15 @@ public class User extends BaseDomain implements UserDetails, OidcUser {
 
     @JsonView(Views.Public.class)
     private String tenantId;
+
+    // Field to indicate if the user is system generated or not. Expected to be `true` for system generated users, null
+    // otherwise.
+    // e.g. AnonymousUser is created by the system migration during the first time startup.
+    @JsonView(Views.Internal.class)
+    Boolean isSystemGenerated;
+
+    @JsonView(Views.Internal.class)
+    Instant lastActiveAt;
 
     // TODO: Populate these attributes for a user. Generally required for OAuth2 logins
     @Override
@@ -179,4 +163,6 @@ public class User extends BaseDomain implements UserDetails, OidcUser {
     public String computeFirstName() {
         return (StringUtils.isEmpty(name) ? email : name).split("[\\s@]+", 2)[0];
     }
+
+    public static class Fields extends BaseDomain.Fields {}
 }

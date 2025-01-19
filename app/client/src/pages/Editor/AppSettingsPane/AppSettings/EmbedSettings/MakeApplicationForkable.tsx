@@ -8,22 +8,19 @@ import {
   Text,
   Button,
   Switch,
-} from "design-system";
-import {
-  createMessage,
-  IN_APP_EMBED_SETTING,
-} from "@appsmith/constants/messages";
+} from "@appsmith/ads";
+import { createMessage, IN_APP_EMBED_SETTING } from "ee/constants/messages";
 import PropertyHelpLabel from "pages/Editor/PropertyPane/PropertyHelpLabel";
 import { useDispatch, useSelector } from "react-redux";
-import { getIsFetchingApplications } from "@appsmith/selectors/applicationSelectors";
-import { updateApplication } from "@appsmith/actions/applicationActions";
-import type { ApplicationPayload } from "@appsmith/constants/ReduxActionConstants";
+import { updateApplication } from "ee/actions/applicationActions";
+import type { ApplicationPayload } from "entities/Application";
+import { getIsFetchingApplications } from "ee/selectors/selectedWorkspaceSelectors";
 
-type ConfirmEnableForkingModalProps = {
+interface ConfirmEnableForkingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
-};
+}
 
 function ConfirmEnableForkingModal({
   isOpen,

@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { LazyEditorWrapper } from "./styles";
 import { REQUEST_IDLE_CALLBACK_TIMEOUT } from "constants/AppConstants";
-import type { EditorProps } from "components/editorComponents/CodeEditor";
+import type {
+  EditorProps,
+  EditorStyleProps,
+} from "components/editorComponents/CodeEditor";
 import type CodeEditor from "components/editorComponents/CodeEditor";
 import CodeEditorFallback from "./CodeEditorFallback";
-import { CODE_EDITOR_LOADING_ERROR } from "ce/constants/messages";
+import { CODE_EDITOR_LOADING_ERROR } from "ee/constants/messages";
 import assertNever from "assert-never/index";
 import log from "loglevel";
-import { toast } from "design-system";
+import { toast } from "@appsmith/ads";
 
 let CachedCodeEditor: typeof CodeEditor | undefined;
 
@@ -63,6 +66,7 @@ class LazyCodeEditorStateMachine {
             this.state = "loading";
           }
         }
+
         break;
       case "loading":
         if (event === "LOADING_FINISHED") {
@@ -70,19 +74,23 @@ class LazyCodeEditorStateMachine {
         } else if (event === "PLACEHOLDER_INTERACTED") {
           this.state = "loading-interacted";
         }
+
         break;
       case "loading-interacted":
         if (event === "LOADING_FINISHED") {
           this.state = "active-focused";
         }
+
         break;
       case "waiting-idle-callback":
         if (event === "IDLE_CALLBACK_FIRED") {
           this.state = "active";
         }
+
         if (event === "PLACEHOLDER_INTERACTED") {
           this.state = "active-focused";
         }
+
         break;
       case "active":
         break;
@@ -110,11 +118,14 @@ class LazyCodeEditorStateMachine {
           const codeEditorModule = await import(
             "components/editorComponents/CodeEditor"
           );
+
           // Once CodeEditor loads, save it, so we can render it synchronously in the future
           CachedCodeEditor = codeEditorModule.default;
           this.transition("LOADING_FINISHED");
         } catch (error) {
           log.error(error);
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           toast.show(CODE_EDITOR_LOADING_ERROR((error as any).message), {
             kind: "error",
           });
@@ -140,6 +151,7 @@ class LazyCodeEditorStateMachine {
         if (this.idleCallbackId) {
           window.cancelIdleCallback(this.idleCallbackId);
         }
+
         break;
 
       default:
@@ -161,7 +173,15 @@ class LazyCodeEditorStateMachine {
  *     3. If there isn't enough idle time to render the CodeEditor component,
  *        then render it immediately upon focus event.
  */
-function LazyCodeEditor({ input, placeholder, ...otherProps }: EditorProps) {
+function LazyCodeEditor({
+  input,
+  onLoad,
+  placeholder,
+  ...otherProps
+}: EditorProps &
+  EditorStyleProps & {
+    onLoad?: () => void;
+  }) {
   const [renderTarget, setRenderTarget] = useState<
     "editor" | "editor-focused" | "fallback"
   >("fallback");
@@ -193,6 +213,7 @@ function LazyCodeEditor({ input, placeholder, ...otherProps }: EditorProps) {
         const editor = editorWrapper.querySelector(
           ".CodeEditorTarget",
         ) as HTMLElement | null;
+
         if (editor) {
           editor.focus();
         }
@@ -200,6 +221,15 @@ function LazyCodeEditor({ input, placeholder, ...otherProps }: EditorProps) {
     },
     [renderTarget],
   );
+
+  useEffect(() => {
+    if (
+      (renderTarget === "editor" || renderTarget === "editor-focused") &&
+      CachedCodeEditor
+    ) {
+      onLoad?.();
+    }
+  }, [renderTarget, CachedCodeEditor, onLoad]);
 
   if (renderTarget === "editor" || renderTarget === "editor-focused") {
     if (!CachedCodeEditor)
@@ -225,6 +255,8 @@ function LazyCodeEditor({ input, placeholder, ...otherProps }: EditorProps) {
     return (
       <LazyEditorWrapper className="t--lazyCodeEditor-fallback">
         <CodeEditorFallback
+          borderLess={otherProps.borderLess}
+          height={otherProps?.height}
           input={input}
           isReadOnly={otherProps.isReadOnly}
           onInteracted={() => {

@@ -3,12 +3,21 @@ import {
   apiPage,
   jsEditor,
   debuggerHelper,
+  dataManager,
+  locators,
+  draggableWidgets,
 } from "../../../../support/Objects/ObjectsCore";
+import EditorNavigation from "../../../../support/Pages/EditorNavigation";
 
-describe("Tests functionality of platform function", () => {
-  it("1. Tests access to outer variable", () => {
-    cy.fixture("datasources").then((datasourceFormData: any) => {
-      apiPage.CreateAndFillApi(datasourceFormData["mockApiUrl"], "getAllUsers");
+describe(
+  "Tests functionality of platform function",
+  { tags: ["@tag.JS", "@tag.Binding"] },
+  () => {
+    it("1. Tests access to outer variable", () => {
+      apiPage.CreateAndFillApi(
+        dataManager.dsValues[dataManager.defaultEnviorment].mockApiUrl,
+        "getAllUsers",
+      );
       jsEditor.CreateJSObject(
         `export default {
         myFun1: () => {
@@ -145,5 +154,76 @@ describe("Tests functionality of platform function", () => {
         debuggerHelper.DoesConsoleLogExist("Hello from setTimeout inside API");
       });
     });
-  });
-});
+
+    it("2.Bug 16135 ShowAlert with same texts, when invoked from different triggers are combined", () => {
+      jsEditor.CreateJSObject(
+        `export default {
+        showTwoSameToastMessageAlerts: () => {
+            showAlert( "Hello World" );
+            showAlert( "Hello World" );
+        },
+
+        }`,
+        {
+          paste: true,
+          completeReplace: true,
+          toRun: false,
+          shouldCreateNewJSObj: true,
+          prettify: false,
+        },
+      );
+      agHelper.Sleep();
+      jsEditor.RunJSObj();
+      agHelper.AssertElementLength(locators._toastMsg, 2);
+      agHelper.ValidateToastMessage("Hello World", 0);
+      agHelper.ValidateToastMessage("Hello World", 1);
+    });
+
+    it("3. Bug 30121 Reset widget should reset children as well when resetChildren argument is set to true", () => {
+      EditorNavigation.ShowCanvas();
+      agHelper.AddDsl("resetWidgetDSL");
+      agHelper.ClearNType(
+        locators._widgetInDeployed(draggableWidgets.INPUT_V2) + " input",
+        "Hello! How are you?",
+        0,
+      );
+
+      agHelper.ClickButton("ResetContainer");
+
+      agHelper.AssertText(
+        locators._widgetInDeployed(draggableWidgets.INPUT_V2) + " input",
+        "text",
+        "",
+        0,
+      );
+
+      agHelper.ClearNType(
+        locators._widgetInDeployed(draggableWidgets.INPUT_V2) + " input",
+        "Hello! How are you?",
+        1,
+      );
+
+      agHelper.ClearNType(
+        locators._widgetInDeployed(draggableWidgets.INPUT_V2) + " input",
+        "Hello! How are you?",
+        2,
+      );
+
+      agHelper.ClickButton("ResetList");
+
+      agHelper.AssertText(
+        locators._widgetInDeployed(draggableWidgets.INPUT_V2) + " input",
+        "text",
+        "",
+        1,
+      );
+
+      agHelper.AssertText(
+        locators._widgetInDeployed(draggableWidgets.INPUT_V2) + " input",
+        "text",
+        "",
+        2,
+      );
+    });
+  },
+);

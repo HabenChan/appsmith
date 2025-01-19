@@ -1,33 +1,19 @@
 import type { Template } from "api/TemplatesApi";
 import React from "react";
-import { useHistory, useParams } from "react-router";
 import styled from "styled-components";
 import DatasourceChip from "../DatasourceChip";
-// import { Colors } from "constants/Colors";
-// import {
-//   FontWeight,
-//   getTypographyByKey,
-//   Text,
-//   TextType,
-// } from "design-system-old";
-import { Button, Text } from "design-system";
+import { Text } from "@appsmith/ads";
 import {
   createMessage,
   DATASOURCES,
-  FORK_THIS_TEMPLATE,
   FUNCTION,
   INDUSTRY,
   NOTE,
   NOTE_MESSAGE,
   OVERVIEW,
   WIDGET_USED,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import WidgetInfo from "../WidgetInfo";
-import ForkTemplate from "../ForkTemplate";
-import { templateIdUrl } from "RouteBuilder";
-import { useQuery } from "pages/Editor/utils";
-import { useSelector } from "react-redux";
-import { getForkableWorkspaces } from "selectors/templatesSelectors";
 
 export const DescriptionWrapper = styled.div`
   display: flex;
@@ -76,31 +62,13 @@ export const TemplateDatasources = styled.div`
   gap: ${(props) => props.theme.spaces[4]}px;
 `;
 
-type TemplateDescriptionProps = {
+interface TemplateDescriptionProps {
   template: Template;
-  hideForkButton?: boolean;
-};
-
-const SHOW_FORK_MODAL_PARAM = "showForkTemplateModal";
+}
 
 function TemplateDescription(props: TemplateDescriptionProps) {
   const { template } = props;
-  const params = useParams<{
-    templateId: string;
-  }>();
-  const history = useHistory();
-  const query = useQuery();
-  const workspaceList = useSelector(getForkableWorkspaces);
 
-  const onForkButtonTrigger = () => {
-    history.replace(
-      `${templateIdUrl({ id: template.id })}?${SHOW_FORK_MODAL_PARAM}=true`,
-    );
-  };
-
-  const onForkModalClose = () => {
-    history.replace(`${templateIdUrl({ id: template.id })}`);
-  };
   return (
     <DescriptionWrapper>
       <DescriptionColumn>
@@ -111,23 +79,6 @@ function TemplateDescription(props: TemplateDescriptionProps) {
           <div className="section-content">
             <Text kind="body-m">{template.description}</Text>
           </div>
-          {!props.hideForkButton && !!workspaceList.length && (
-            <ForkTemplate
-              onClose={onForkModalClose}
-              showForkModal={!!query.get(SHOW_FORK_MODAL_PARAM)}
-              templateId={params.templateId}
-            >
-              <Button
-                className="template-fork-button"
-                data-testid="template-fork-button"
-                onClick={onForkButtonTrigger}
-                size="md"
-                startIcon="fork-2"
-              >
-                {createMessage(FORK_THIS_TEMPLATE)}
-              </Button>
-            </ForkTemplate>
-          )}
         </Section>
         <Section>
           <Text kind="heading-m" renderAs="h4">

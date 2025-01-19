@@ -27,6 +27,7 @@ export default [
         helpText: "Sets the source for the menu items",
         label: "Menu items source",
         controlType: "ICON_TABS",
+        defaultValue: MenuItemsSource.STATIC,
         fullWidth: true,
         options: [
           {
@@ -88,7 +89,7 @@ export default [
         controlType: "OPEN_CONFIG_PANEL",
         buttonConfig: {
           label: "Configure",
-          icon: "settings-2-line",
+          icon: "settings-v3",
         },
         label: "Configure menu items",
         isBindProperty: false,

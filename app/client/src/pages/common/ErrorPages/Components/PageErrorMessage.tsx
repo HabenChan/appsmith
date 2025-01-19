@@ -1,7 +1,7 @@
 import classNames from "classnames";
 import React from "react";
 
-export type PageErrorMessageProps = {
+export interface PageErrorMessageProps {
   text: string;
   links?: Array<{
     from: number;
@@ -9,7 +9,7 @@ export type PageErrorMessageProps = {
     href: string;
   }>;
   addNewLine?: boolean;
-};
+}
 
 export function PageErrorMessage(props: { data: PageErrorMessageProps }) {
   const errorMessage = props.data;
@@ -25,6 +25,7 @@ export function PageErrorMessage(props: { data: PageErrorMessageProps }) {
       // add inbetween text from prev link end to current link start
       else {
         const prevLink = links[idx - 1];
+
         if (prevLink && curr.from - prevLink.to > 0) {
           prev.push(<span>{text.slice(prevLink.to, curr.from)}</span>);
         }

@@ -1,23 +1,32 @@
-const dsl = require("../../../../fixtures/debuggerTableDsl.json");
-const explorer = require("../../../../locators/explorerlocators.json");
+import EditorNavigation, {
+  EntityType,
+} from "../../../../support/Pages/EditorNavigation";
+import {
+  agHelper,
+  apiPage,
+  debuggerHelper,
+} from "../../../../support/Objects/ObjectsCore";
 const testdata = require("../../../../fixtures/testdata.json");
-import * as _ from "../../../../support/Objects/ObjectsCore";
 
-describe("Check debugger logs state when there are onPageLoad actions", function () {
-  before(() => {
-    _.agHelper.AddDsl(dsl);
-  });
-  it("1. Check debugger logs state when there are onPageLoad actions", function () {
-    _.entityExplorer.SelectEntityByName("Table1", "Widgets");
-    _.propPane.UpdatePropertyFieldValue("Table data", "{{TestApi.data.users}}");
-    _.apiPage.CreateAndFillApi(testdata.baseUrl + testdata.methods, "TestApi");
-    _.apiPage.RunAPI();
-    _.agHelper.GetNClick(explorer.addWidget);
-    _.agHelper.RefreshPage();
-    // Wait for the debugger icon to be visible
-    _.agHelper.AssertElementVisible(".t--debugger-count");
-    // debuggerHelper.isErrorCount(0);
-    cy.wait("@postExecute");
-    _.debuggerHelper.AssertErrorCount(1);
-  });
-});
+describe(
+  "Check debugger logs state when there are onPageLoad actions",
+  { tags: ["@tag.IDE", "@tag.Datasource", "@tag.Git", "@tag.AccessControl"] },
+  function () {
+    before(() => {
+      agHelper.AddDsl("debuggerTableDsl");
+    });
+
+    it("1. Check debugger logs state when there are onPageLoad actions", function () {
+      EditorNavigation.SelectEntityByName("Table1", EntityType.Widget);
+      apiPage.CreateAndFillApi(testdata.baseUrl + testdata.methods, "TestApi");
+      apiPage.RunAPI();
+      EditorNavigation.ShowCanvas();
+      agHelper.RefreshPage();
+      // Wait for the debugger icon to be visible
+      agHelper.AssertElementVisibility(".t--debugger-count");
+      // debuggerHelper.isErrorCount(0);
+      cy.wait("@postExecute");
+      debuggerHelper.AssertErrorCount(1);
+    });
+  },
+);

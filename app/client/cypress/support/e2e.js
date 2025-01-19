@@ -14,19 +14,23 @@
 // ***********************************************************
 /// <reference types="Cypress" />
 /// <reference types='cypress-tags' />
+import "cypress-real-events";
 import "cypress-real-events/support";
 import "cypress-wait-until";
 import "cypress-network-idle";
 import "cypress-xpath";
-import * as MESSAGES from "../../../client/src/ce/constants/messages.ts";
+import * as MESSAGES from "../../src/ce/constants/messages.ts";
 import "./ApiCommands";
-// Import commands.js using ES2015 syntax:
 import "./commands";
-import { initLocalstorage } from "./commands";
+import { initLocalstorage, addIndexedDBKey } from "./commands";
 import "./dataSourceCommands";
 import "./gitSync";
 import { initLocalstorageRegistry } from "./Objects/Registry";
 import RapidMode from "./RapidMode.ts";
+import "cypress-mochawesome-reporter/register";
+import installLogsCollector from "cypress-terminal-report/src/installLogsCollector";
+import { CURRENT_REPO, REPO } from "../fixtures/REPO";
+import { addMatchImageSnapshotCommand } from "@simonsmith/cypress-image-snapshot/command";
 
 import "./WorkspaceCommands";
 import "./queryCommands";
@@ -34,16 +38,29 @@ import "./widgetCommands";
 import "./themeCommands";
 import "./AdminSettingsCommands";
 import "cypress-plugin-tab";
+import {
+  FEATURE_WALKTHROUGH_INDEX_KEY,
+  WALKTHROUGH_TEST_PAGE,
+} from "./Constants.js";
+const registerCypressGrep = require("@cypress/grep");
 /// <reference types="cypress-xpath" />
 
-Cypress.on("uncaught:exception", () => {
-  // returning false here prevents Cypress from
-  // failing the test
-  return false;
+registerCypressGrep();
+installLogsCollector();
+
+addMatchImageSnapshotCommand({
+  comparisonMethod: "ssim",
+  failureThreshold: 0.01,
+  failureThresholdType: "percent",
+});
+
+Cypress.on("uncaught:exception", (error) => {
+  return false; // returning false here prevents Cypress from failing the test
 });
 
 Cypress.on("fail", (error) => {
-  throw error; // throw error to have test still fail
+  cy.log(error.message);
+  throw error; // throw error to have test fail
 });
 
 Cypress.env("MESSAGES", MESSAGES);
@@ -57,7 +74,6 @@ before(function () {
       }
     });
 
-    Cypress.Cookies.preserveOnce("SESSION", "remember_token");
     if (!RapidMode.config.usesDSL) {
       cy.visit(RapidMode.url());
       cy.wait("@getWorkspace");
@@ -69,7 +85,6 @@ before(function () {
   if (RapidMode.config.enabled) {
     return;
   }
-  //console.warn = () => {}; //to remove all warnings in cypress console
   initLocalstorage();
   initLocalstorageRegistry();
   cy.startServerAndRoutes();
@@ -77,13 +92,15 @@ before(function () {
   cy.window().then((window) => {
     window.indexedDB.deleteDatabase("Appsmith");
   });
-  cy.visit("/setup/welcome");
-  cy.wait("@getMe");
+  cy.visit("/setup/welcome", { timeout: 60000 });
+  cy.wait("@getConsolidatedData");
+
   cy.wait(2000);
+  const username = Cypress.env("USERNAME");
+  const password = Cypress.env("PASSWORD");
   cy.url().then((url) => {
     if (url.indexOf("setup/welcome") > -1) {
       cy.createSuperUser();
-      cy.LogOut();
       cy.SignupFromAPI(
         Cypress.env("TESTUSERNAME1"),
         Cypress.env("TESTPASSWORD1"),
@@ -104,40 +121,41 @@ before(function () {
         Cypress.env("TESTPASSWORD4"),
       );
       cy.LogOut();
+      cy.LoginFromAPI(username, password);
+    } else if (url.indexOf("user/login") > -1) {
+      //Cypress.Cookies.preserveOnce("SESSION", "remember_token");
+      cy.LoginFromAPI(username, password);
+      cy.wait(3000);
     }
   });
-});
 
-before(function () {
-  if (RapidMode.config.enabled) {
-    return;
+  if (CURRENT_REPO === REPO.EE) {
+    cy.wait(2000);
+    cy.url().then((url) => {
+      if (url.indexOf("/license") > -1) {
+        cy.validateLicense();
+      }
+    });
   }
-  //console.warn = () => {};
-  Cypress.Cookies.preserveOnce("SESSION", "remember_token");
-  const username = Cypress.env("USERNAME");
-  const password = Cypress.env("PASSWORD");
-  cy.LoginFromAPI(username, password);
-  cy.wait(3000);
-  cy.get(".t--applications-container .createnew")
-    .should("be.visible")
-    .should("be.enabled");
-  cy.generateUUID().then((id) => {
-    cy.CreateAppInFirstListedWorkspace(id);
-    localStorage.setItem("AppName", id);
-  });
 
-  cy.fixture("example").then(function (data) {
-    this.data = data;
+  if (!Cypress.currentTest.titlePath[0].includes(WALKTHROUGH_TEST_PAGE)) {
+    // Adding key FEATURE_WALKTHROUGH (which is used to check if the walkthrough is already shown to the user or not) for non walkthrough cypress tests (to not show walkthrough)
+    addIndexedDBKey(FEATURE_WALKTHROUGH_INDEX_KEY, {
+      binding_widget: true,
+    });
+  }
+
+  cy.CreateNewAppInNewWorkspace(); //Creating new workspace and app
+  cy.fixture("TestDataSet1").then(function (data) {
+    this.dataSet = data;
   });
 });
 
 beforeEach(function () {
-  //cy.window().then((win) => (win.onbeforeunload = undefined));
   if (!navigator.userAgent.includes("Cypress")) {
     window.addEventListener("beforeunload", this.beforeunloadFunction);
   }
   initLocalstorage();
-  Cypress.Cookies.preserveOnce("SESSION", "remember_token");
   cy.startServerAndRoutes();
   //-- Delete local storage data of entity explorer
   cy.DeleteEntityStateLocalStorage();
@@ -152,11 +170,5 @@ after(function () {
   }
   //-- Deleting the application by Api---//
   cy.DeleteAppByApi();
-  //-- LogOut Application---//
-  cy.LogOut();
-
-  // Commenting until Upgrade Appsmith cases are fixed
-  // const tedUrl = "http://localhost:5001/v1/parent/cmd";
-  // cy.log("Start the appsmith container");
-  // cy.StartContainer(tedUrl, "appsmith"); // start the old container
+  cy.DeleteWorkspaceByApi();
 });

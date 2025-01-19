@@ -104,8 +104,10 @@ describe("Validate Validators", () => {
         ],
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(validation, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -149,8 +151,10 @@ describe("Validate Validators", () => {
         parsed: "app.appsmith.com",
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(validation, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -198,8 +202,10 @@ describe("Validate Validators", () => {
         parsed: "app.appsmith.com",
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(validation, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -219,8 +225,10 @@ describe("Validate Validators", () => {
         parsed: "abc",
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(validation, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -262,8 +270,10 @@ describe("Validate Validators", () => {
         ],
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(validation, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -283,6 +293,7 @@ describe("Validate Validators", () => {
       "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAAKAAoDASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAQUGCP/EACAQAAICAgICAwAAAAAAAAAAAAECAwUEEQAhBkESFSL/xAAVAQEBAAAAAAAAAAAAAAAAAAAFBv/EABwRAQAABwEAAAAAAAAAAAAAAAEAAgMEBREhQf/aAAwDAQACEQMRAD8A0nU5V9i+Q5/3NREaEpElc+NjGaVm1+iwQEhfe2A0ffIC5trSK3zYo8+dETIdVUMdABjocF9Z2UV1lRRWGXHGsxVVWZgAO+gN8WMSzFmPyYnZJ7JPAchcNQA5qKvEWktFmme7DyP/2Q==",
       "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAAKAAoDASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAQUGCP/EACAQAAICAgICAwAAAAAAAAAAAAECAwUEEQAhBkESFSL/xAAVAQEBAAAAAAAAAAAAAAAAAAAFBv/EABwRAQAABwEAAAAAAAAAAAAAAAEAAgMEBREhQf/aAAwDAQACEQMRAD8A0nU5V9i+Q5/3NREaEpElc+NjGaVm1+iwQEhfe2A0ffIC5trSK3zYo8+dETIdVUMdABjocF9Z2UV1lRRWGXHGsxVVWZgAO+gN8WMSzFmPyYnZJ7JPAchcNQA5qKvEWktFmme7DyP/2Q==",
       undefined,
+      "blob:https://localhost/a18fd4c9-e485-44ef-9fcf-6345785e88ec",
     ];
 
     const expected = [
@@ -312,15 +323,22 @@ describe("Validate Validators", () => {
           },
         ],
       },
+      {
+        isValid: true,
+        parsed: "blob:https://localhost/a18fd4c9-e485-44ef-9fcf-6345785e88ec",
+      },
     ];
 
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
 
   it("Validates number with passThroughOnZero", () => {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const config: any = {
       type: ValidationTypes.NUMBER,
       params: {
@@ -417,8 +435,10 @@ describe("Validate Validators", () => {
         ],
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -453,8 +473,10 @@ describe("Validate Validators", () => {
         parsed: -8,
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -539,6 +561,7 @@ describe("Validate Validators", () => {
 
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -560,6 +583,7 @@ describe("Validate Validators", () => {
 
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -665,8 +689,10 @@ describe("Validate Validators", () => {
         ],
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -738,8 +764,10 @@ describe("Validate Validators", () => {
         ],
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -812,8 +840,10 @@ describe("Validate Validators", () => {
         ],
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -907,6 +937,7 @@ describe("Validate Validators", () => {
     };
 
     const result = validate(config, input, DUMMY_WIDGET);
+
     expect(result).toStrictEqual(expected);
   });
 
@@ -1053,8 +1084,10 @@ describe("Validate Validators", () => {
         messages: [],
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -1080,8 +1113,10 @@ describe("Validate Validators", () => {
         parsed: [],
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -1185,8 +1220,10 @@ describe("Validate Validators", () => {
         ],
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -1225,8 +1262,10 @@ describe("Validate Validators", () => {
         parsed: [],
       },
     ];
+
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -1299,6 +1338,7 @@ describe("Validate Validators", () => {
 
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -1325,6 +1365,7 @@ describe("Validate Validators", () => {
 
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
       expect(result).not.toStrictEqual(defaultDate);
     });
@@ -1475,6 +1516,7 @@ describe("Validate Validators", () => {
 
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -1499,6 +1541,7 @@ describe("Validate Validators", () => {
 
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -1523,6 +1566,7 @@ describe("Validate Validators", () => {
 
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -1574,6 +1618,7 @@ describe("Validate Validators", () => {
 
     inputs.forEach((input, index) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[index]);
     });
   });
@@ -1591,8 +1636,10 @@ describe("Validate Validators", () => {
       isValid: true,
       parsed: [],
     };
+
     inputs.forEach((input) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected);
     });
   });
@@ -1645,6 +1692,7 @@ describe("Validate Validators", () => {
     };
 
     const result = validate(config, input, DUMMY_WIDGET);
+
     expect(result).toStrictEqual(expected);
   });
 
@@ -1706,8 +1754,10 @@ describe("Validate Validators", () => {
         ],
       },
     ];
+
     inputs.forEach((input, i) => {
       const result = validate(config, input, DUMMY_WIDGET);
+
       expect(result).toStrictEqual(expected[i]);
     });
   });

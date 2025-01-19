@@ -1,28 +1,39 @@
-const pages = require("../../../../locators/Pages.json");
-const publish = require("../../../../locators/publishWidgetspage.json");
+import EditorNavigation, {
+  EntityType,
+  PageLeftPane,
+} from "../../../../support/Pages/EditorNavigation";
 
-const pageOne = "MyPage1";
-const pageTwo = "MyPage2";
+import * as _ from "../../../../support/Objects/ObjectsCore";
+import PageList from "../../../../support/Pages/PageList";
+import { EntityItems } from "../../../../support/Pages/AssertHelper";
 
-describe("Hide / Show page test functionality", function () {
-  it("1. Hide/Show page test ", function () {
-    cy.Createpage(pageOne);
-    cy.Createpage(pageTwo);
-    cy.get(".t--entity-name").contains("Page1").click({ force: true });
-    cy.get(`.t--entity-item:contains('MyPage2')`).within(() => {
-      cy.get(".t--context-menu").click({ force: true });
+describe(
+  "Hide / Show page test functionality",
+  { tags: ["@tag.IDE", "@tag.PropertyPane"] },
+  function () {
+    it("1. Hide/Show page test ", function () {
+      PageList.AddNewPage(); // Page2
+      PageList.AddNewPage(); // Page3
+      EditorNavigation.SelectEntityByName("Page1", EntityType.Page);
+      _.entityExplorer.ActionContextMenuByEntityName({
+        entityNameinLeftSidebar: "Page2",
+        action: "Hide",
+        entityType: EntityItems.Page,
+      });
+      PageLeftPane.switchToAddNew();
+      cy.ClearSearch();
+      _.deployMode.DeployApp();
+      cy.get(".t--page-switch-tab").should("have.length", 2);
+      //Show page test
+      _.deployMode.NavigateBacktoEditor();
+      _.entityExplorer.ActionContextMenuByEntityName({
+        entityNameinLeftSidebar: "Page2",
+        action: "Show",
+        entityType: EntityItems.Page,
+      });
+      cy.ClearSearch();
+      _.deployMode.DeployApp();
+      cy.get(".t--page-switch-tab").should("have.length", 3);
     });
-    cy.get(pages.hidePage).click({ force: true });
-    cy.ClearSearch();
-    cy.PublishtheApp();
-    cy.get(".t--page-switch-tab").should("have.length", 2);
-    //Show page test
-    cy.get(publish.backToEditor).click();
-    cy.get(`.t--entity-name:contains('MyPage2')`).trigger("mouseover");
-    cy.hoverAndClick("MyPage2");
-    cy.selectAction("Show");
-    cy.ClearSearch();
-    cy.PublishtheApp();
-    cy.get(".t--page-switch-tab").should("have.length", 3);
-  });
-});
+  },
+);

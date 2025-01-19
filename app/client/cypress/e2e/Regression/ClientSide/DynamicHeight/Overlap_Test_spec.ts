@@ -1,32 +1,28 @@
-import { ObjectsRegistry } from "../../../../support/Objects/Registry";
+import { agHelper, locators } from "../../../../support/Objects/ObjectsCore";
 
-const { AggregateHelper, CommonLocators, DeployMode } = ObjectsRegistry;
-
-describe("Fixed Invisible widgets and auto height containers", () => {
-  before(() => {
-    // Create a page with a divider below a button widget and a checkbox widget below a filepicker widget
-    // Button widget and filepicker widgets are fixed height widgets
-    cy.fixture("autoHeightOverlapDSL").then((val: any) => {
-      AggregateHelper.AddDsl(val);
+describe(
+  "Fixed Invisible widgets and auto height containers",
+  { tags: ["@tag.AutoHeight"] },
+  () => {
+    before(() => {
+      // Create a page with a divider below a button widget and a checkbox widget below a filepicker widget
+      // Button widget and filepicker widgets are fixed height widgets
+      agHelper.AddDsl("autoHeightOverlapDSL");
     });
-  });
 
-  it("1. Invisible widgets should not overlap when returning from preview mode to edit mode", () => {
-    cy.get(CommonLocators._widgetInDeployed("textwidget"));
-    AggregateHelper.AssertContains("anything", "exist", "#ryq5qy60cg");
+    it("1. Invisible widgets should not overlap when returning from preview mode to edit mode", () => {
+      cy.get(locators._widgetInDeployed("textwidget"));
+      agHelper.AssertContains("anything", "exist", "#ryq5qy60cg");
 
-    AggregateHelper.AssertElementVisible(
-      CommonLocators._previewModeToggle("edit"),
-    );
-    AggregateHelper.GetNClick(CommonLocators._previewModeToggle("edit"));
+      agHelper.AssertElementVisibility(locators._previewModeToggle("edit"));
+      agHelper.GetNClick(locators._previewModeToggle("edit"));
 
-    AggregateHelper.AssertElementVisible(
-      CommonLocators._previewModeToggle("preview"),
-    );
-    AggregateHelper.GetNClick(CommonLocators._previewModeToggle("preview"));
+      agHelper.AssertElementVisibility(locators._previewModeToggle("preview"));
+      agHelper.GetNClick(locators._previewModeToggle("preview"));
 
-    cy.get("#ryq5qy60cg").should("have.css", "top", "136px");
-    cy.get("#kx7mvoopqu").should("have.css", "top", "96px");
-    cy.get("#m4doxmviiu").should("have.css", "top", "56px");
-  });
-});
+      cy.get("#ryq5qy60cg").should("have.css", "top", "136px");
+      cy.get("#kx7mvoopqu").should("have.css", "top", "96px");
+      cy.get("#m4doxmviiu").should("have.css", "top", "56px");
+    });
+  },
+);

@@ -2,21 +2,21 @@ import React from "react";
 import { connect } from "react-redux";
 import styled from "styled-components";
 import _ from "lodash";
-import { DATASOURCE_DB_FORM } from "@appsmith/constants/forms";
+import { DATASOURCE_DB_FORM } from "ee/constants/forms";
 import type { Datasource } from "entities/Datasource";
 import type { InjectedFormProps } from "redux-form";
 import { reduxForm } from "redux-form";
 import { APPSMITH_IP_ADDRESSES } from "constants/DatasourceEditorConstants";
-import { getAppsmithConfigs } from "@appsmith/configs";
+import { getAppsmithConfigs } from "ee/configs";
 import { convertArrayToSentence } from "utils/helpers";
-import { PluginType } from "entities/Action";
-import type { AppState } from "@appsmith/reducers";
+import { PluginType } from "entities/Plugin";
+import type { AppState } from "ee/reducers";
 import type { JSONtoFormProps } from "./JSONtoForm";
 import { JSONtoForm } from "./JSONtoForm";
 import { TEMP_DATASOURCE_ID } from "constants/Datasource";
-import DatasourceInformation from "./DatasourceSection";
 import { DocsLink, openDoc } from "../../../constants/DocumentationLinks";
-import { Callout } from "design-system";
+import { Callout } from "@appsmith/ads";
+import store from "store";
 
 const { cloudHosting } = getAppsmithConfigs();
 
@@ -30,59 +30,60 @@ interface DatasourceDBEditorProps extends JSONtoFormProps {
   datasource: Datasource;
   hiddenHeader?: boolean;
   datasourceName?: string;
+  isPluginAllowedToPreviewData: boolean;
 }
 
 type Props = DatasourceDBEditorProps &
   InjectedFormProps<Datasource, DatasourceDBEditorProps>;
 
-export const Form = styled.form`
+export const Form = styled.form<{
+  viewMode: boolean;
+}>`
   display: flex;
   flex-direction: column;
-  height: ${({ theme }) => `calc(100% - ${theme.backBanner})`};
-  overflow-y: scroll;
-  flex: 8 8 80%;
-  padding-bottom: 20px;
-`;
-
-export const ViewModeWrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  border-bottom: 1px solid var(--ads-v2-color-border);
-  padding: var(--ads-v2-spaces-7) 0;
+  ${(props) => !props.viewMode && `height: 100%`}
+  padding-bottom: var(--ads-v2-spaces-6);
+  overflow-y: auto;
+  margin-left: ${(props) => (props.viewMode ? "0px" : "24px")};
 `;
 
 class DatasourceDBEditor extends JSONtoForm<Props> {
   openDocumentation = () => {
-    openDoc(DocsLink.WHITELIST_IP);
+    const appState: AppState = store.getState();
+    const plugin = appState.entities.plugins.list.find(
+      (plugin) => plugin.id === this.props.datasource?.pluginId,
+    );
+
+    if (!!plugin)
+      openDoc(DocsLink.WHITELIST_IP, plugin?.documentationLink, plugin?.name);
+    else openDoc(DocsLink.WHITELIST_IP);
   };
 
   render() {
-    const { formConfig, viewMode } = this.props;
+    const { formConfig, initialized, viewMode } = this.props;
 
     // make sure this redux form has been initialized before rendering anything.
     // the initialized prop below comes from redux-form.
     // The viewMode condition is added to allow the conditons only run on the editMode
-    if (!this.props.initialized && !viewMode) {
+    if (!initialized && !viewMode) {
       return null;
     }
 
     return this.renderDataSourceConfigForm(formConfig);
   }
+
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   renderDataSourceConfigForm = (sections: any) => {
-    const {
-      datasource,
-      datasourceId,
-      formConfig,
-      messages,
-      pluginType,
-      viewMode,
-    } = this.props;
+    const { datasourceId, hiddenHeader, messages, pluginType, viewMode } =
+      this.props;
 
     return (
       <Form
         onSubmit={(e) => {
           e.preventDefault();
         }}
+        viewMode={viewMode}
       >
         {messages &&
           messages.map((msg, i) => {
@@ -92,13 +93,13 @@ class DatasourceDBEditor extends JSONtoForm<Props> {
               </Callout>
             );
           })}
-        {!this.props.hiddenHeader &&
+        {!hiddenHeader &&
           cloudHosting &&
           pluginType === PluginType.DB &&
           !viewMode && (
             <Callout
-              className="mt-4"
-              kind="warning"
+              className="mt-4 select-text"
+              kind="info"
               links={[
                 {
                   children: "Learn more",
@@ -121,22 +122,13 @@ class DatasourceDBEditor extends JSONtoForm<Props> {
             {""}
           </>
         )}
-        {viewMode && (
-          <ViewModeWrapper>
-            {!_.isNil(formConfig) && !_.isNil(datasource) ? (
-              <DatasourceInformation
-                config={formConfig[0]}
-                datasource={datasource}
-                viewMode={viewMode}
-              />
-            ) : undefined}
-          </ViewModeWrapper>
-        )}
       </Form>
     );
   };
 }
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapStateToProps = (state: AppState, props: any) => {
   const datasource = state.entities.datasources.list.find(
     (e) => e.id === props.datasourceId,
@@ -153,6 +145,7 @@ const mapStateToProps = (state: AppState, props: any) => {
 
 export default connect(mapStateToProps)(
   reduxForm<Datasource, DatasourceDBEditorProps>({
+    destroyOnUnmount: false,
     form: DATASOURCE_DB_FORM,
     enableReinitialize: true,
   })(DatasourceDBEditor),

@@ -17,7 +17,7 @@ import {
 } from "widgets/WidgetUtils";
 import Interweave from "interweave";
 import { Popover2 } from "@blueprintjs/popover2";
-import type { ThemeProp } from "widgets/constants";
+import type { ThemeProp } from "WidgetProvider/constants";
 
 const ToolTipWrapper = styled.div`
   height: 100%;
@@ -41,13 +41,13 @@ const TooltipStyles = createGlobalStyle`
   }
 `;
 
-type IconButtonContainerProps = {
+interface IconButtonContainerProps {
   disabled?: boolean;
   buttonColor?: string;
   buttonVariant?: ButtonVariant;
   hasOnClickAction?: boolean;
   renderMode: RenderMode;
-};
+}
 
 const IconButtonContainer = styled.div<IconButtonContainerProps>`
   display: flex;
@@ -81,10 +81,10 @@ const IconButtonContainer = styled.div<IconButtonContainerProps>`
         getCustomHoverColor(theme, buttonVariant, buttonColor) !== "none"
           ? getCustomHoverColor(theme, buttonVariant, buttonColor)
           : buttonVariant === ButtonVariantTypes.SECONDARY
-          ? theme.colors.button.primary.secondary.hoverColor
-          : buttonVariant === ButtonVariantTypes.TERTIARY
-          ? theme.colors.button.primary.tertiary.hoverColor
-          : theme.colors.button.primary.primary.hoverColor
+            ? theme.colors.button.primary.secondary.hoverColor
+            : buttonVariant === ButtonVariantTypes.TERTIARY
+              ? theme.colors.button.primary.tertiary.hoverColor
+              : theme.colors.button.primary.primary.hoverColor
       } !important;
     }`
       : ""
@@ -102,6 +102,8 @@ export interface ButtonStyleProps {
   dimension?: number;
   hasOnClickAction?: boolean;
   compactMode?: string;
+  minWidth?: number;
+  minHeight?: number;
 }
 
 export const StyledButton = styled((props) => (
@@ -114,6 +116,11 @@ export const StyledButton = styled((props) => (
       "dimension",
       "hasOnClickAction",
       "compactMode",
+      "buttonColor",
+      "primaryColor",
+      "navColorStyle",
+      "isMinimal",
+      "insideSidebar",
     ])}
   />
 ))<ThemeProp & ButtonStyleProps>`
@@ -129,12 +136,12 @@ export const StyledButton = styled((props) => (
   line-height: ${({ compactMode }) =>
     compactMode === "SHORT" ? "24px" : "28px"};
 
-  .auto-layout & {
-    min-height: 32px;
-    min-width: 32px;
-    height: 32px;
-    width: 32px;
-  }
+  ${({ minHeight, minWidth }) =>
+    `&& {
+      ${minWidth ? `min-width: ${minWidth}px;` : ""}
+      ${minHeight ? `min-height: ${minHeight}px;` : ""}
+    }
+  `}
 
   ${({ buttonColor, buttonVariant, compactMode, hasOnClickAction, theme }) => `
     &:enabled {
@@ -142,8 +149,8 @@ export const StyledButton = styled((props) => (
         getCustomBackgroundColor(buttonVariant, buttonColor) !== "none"
           ? getCustomBackgroundColor(buttonVariant, buttonColor)
           : buttonVariant === ButtonVariantTypes.PRIMARY
-          ? theme.colors.button.primary.primary.bgColor
-          : "none"
+            ? theme.colors.button.primary.primary.bgColor
+            : "none"
       } !important;
     }
 
@@ -154,10 +161,10 @@ export const StyledButton = styled((props) => (
           getCustomHoverColor(theme, buttonVariant, buttonColor) !== "none"
             ? getCustomHoverColor(theme, buttonVariant, buttonColor)
             : buttonVariant === ButtonVariantTypes.SECONDARY
-            ? theme.colors.button.primary.secondary.hoverColor
-            : buttonVariant === ButtonVariantTypes.TERTIARY
-            ? theme.colors.button.primary.tertiary.hoverColor
-            : theme.colors.button.primary.primary.hoverColor
+              ? theme.colors.button.primary.secondary.hoverColor
+              : buttonVariant === ButtonVariantTypes.TERTIARY
+                ? theme.colors.button.primary.tertiary.hoverColor
+                : theme.colors.button.primary.primary.hoverColor
         } !important;
       }`
         : ""
@@ -195,8 +202,8 @@ export const StyledButton = styled((props) => (
       getCustomBorderColor(buttonVariant, buttonColor) !== "none"
         ? `1px solid ${getCustomBorderColor(buttonVariant, buttonColor)}`
         : buttonVariant === ButtonVariantTypes.SECONDARY
-        ? `1px solid ${theme.colors.button.primary.secondary.borderColor}`
-        : "none"
+          ? `1px solid ${theme.colors.button.primary.secondary.borderColor}`
+          : "none"
     } !important;
 
     & > span {
@@ -210,11 +217,11 @@ export const StyledButton = styled((props) => (
         buttonVariant === ButtonVariantTypes.PRIMARY
           ? getComplementaryGrayscaleColor(buttonColor)
           : getCustomBackgroundColor(
-              ButtonVariantTypes.PRIMARY,
-              buttonColor,
-            ) !== "none"
-          ? getCustomBackgroundColor(ButtonVariantTypes.PRIMARY, buttonColor)
-          : `${theme.colors.button.primary.secondary.textColor}`
+                ButtonVariantTypes.PRIMARY,
+                buttonColor,
+              ) !== "none"
+            ? getCustomBackgroundColor(ButtonVariantTypes.PRIMARY, buttonColor)
+            : `${theme.colors.button.primary.secondary.textColor}`
       } !important;
     }
 
@@ -246,6 +253,8 @@ export interface IconButtonComponentProps extends ComponentProps {
   height: number;
   tooltip?: string;
   width: number;
+  minHeight?: number;
+  minWidth?: number;
 }
 
 function IconButtonComponent(props: IconButtonComponentProps) {
@@ -257,6 +266,8 @@ function IconButtonComponent(props: IconButtonComponentProps) {
     hasOnClickAction,
     height,
     isDisabled,
+    minHeight,
+    minWidth,
     onClick,
     renderMode,
     tooltip,
@@ -297,6 +308,8 @@ function IconButtonComponent(props: IconButtonComponentProps) {
         hasOnClickAction={hasOnClickAction}
         icon={props.iconName}
         large
+        minHeight={minHeight}
+        minWidth={minWidth}
       />
     </IconButtonContainer>
   );

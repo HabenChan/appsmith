@@ -2,11 +2,9 @@ import React, { useMemo, useState } from "react";
 import { AddButtonWrapper, EntityClassNames } from "../Entity";
 import EntityAddButton from "../Entity/AddButton";
 import styled from "styled-components";
-import history from "utils/history";
-import { generateTemplateFormURL } from "RouteBuilder";
 import { useParams } from "react-router";
-import { useDispatch, useSelector } from "react-redux";
-import type { ExplorerURLParams } from "@appsmith/pages/Editor/Explorer/helpers";
+import { useDispatch } from "react-redux";
+import type { ExplorerURLParams } from "ee/pages/Editor/Explorer/helpers";
 import { showTemplatesModal } from "actions/templateActions";
 import {
   ADD_PAGE_FROM_TEMPLATE,
@@ -15,8 +13,9 @@ import {
   createMessage,
   CREATE_PAGE,
   GENERATE_PAGE_ACTION_TITLE,
-} from "@appsmith/constants/messages";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+} from "ee/constants/messages";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import type { ButtonSizes } from "@appsmith/ads";
 import {
   Menu,
   MenuContent,
@@ -24,10 +23,14 @@ import {
   MenuItem,
   Tooltip,
   Text,
-} from "design-system";
-import { getIsAutoLayout } from "selectors/editorSelectors";
-import { isAirgapped } from "@appsmith/utils/airgapHelpers";
+} from "@appsmith/ads";
+import { isAirgapped } from "ee/utils/airgapHelpers";
 import { TOOLTIP_HOVER_ON_DELAY_IN_S } from "constants/AppConstants";
+import {
+  LayoutSystemFeatures,
+  useLayoutSystemFeatures,
+} from "layoutSystems/common/useLayoutSystemFeatures";
+import { openGeneratePageModal } from "pages/Editor/GeneratePage/store/generatePageActions";
 
 const Wrapper = styled.div`
   .title {
@@ -37,24 +40,34 @@ const Wrapper = styled.div`
   }
 `;
 
-type SubMenuProps = {
+interface SubMenuProps {
   className: string;
   openMenu: boolean;
   onMenuClose: () => void;
   createPageCallback: () => void;
-};
+  buttonSize?: ButtonSizes;
+  onItemSelected?: () => void;
+}
 
 function AddPageContextMenu({
+  buttonSize,
   className,
   createPageCallback,
+  onItemSelected,
   onMenuClose,
   openMenu,
 }: SubMenuProps) {
   const [show, setShow] = useState(openMenu);
   const dispatch = useDispatch();
-  const { pageId } = useParams<ExplorerURLParams>();
-  const isAutoLayout = useSelector(getIsAutoLayout);
+  const { basePageId } = useParams<ExplorerURLParams>();
   const isAirgappedInstance = isAirgapped();
+
+  const checkLayoutSystemFeatures = useLayoutSystemFeatures();
+  const [enableForkingFromTemplates, enableGenerateCrud] =
+    checkLayoutSystemFeatures([
+      LayoutSystemFeatures.ENABLE_FORKING_FROM_TEMPLATES,
+      LayoutSystemFeatures.ENABLE_GENERATE_CRUD_APP,
+    ]);
 
   const ContextMenuItems = useMemo(() => {
     const items = [
@@ -65,27 +78,31 @@ function AddPageContextMenu({
         "data-testid": "add-page",
         key: "CREATE_PAGE",
       },
-      {
-        title: createMessage(GENERATE_PAGE_ACTION_TITLE),
-        icon: "database-2-line",
-        onClick: () => history.push(generateTemplateFormURL({ pageId })),
-        "data-testid": "generate-page",
-        key: "GENERATE_PAGE",
-      },
     ];
 
-    if (!isAutoLayout && !isAirgappedInstance) {
+    if (enableGenerateCrud) {
+      items.push({
+        title: createMessage(GENERATE_PAGE_ACTION_TITLE),
+        icon: "database-2-line",
+        onClick: () => dispatch(openGeneratePageModal()),
+        "data-testid": "generate-page",
+        key: "GENERATE_PAGE",
+      });
+    }
+
+    if (enableForkingFromTemplates && !isAirgappedInstance) {
       items.push({
         title: createMessage(ADD_PAGE_FROM_TEMPLATE),
         icon: "layout-2-line",
-        onClick: () => dispatch(showTemplatesModal(true)),
+        onClick: () =>
+          dispatch(showTemplatesModal({ isOpenFromCanvas: false })),
         "data-testid": "add-page-from-template",
         key: "ADD_PAGE_FROM_TEMPLATE",
       });
     }
 
     return items;
-  }, [pageId]);
+  }, [basePageId, enableGenerateCrud]);
 
   const handleOpenChange = (open: boolean) => {
     if (open) {
@@ -99,6 +116,8 @@ function AddPageContextMenu({
   };
 
   const onMenuItemClick = (item: (typeof ContextMenuItems)[number]) => {
+    if (onItemSelected) onItemSelected();
+
     handleOpenChange(false);
     item.onClick();
     AnalyticsUtil.logEvent("ENTITY_EXPLORER_ADD_PAGE_CLICK", {
@@ -116,6 +135,7 @@ function AddPageContextMenu({
         >
           <AddButtonWrapper>
             <EntityAddButton
+              buttonSize={buttonSize}
               className={`${className} ${show ? "selected" : ""}`}
               onClick={() => handleOpenChange(true)}
             />

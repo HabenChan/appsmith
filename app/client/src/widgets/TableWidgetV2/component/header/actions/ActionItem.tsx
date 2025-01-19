@@ -4,15 +4,15 @@ import { Colors } from "constants/Colors";
 import styled from "styled-components";
 import Tooltip from "components/editorComponents/Tooltip";
 import { TooltipContentWrapper } from "../../TableStyledWrappers";
-import { importSvg } from "design-system-old";
+import { importSvg } from "@appsmith/ads-old";
 
 const FilterIcon = importSvg(
-  () => import("assets/icons/control/filter-icon.svg"),
+  async () => import("assets/icons/control/filter-icon.svg"),
 );
 const DownloadIcon = importSvg(
-  () => import("assets/icons/control/download-data-icon.svg"),
+  async () => import("assets/icons/control/download-data-icon.svg"),
 );
-const AddIcon = importSvg(() => import("assets/icons/control/add.svg"));
+const AddIcon = importSvg(async () => import("assets/icons/control/add.svg"));
 
 export const TableIconWrapper = styled.div<{
   selected?: boolean;

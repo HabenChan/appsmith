@@ -1,6 +1,6 @@
 import React from "react";
 import styled from "styled-components";
-import { Option, Select, Text, Icon } from "design-system";
+import { Option, Select, Text, Icon } from "@appsmith/ads";
 import type { ControlProps } from "./BaseControl";
 import BaseControl from "./BaseControl";
 import { isNil } from "lodash";
@@ -8,6 +8,7 @@ import { isDynamicValue } from "utils/DynamicBindingUtils";
 import type { DSEventDetail } from "utils/AppsmithUtils";
 import { DSEventTypes, DS_EVENT } from "utils/AppsmithUtils";
 import { emitInteractionAnalyticsEvent } from "utils/AppsmithUtils";
+import { getValidationErrorForProperty } from "./utils";
 
 const FlagWrapper = styled.span`
   font-family: "Twemoji Country Flags";
@@ -18,6 +19,14 @@ const FlagWrapper = styled.span`
   position: relative;
   top: 1px;
   overflow: initial !important;
+`;
+
+const ErrorMessage = styled.div`
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 14px;
+  color: var(--ads-v2-color-fg-error);
+  margin-top: 5px;
 `;
 
 class DropDownControl extends BaseControl<DropDownControlProps> {
@@ -64,6 +73,7 @@ class DropDownControl extends BaseControl<DropDownControlProps> {
     if (this.props.defaultValue) {
       if (this.props.isMultiSelect) {
         const defaultValueSet = new Set(this.props.defaultValue);
+
         defaultSelected = options
           .filter((option) => defaultValueSet.has(option.value))
           .map((option) => option.value);
@@ -78,6 +88,7 @@ class DropDownControl extends BaseControl<DropDownControlProps> {
 
     if (this.props.isMultiSelect) {
       const propertyValueSet = new Set(this.props.propertyValue);
+
       selected = options
         .filter((option) => propertyValueSet.has(option.value))
         .map((option) => option.value);
@@ -94,13 +105,25 @@ class DropDownControl extends BaseControl<DropDownControlProps> {
       selected = options.find(
         (option) => option.value === computedValue,
       )?.value;
+
+      if (this.props.alwaysShowSelected && !selected) {
+        selected = computedValue;
+      }
     }
+
+    const errors = getValidationErrorForProperty(
+      this.props.widgetProperties,
+      this.props.propertyName,
+    );
+
+    const errorMessage = errors?.[errors.length - 1]?.errorMessage?.message;
 
     return (
       <div className="w-full h-full" ref={this.containerRef}>
         <Select
           defaultValue={defaultSelected}
           isMultiSelect={this.props.isMultiSelect}
+          isValid={!errors.length}
           onDeselect={this.onDeselect}
           onSelect={this.onSelect}
           optionFilterProp="label"
@@ -117,37 +140,44 @@ class DropDownControl extends BaseControl<DropDownControlProps> {
               label={option.label}
               value={option.value}
             >
-              {/* Show Flag if present */}
-              {option.leftElement && (
-                <FlagWrapper>{option.leftElement}</FlagWrapper>
-              )}
+              <div className="flex flex-row w-full">
+                {/* Show Flag if present */}
+                {option.leftElement && (
+                  <FlagWrapper>{option.leftElement}</FlagWrapper>
+                )}
 
-              {/* Show icon if present */}
-              {option.icon && (
-                <Icon className="mr-1" name={option.icon} size="md" />
-              )}
+                {/* Show icon if present */}
+                {option.icon && (
+                  <Icon className="mr-1" name={option.icon} size="md" />
+                )}
 
-              {option.subText ? (
-                this.props.hideSubText ? (
-                  // Show subText below the main text eg - DatePicker control
-                  <div className="w-full flex flex-col">
-                    <Text kind="action-m">{option.label}</Text>
-                    <Text kind="action-s">{option.subText}</Text>
-                  </div>
+                {option.subText ? (
+                  this.props.hideSubText ? (
+                    // Show subText below the main text eg - DatePicker control
+                    <div className="w-full flex flex-col">
+                      <Text kind="action-m">{option.label}</Text>
+                      <Text kind="action-s">{option.subText}</Text>
+                    </div>
+                  ) : (
+                    // Show subText to the right side eg - Label fontsize control
+                    <div className="w-full flex justify-between items-end">
+                      <Text kind="action-m">{option.label}</Text>
+                      <Text kind="action-s">{option.subText}</Text>
+                    </div>
+                  )
                 ) : (
-                  // Show subText to the right side eg - Label fontsize control
-                  <div className="w-full flex justify-between items-end">
-                    <Text kind="action-m">{option.label}</Text>
-                    <Text kind="action-s">{option.subText}</Text>
-                  </div>
-                )
-              ) : (
-                // Only show the label eg - Auto height control
-                <Text kind="action-m">{option.label}</Text>
-              )}
+                  // Only show the label eg - Auto height control
+                  <Text kind="action-m">{option.label}</Text>
+                )}
+              </div>
             </Option>
           ))}
         </Select>
+        {errorMessage && (
+          <ErrorMessage data-testid="t---dropdown-control-error">
+            {errorMessage}
+          </ErrorMessage>
+        )}
       </div>
     );
   }
@@ -155,9 +185,11 @@ class DropDownControl extends BaseControl<DropDownControlProps> {
   onSelect = (value?: string): void => {
     if (!isNil(value)) {
       let selectedValue: string | string[] = this.props.propertyValue;
+
       if (this.props.isMultiSelect) {
         if (Array.isArray(selectedValue)) {
           const index = selectedValue.indexOf(value);
+
           if (index >= 0) {
             selectedValue = [
               ...selectedValue.slice(0, index),
@@ -172,6 +204,7 @@ class DropDownControl extends BaseControl<DropDownControlProps> {
       } else {
         selectedValue = value;
       }
+
       this.updateProperty(this.props.propertyName, selectedValue);
     }
   };
@@ -179,9 +212,11 @@ class DropDownControl extends BaseControl<DropDownControlProps> {
   onDeselect = (value?: string) => {
     if (!isNil(value)) {
       let selectedValue: string | string[] = this.props.propertyValue;
+
       if (this.props.isMultiSelect) {
         if (Array.isArray(selectedValue)) {
           const index = selectedValue.indexOf(value);
+
           if (index >= 0) {
             selectedValue = [
               ...selectedValue.slice(0, index),
@@ -194,10 +229,13 @@ class DropDownControl extends BaseControl<DropDownControlProps> {
       } else {
         selectedValue = "";
       }
+
       this.updateProperty(this.props.propertyName, selectedValue);
     }
   };
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   isOptionSelected = (selectedOption: any) => {
     return selectedOption.value === this.props.propertyValue;
   };
@@ -208,6 +246,8 @@ class DropDownControl extends BaseControl<DropDownControlProps> {
 
   static canDisplayValueInUI(
     config: DropDownControlProps,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any,
   ): boolean {
     const options =
@@ -218,15 +258,18 @@ class DropDownControl extends BaseControl<DropDownControlProps> {
     const allowedValues = new Set(
       options?.map((x: { value: string | number }) => x.value.toString()),
     );
+
     if (config.isMultiSelect) {
       try {
         const values = JSON.parse(value);
+
         for (const x of values) {
           if (!allowedValues.has(x.toString())) return false;
         }
       } catch {
         return false;
       }
+
       return true;
     } else {
       return allowedValues.has(value);
@@ -235,6 +278,8 @@ class DropDownControl extends BaseControl<DropDownControlProps> {
 }
 
 export interface DropDownControlProps extends ControlProps {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   options?: any[] | ((props: ControlProps["widgetProperties"]) => any[]);
   defaultValue?: string;
   virtual?: boolean;
@@ -247,6 +292,7 @@ export interface DropDownControlProps extends ControlProps {
   optionWidth?: string;
   hideSubText?: boolean;
   dropdownUsePropertyValue?: boolean;
+  alwaysShowSelected?: boolean;
 }
 
 export default DropDownControl;

@@ -1,14 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import Button from "./AppViewerButton";
 import { AUTH_LOGIN_URL } from "constants/routes";
+import { PERMISSION_TYPE, isPermitted } from "ee/utils/permissionHelpers";
 import {
-  PERMISSION_TYPE,
-  isPermitted,
-} from "@appsmith/utils/permissionHelpers";
-import {
-  getCurrentApplication,
-  getCurrentPageId,
+  getCurrentBasePageId,
   previewModeSelector,
 } from "selectors/editorSelectors";
 import { getSelectedAppTheme } from "selectors/appThemingSelectors";
@@ -17,32 +13,34 @@ import {
   EDIT_APP,
   FORK_APP,
   SIGN_IN,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import { getCurrentUser } from "selectors/usersSelectors";
 import { ANONYMOUS_USERNAME } from "constants/userConstants";
 import ForkApplicationModal from "pages/Applications/ForkApplicationModal";
-import { viewerURL } from "RouteBuilder";
-import { useHistory } from "react-router";
+import { viewerURL } from "ee/RouteBuilder";
+import { useHistory, useLocation } from "react-router";
 import { useHref } from "pages/Editor/utils";
 import type { NavigationSetting } from "constants/AppConstants";
-import { Icon, Tooltip } from "design-system";
+import { Icon, Tooltip } from "@appsmith/ads";
 import { getApplicationNameTextColor } from "./utils";
 import { ButtonVariantTypes } from "components/constants";
 import { setPreviewModeInitAction } from "actions/editorActions";
+import { getCurrentApplication } from "ee/selectors/applicationSelectors";
+import { useGitProtectedMode } from "pages/Editor/gitSync/hooks/modHooks";
 
 /**
  * ---------------------------------------------------------------------------------------------------
  * TYPES
  * ---------------------------------------------------------------------------------------------------
  */
-type Props = {
+interface Props {
   url?: string;
   className?: string;
   primaryColor: string;
   navColorStyle: NavigationSetting["colorStyle"];
   insideSidebar?: boolean;
   isMinimal?: boolean;
-};
+}
 
 /**
  * ---------------------------------------------------------------------------------------------------
@@ -60,7 +58,7 @@ function PrimaryCTA(props: Props) {
     url,
   } = props;
   const currentUser = useSelector(getCurrentUser);
-  const currentPageID = useSelector(getCurrentPageId);
+  const currentBasePageId = useSelector(getCurrentBasePageId);
   const selectedTheme = useSelector(getSelectedAppTheme);
   const currentApplication = useSelector(getCurrentApplication);
   const history = useHistory();
@@ -69,12 +67,56 @@ function PrimaryCTA(props: Props) {
   const canEdit = isPermitted(userPermissions, permissionRequired);
   const [isForkModalOpen, setIsForkModalOpen] = useState(false);
   const isPreviewMode = useSelector(previewModeSelector);
+  const isProtectedMode = useGitProtectedMode();
   const dispatch = useDispatch();
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+
+  useEffect(() => {
+    if (queryParams.get("fork") === "true") {
+      handleForkModalOpen();
+    } else {
+      handleForkModalClose();
+    }
+  }, []);
+
+  const appendOrDeleteForkParam = (appendOrDelete: "append" | "delete") => {
+    const url = new URL(window.location.href);
+
+    if (appendOrDelete === "append" && !url.searchParams.has("fork")) {
+      url.searchParams.append("fork", "true");
+      history.push(url.toString().slice(url.origin.length));
+    } else if (appendOrDelete === "delete" && url.searchParams.has("fork")) {
+      url.searchParams.delete("fork");
+      history.push(url.toString().slice(url.origin.length));
+    }
+  };
+
+  const handleForkModalOpen = () => {
+    setIsForkModalOpen(true);
+    appendOrDeleteForkParam("append");
+  };
+
+  const handleForkModalClose = () => {
+    setIsForkModalOpen(false);
+    appendOrDeleteForkParam("delete");
+  };
+
+  useEffect(() => {
+    // delete "fork" param from url if user is not logged in
+    if (
+      currentApplication?.forkingEnabled &&
+      currentUser?.username === ANONYMOUS_USERNAME
+    ) {
+      appendOrDeleteForkParam("delete");
+    }
+  }, [currentApplication?.forkingEnabled, currentUser?.username]);
 
   const appViewerURL = useHref(viewerURL, {
-    pageId: currentPageID,
+    basePageId: currentBasePageId,
     params: {
       fork: "true",
+      branch: null,
     },
   });
 
@@ -83,6 +125,7 @@ function PrimaryCTA(props: Props) {
     const encodedForkRedirectURL = `${encodeURIComponent(
       `${window.location.origin}${appViewerURL}`,
     )}`;
+
     return `${AUTH_LOGIN_URL}?redirectUrl=${encodedForkRedirectURL}`;
   }, [appViewerURL]);
 
@@ -98,7 +141,7 @@ function PrimaryCTA(props: Props) {
    * 2. if forking app is enabled and app is public but the user is not logged  -> fork button
    */
   const PrimaryCTA = useMemo(() => {
-    if (url && canEdit) {
+    if (url && canEdit && !isProtectedMode) {
       return (
         <Tooltip
           content={createMessage(EDIT_APP)}
@@ -131,10 +174,12 @@ function PrimaryCTA(props: Props) {
         </Tooltip>
       );
     }
+
     // We wait for the url to be available here to avoid showing the fork
     // button for a moment and then showing the edit button i.e show one of the buttons once
     // the data is available
     if (!currentUser || !url) return;
+
     if (
       currentApplication?.forkingEnabled &&
       currentUser?.username === ANONYMOUS_USERNAME
@@ -153,7 +198,7 @@ function PrimaryCTA(props: Props) {
           }}
           primaryColor={primaryColor}
           text={createMessage(FORK_APP)}
-          varient={ButtonVariantTypes.SECONDARY}
+          variant={ButtonVariantTypes.SECONDARY}
         />
       );
     }
@@ -171,15 +216,17 @@ function PrimaryCTA(props: Props) {
             insideSidebar={insideSidebar}
             navColorStyle={navColorStyle}
             onClick={() => {
-              setIsForkModalOpen(true);
+              handleForkModalOpen();
             }}
             primaryColor={primaryColor}
             text={createMessage(FORK_APP)}
+            variant={ButtonVariantTypes.SECONDARY}
           />
           <ForkApplicationModal
             applicationId={currentApplication?.id || ""}
+            handleClose={handleForkModalClose}
+            handleOpen={handleForkModalOpen}
             isModalOpen={isForkModalOpen}
-            setModalClose={setIsForkModalOpen}
           />
         </div>
       );
@@ -208,7 +255,7 @@ function PrimaryCTA(props: Props) {
           }}
           primaryColor={primaryColor}
           text={createMessage(SIGN_IN)}
-          varient={ButtonVariantTypes.SECONDARY}
+          variant={ButtonVariantTypes.SECONDARY}
         />
       );
     }

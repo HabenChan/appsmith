@@ -1,12 +1,17 @@
 import { useEffect, useState, useCallback } from "react";
 import type { DropdownOptions } from "../constants";
 import type { Datasource } from "entities/Datasource";
-import type { GenerateCRUDEnabledPluginMap } from "api/PluginApi";
 import { CONNECT_NEW_DATASOURCE_OPTION_ID } from "../DataSourceOption";
 import type { executeDatasourceQuerySuccessPayload } from "actions/datasourceActions";
 import { executeDatasourceQuery } from "actions/datasourceActions";
-import type { DropdownOption } from "design-system-old";
-import { useDispatch } from "react-redux";
+import type { DropdownOption } from "@appsmith/ads-old";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  type GenerateCRUDEnabledPluginMap,
+  PluginPackageName,
+} from "entities/Plugin";
+import { getCurrentEnvironmentId } from "ee/selectors/environmentSelectors";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 
 export const FAKE_DATASOURCE_OPTION = {
   CONNECT_NEW_DATASOURCE_OPTION: {
@@ -22,27 +27,41 @@ export const FAKE_DATASOURCE_OPTION = {
 export const useDatasourceOptions = ({
   canCreateDatasource,
   datasources,
+  fetchingDatasourceConfigs,
   generateCRUDSupportedPlugin,
 }: {
   canCreateDatasource: boolean;
   datasources: Datasource[];
+  fetchingDatasourceConfigs: boolean;
   generateCRUDSupportedPlugin: GenerateCRUDEnabledPluginMap;
 }) => {
   const [dataSourceOptions, setDataSourceOptions] = useState<DropdownOptions>(
     [],
   );
+  const currentEnvironment = useSelector(getCurrentEnvironmentId);
 
   useEffect(() => {
     // On mount of component and on change of datasources, Update the list.
     const unSupportedDatasourceOptions: DropdownOptions = [];
     const supportedDatasourceOptions: DropdownOptions = [];
     let newDataSourceOptions: DropdownOptions = [];
+
     if (canCreateDatasource) {
       newDataSourceOptions.push(
         FAKE_DATASOURCE_OPTION.CONNECT_NEW_DATASOURCE_OPTION,
       );
     }
-    datasources.forEach(({ id, isValid, name, pluginId }) => {
+
+    datasources.forEach(({ datasourceStorages, id, name, pluginId }) => {
+      // Doing this since g sheets plugin is not supported for environments
+      // and we need to show the option in the dropdown
+      const isGoogleSheetPlugin =
+        generateCRUDSupportedPlugin.hasOwnProperty(pluginId) &&
+        generateCRUDSupportedPlugin[pluginId] ===
+          PluginPackageName.GOOGLE_SHEETS;
+      const datasourceStorage = isGoogleSheetPlugin
+        ? Object.values(datasourceStorages)[0]
+        : datasourceStorages[currentEnvironment];
       const datasourceObject = {
         id,
         label: name,
@@ -50,9 +69,10 @@ export const useDatasourceOptions = ({
         data: {
           pluginId,
           isSupportedForTemplate: !!generateCRUDSupportedPlugin[pluginId],
-          isValid,
+          isValid: datasourceStorage?.isValid,
         },
       };
+
       if (generateCRUDSupportedPlugin[pluginId])
         supportedDatasourceOptions.push(datasourceObject);
       else {
@@ -64,7 +84,13 @@ export const useDatasourceOptions = ({
       unSupportedDatasourceOptions,
     );
     setDataSourceOptions(newDataSourceOptions);
-  }, [datasources, setDataSourceOptions, generateCRUDSupportedPlugin]);
+  }, [
+    datasources,
+    setDataSourceOptions,
+    generateCRUDSupportedPlugin,
+    fetchingDatasourceConfigs,
+  ]);
+
   return dataSourceOptions;
 };
 
@@ -90,20 +116,22 @@ export const useDatasourceOptions = ({
 //   deleteFormat: "SHEET",
 // };
 
-type FetchAllSpreadSheets = {
+interface FetchAllSpreadSheets {
   selectedDatasourceId: string;
   pluginId: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestObject?: Record<any, string>;
-};
+}
 
-export type UseSpreadSheetsReturn = {
+export interface UseSpreadSheetsReturn {
   fetchAllSpreadsheets: ({
     requestObject,
     selectedDatasourceId,
   }: FetchAllSpreadSheets) => void;
   isFetchingSpreadsheets: boolean;
   failedFetchingSpreadsheets: boolean;
-};
+}
 
 export const useSpreadSheets = ({
   setSelectedDatasourceIsInvalid,
@@ -134,6 +162,7 @@ export const useSpreadSheets = ({
       >,
     ) => {
       setIsFetchingSpreadsheets(false);
+
       if (payload.data && payload.data.trigger) {
         const spreadSheets = payload.data.trigger;
 
@@ -167,11 +196,13 @@ export const useSpreadSheets = ({
         requestType: "SPREADSHEET_SELECTOR",
         ...requestObject,
       };
+
       dispatch(
         executeDatasourceQuery({
           payload: {
             datasourceId: selectedDatasourceId,
             data: formattedRequestData,
+            isGeneratePage: true,
           },
           onSuccessCallback: onFetchAllSpreadsheetSuccess,
           onErrorCallback: onFetchAllSpreadsheetFailure,
@@ -214,14 +245,26 @@ export type Sheets = Sheet[];
 export const getSheetUrl = (sheetId: string): string =>
   `https://docs.google.com/spreadsheets/d/${sheetId}/edit#gid=0`;
 
-export type FetchSheetsList = {
+export interface FetchSheetsList {
   selectedDatasourceId: string;
   selectedSpreadsheetUrl: string;
   pluginId: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestObject?: Record<any, string>;
-};
+}
 
-export type UseSheetListReturn = {
+export interface FetchSheetData {
+  selectedDatasourceId: string;
+  selectedSpreadsheetUrl: string;
+  selectedSheetName: string;
+  pluginId: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  requestObject?: Record<any, string>;
+}
+
+export interface UseSheetListReturn {
   sheetsList: DropdownOption[];
   isFetchingSheetsList: boolean;
   failedFetchingSheetsList: boolean;
@@ -230,9 +273,33 @@ export type UseSheetListReturn = {
     selectedDatasourceId,
     selectedSpreadsheetUrl,
   }: FetchSheetsList) => void;
-};
+}
 
-export const useSheetsList = (): UseSheetListReturn => {
+export interface UseSheetDataReturn {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sheetData: Array<any>;
+  isFetchingSheetData: boolean;
+  failedFetchingSheetData: boolean;
+  fetchSheetData: ({
+    requestObject,
+    selectedDatasourceId,
+    selectedSheetName,
+    selectedSpreadsheetUrl,
+  }: FetchSheetData) => void;
+}
+
+export interface UseSheetListProps {
+  setSheetOptions?: (tableOptions: DropdownOptions) => void;
+}
+
+export interface UseSheetDataProps {
+  setSheetData?: (tableOptions: DropdownOptions) => void;
+}
+
+export const useSheetsList = (
+  props: UseSheetListProps = {},
+): UseSheetListReturn => {
   const dispatch = useDispatch();
 
   const [sheetsList, setSheetsList] = useState<DropdownOption[]>([]);
@@ -254,16 +321,19 @@ export const useSheetsList = (): UseSheetListReturn => {
       >,
     ) => {
       setIsFetchingSheetsList(false);
+
       if (payload.data && payload.data.trigger) {
         const responseBody = payload.data.trigger;
+
         if (Array.isArray(responseBody)) {
           setSheetsList(responseBody);
+          props.setSheetOptions && props.setSheetOptions(responseBody);
         } else {
           // to handle error like "401 Unauthorized"
         }
       }
     },
-    [setSheetsList, setIsFetchingSheetsList],
+    [setSheetsList, setIsFetchingSheetsList, props.setSheetOptions],
   );
 
   const fetchSheetsList = useCallback(
@@ -274,6 +344,7 @@ export const useSheetsList = (): UseSheetListReturn => {
       selectedSpreadsheetUrl,
     }: FetchSheetsList) => {
       setSheetsList([]);
+      props.setSheetOptions && props.setSheetOptions([]);
       setIsFetchingSheetsList(true);
       setFailedFetchingSheetsList(false);
       const formattedRequestData = {
@@ -285,11 +356,13 @@ export const useSheetsList = (): UseSheetListReturn => {
         pluginId: pluginId,
         requestType: "SHEET_SELECTOR",
       };
+
       dispatch(
         executeDatasourceQuery({
           payload: {
             datasourceId: selectedDatasourceId,
             data: formattedRequestData,
+            isGeneratePage: true,
           },
           onSuccessCallback: onFetchAllSheetSuccess,
           onErrorCallback: onFetchAllSheetFailure,
@@ -302,6 +375,7 @@ export const useSheetsList = (): UseSheetListReturn => {
       onFetchAllSheetFailure,
       setIsFetchingSheetsList,
       setFailedFetchingSheetsList,
+      props.setSheetOptions,
     ],
   );
 
@@ -313,16 +387,124 @@ export const useSheetsList = (): UseSheetListReturn => {
   };
 };
 
-export type FetchColumnHeaderListParams = {
+export const useSheetData = (
+  props: UseSheetDataProps = {},
+): UseSheetDataReturn => {
+  const dispatch = useDispatch();
+
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [sheetData, setSheetData] = useState<any>([]);
+
+  const [isFetchingSheetData, setIsFetchingSheetData] =
+    useState<boolean>(false);
+  const [failedFetchingSheetData, setFailedFetchingSheetData] =
+    useState<boolean>(false);
+
+  const onFetchAllSheetFailure = useCallback(
+    (error: string) => {
+      setIsFetchingSheetData(false);
+      setFailedFetchingSheetData(true);
+      AnalyticsUtil.logEvent("DATA_FETCH_FAILED_POST_SCHEMA_FETCH", {
+        error: error,
+      });
+    },
+    [setIsFetchingSheetData],
+  );
+
+  const onFetchAllSheetSuccess = useCallback(
+    (
+      payload: executeDatasourceQuerySuccessPayload<
+        Array<{ label: string; value: string }>
+      >,
+    ) => {
+      setIsFetchingSheetData(false);
+
+      if (payload.data && payload.data.trigger) {
+        const responseBody = payload.data.trigger;
+
+        if (Array.isArray(responseBody)) {
+          setSheetData(responseBody);
+          props.setSheetData && props.setSheetData(responseBody);
+        } else {
+          // to handle error like "401 Unauthorized"
+          AnalyticsUtil.logEvent(
+            "DATA_FETCH_FAILED_POST_SCHEMA_FETCH",
+            { error: payload }, // sending the entire payload here because it is not clear if there is a distinct
+            // field holding the error message
+          );
+        }
+      }
+    },
+    [setSheetData, setIsFetchingSheetData, props.setSheetData],
+  );
+
+  const fetchSheetData = useCallback(
+    ({
+      pluginId,
+      selectedDatasourceId,
+      selectedSheetName,
+      selectedSpreadsheetUrl,
+    }: FetchSheetData) => {
+      setSheetData([]);
+      props.setSheetData && props.setSheetData([]);
+      setIsFetchingSheetData(true);
+      setFailedFetchingSheetData(false);
+      const formattedRequestData = {
+        datasourceId: selectedDatasourceId,
+        displayType: "DROP_DOWN",
+        parameters: {
+          sheetUrl: selectedSpreadsheetUrl,
+          sheetName: selectedSheetName,
+          queryFormat: "ROWS",
+          tableHeaderIndex: 1,
+        },
+        pluginId: pluginId,
+        requestType: "SHEET_DATA",
+      };
+
+      dispatch(
+        executeDatasourceQuery({
+          payload: {
+            datasourceId: selectedDatasourceId,
+            data: formattedRequestData,
+            isGeneratePage: true,
+          },
+          onSuccessCallback: onFetchAllSheetSuccess,
+          onErrorCallback: onFetchAllSheetFailure,
+        }),
+      );
+    },
+    [
+      setSheetData,
+      onFetchAllSheetSuccess,
+      onFetchAllSheetFailure,
+      setIsFetchingSheetData,
+      setFailedFetchingSheetData,
+      props.setSheetData,
+    ],
+  );
+
+  return {
+    sheetData,
+    isFetchingSheetData,
+    failedFetchingSheetData,
+    fetchSheetData,
+  };
+};
+
+export interface FetchColumnHeaderListParams {
   selectedDatasourceId: string;
   selectedSpreadsheetUrl: string;
   sheetName: string;
   pluginId: string;
   tableHeaderIndex: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestObject?: Record<any, string>; //possily unneccesary
-};
+}
 
-export type UseSheetColumnHeadersReturn = {
+export interface UseSheetColumnHeadersReturn {
   columnHeaderList: DropdownOption[];
   isFetchingColumnHeaderList: boolean;
   errorFetchingColumnHeaderList: string;
@@ -332,7 +514,7 @@ export type UseSheetColumnHeadersReturn = {
     sheetName,
     tableHeaderIndex,
   }: FetchColumnHeaderListParams) => void;
-};
+}
 
 export const useSheetColumnHeaders = () => {
   const dispatch = useDispatch();
@@ -363,13 +545,16 @@ export const useSheetColumnHeaders = () => {
 
       if (payload.data && payload.data.trigger) {
         const responseBody = payload.data.trigger;
+
         if (Array.isArray(responseBody)) {
           setColumnHeaderList(responseBody);
         } else {
           let error = "Failed fetching Column headers";
+
           if (typeof responseBody === "string") {
             error = responseBody;
           }
+
           setColumnHeaderList([]);
           setErrorFetchingColumnHeaderList(error);
         }
@@ -403,6 +588,7 @@ export const useSheetColumnHeaders = () => {
           payload: {
             datasourceId: params.selectedDatasourceId,
             data: formattedRequestData,
+            isGeneratePage: true,
           },
           onSuccessCallback: onFetchColumnHeadersSuccess,
           onErrorCallback: onFetchColumnHeadersFailure,
@@ -446,10 +632,13 @@ export const useS3BucketList = () => {
       }>,
     ) => {
       setIsFetchingBucketList(false);
+
       if (payload.data && payload.data.body) {
         const payloadBody = payload.data.body;
+
         if (Array.isArray(payloadBody.bucketList)) {
           const { bucketList: list = [] } = payloadBody;
+
           setBucketList(list);
         }
       }
@@ -472,6 +661,7 @@ export const useS3BucketList = () => {
             payload: {
               datasourceId: selectedDatasource.id,
               data: payload,
+              isGeneratePage: true,
             },
             onSuccessCallback: onFetchBucketSuccess,
             onErrorCallback: onFetchBucketFailure,

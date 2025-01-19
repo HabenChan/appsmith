@@ -1,44 +1,48 @@
-const commonlocators = require("../../../../../locators/commonlocators.json");
 const formWidgetsPage = require("../../../../../locators/FormWidgets.json");
-const dsl = require("../../../../../fixtures/formWithRTEDsl.json");
+import * as _ from "../../../../../support/Objects/ObjectsCore";
 const widgetsPage = require("../../../../../locators/Widgets.json");
 
-describe("RichTextEditor Widget Functionality in Form", function () {
-  before(() => {
-    cy.addDsl(dsl);
-  });
+describe(
+  "RichTextEditor Widget Functionality in Form",
+  { tags: ["@tag.Widget", "@tag.Form", "@tag.TextEditor", "@tag.Binding"] },
+  function () {
+    before(() => {
+      _.agHelper.AddDsl("formWithRTEDsl");
+    });
 
-  beforeEach(() => {
-    cy.wait(7000);
-    cy.openPropertyPane("richtexteditorwidget");
-  });
+    beforeEach(() => {
+      cy.openPropertyPane("richtexteditorwidget");
+    });
 
-  it("RichTextEditor required functionality", function () {
-    //changing the Text Name
-    cy.widgetText(
-      this.data.RichTextEditorName,
-      formWidgetsPage.richTextEditorWidget,
-      widgetsPage.widgetNameSpan,
-    );
+    it("RichTextEditor required functionality", function () {
+      //Validate Html
+      cy.validateHTMLText(
+        formWidgetsPage.richTextEditorWidget,
+        "h1",
+        "Default",
+      );
 
-    //Validate Html
-    cy.validateHTMLText(formWidgetsPage.richTextEditorWidget, "h1", "Default");
-    //   Make RTE Required
-    cy.CheckWidgetProperties(formWidgetsPage.requiredJs);
+      //changing the Text Name
+      cy.widgetText(
+        this.dataSet.RichTextEditorName,
+        formWidgetsPage.richTextEditorWidget,
+        widgetsPage.widgetNameSpan,
+      );
 
-    //   Clear the input
-    cy.testJsontext("defaultvalue", "");
+      //   Make RTE Required
+      cy.CheckWidgetProperties(formWidgetsPage.requiredJs);
 
-    cy.wait(500);
-    cy.get(formWidgetsPage.richTextEditorWidget + " .tox.tox-tinymce").should(
-      "have.css",
-      "border",
-      "1px solid rgb(217, 25, 33)",
-    );
+      //   Clear the input
+      cy.testJsontext("defaultvalue", "");
 
-    cy.get(".t--draggable-formbuttonwidget button").should("be.disabled");
-  });
-  afterEach(() => {
-    cy.goToEditFromPublish();
-  });
-});
+      cy.wait(500);
+      cy.get(formWidgetsPage.richTextEditorWidget + " .tox.tox-tinymce").should(
+        "have.css",
+        "border",
+        "1px solid rgb(217, 25, 33)",
+      );
+
+      cy.get(".t--draggable-formbuttonwidget button").should("be.disabled");
+    });
+  },
+);

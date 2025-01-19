@@ -2,17 +2,17 @@ import React, { useEffect, useRef, useState } from "react";
 import type { NavigationSetting } from "constants/AppConstants";
 import { StyledApplicationName } from "./ApplicationName.styled";
 import { isEllipsisActive } from "utils/helpers";
-import { Tooltip } from "design-system";
+import { Tooltip } from "@appsmith/ads";
 import { useIsMobileDevice } from "utils/hooks/useDeviceDetect";
 
-type ApplicationNameProps = {
+interface ApplicationNameProps {
   appName?: string;
   navColorStyle: NavigationSetting["colorStyle"];
   navStyle: NavigationSetting["navStyle"];
   primaryColor: string;
   forSidebar?: boolean;
   fontWeight?: "regular" | "bold";
-};
+}
 
 const ApplicationName = (props: ApplicationNameProps) => {
   const {

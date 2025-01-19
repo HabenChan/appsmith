@@ -1,8 +1,8 @@
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+} from "ee/constants/ReduxActionConstants";
 import {
   APPSMITH_BRAND_FAVICON_URL,
   APPSMITH_BRAND_LOGO_URL,
@@ -27,6 +27,8 @@ export const defaultBrandingConfig = {
   brandLogoUrl: APPSMITH_BRAND_LOGO_URL,
 };
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const initialState: TenantReduxState<any> = {
   userPermissions: [],
   tenantConfiguration: {
@@ -39,6 +41,8 @@ export const initialState: TenantReduxState<any> = {
 
 export const handlers = {
   [ReduxActionTypes.FETCH_CURRENT_TENANT_CONFIG]: (
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     state: TenantReduxState<any>,
     action: ReduxAction<{ isBackgroundRequest: boolean }>,
   ) => ({
@@ -46,19 +50,54 @@ export const handlers = {
     isLoading: !action.payload.isBackgroundRequest,
   }),
   [ReduxActionTypes.FETCH_CURRENT_TENANT_CONFIG_SUCCESS]: (
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     state: TenantReduxState<any>,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     action: ReduxAction<TenantReduxState<any>>,
   ) => ({
     ...state,
     userPermissions: action.payload.userPermissions || [],
     tenantConfiguration: {
+      ...defaultBrandingConfig,
       ...state.tenantConfiguration,
       ...action.payload.tenantConfiguration,
+      brandColors: {
+        ...defaultBrandingConfig.brandColors,
+        ...action.payload.tenantConfiguration.brandColors,
+      },
     },
     isLoading: false,
     instanceId: action.payload.instanceId,
   }),
   [ReduxActionErrorTypes.FETCH_CURRENT_TENANT_CONFIG_ERROR]: (
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    state: TenantReduxState<any>,
+  ) => ({
+    ...state,
+    isLoading: false,
+  }),
+  [ReduxActionTypes.UPDATE_TENANT_CONFIG_SUCCESS]: (
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    state: TenantReduxState<any>,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    action: ReduxAction<TenantReduxState<any>>,
+  ) => ({
+    ...state,
+    ...action.payload,
+    tenantConfiguration: {
+      ...state.tenantConfiguration,
+      ...action.payload.tenantConfiguration,
+    },
+    isLoading: false,
+  }),
+  [ReduxActionErrorTypes.UPDATE_TENANT_CONFIG_ERROR]: (
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     state: TenantReduxState<any>,
   ) => ({
     ...state,

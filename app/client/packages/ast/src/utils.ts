@@ -11,6 +11,7 @@ export function sanitizeScript(js: string, evaluationVersion: number) {
   //default value of evalutaion version is 2
   evaluationVersion = evaluationVersion ? evaluationVersion : 2;
   const trimmedJS = js.replace(beginsWithLineBreakRegex, "");
+
   return evaluationVersion > 1 ? trimmedJS : unescapeJS(trimmedJS);
 }
 
@@ -25,10 +26,10 @@ export const isTrueObject = (
 export const getNameFromPropertyNode = (node: PropertyNode): string =>
   isLiteralNode(node.key) ? String(node.key.value) : node.key.name;
 
-type Position = {
+interface Position {
   line: number;
   ch: number;
-};
+}
 
 export const extractContentByPosition = (
   content: string,
@@ -52,9 +53,23 @@ export const extractContentByPosition = (
     } else {
       returnedString += eachLine[i];
     }
+
     if (i !== position.to.line) {
       returnedString += "\n";
     }
   }
+
   return returnedString;
+};
+
+export const getStringValue = (
+  inputValue: string | number | boolean | RegExp,
+) => {
+  if (typeof inputValue === "object" || typeof inputValue === "boolean") {
+    inputValue = JSON.stringify(inputValue);
+  } else if (typeof inputValue === "number" || typeof inputValue === "string") {
+    inputValue += "";
+  }
+
+  return inputValue;
 };

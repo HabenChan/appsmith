@@ -3,6 +3,7 @@ package com.appsmith.server.solutions.ce;
 import com.appsmith.server.configurations.ProjectProperties;
 import com.appsmith.server.dtos.ReleaseNode;
 import com.appsmith.server.helpers.ReleaseNotesUtils;
+import io.micrometer.observation.annotation.Observed;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,7 +15,6 @@ import reactor.core.scheduler.Schedulers;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-
 
 @RequiredArgsConstructor
 @Slf4j
@@ -76,9 +76,10 @@ public class ReleaseNotesServiceCEImpl implements ReleaseNotesServiceCE {
      */
     // Number of milliseconds between the start of each scheduled calls to this method.
     @Scheduled(initialDelay = 2 * 60 * 1000 /* two minutes */, fixedRate = 2 * 60 * 60 * 1000 /* two hours */)
+    @Observed(name = "refreshReleaseNotes")
     public void refreshReleaseNotes() {
 
-        cacheExpiryTime = null;  // Bust the release notes cache to force fetching again.
+        cacheExpiryTime = null; // Bust the release notes cache to force fetching again.
         getReleaseNodes()
                 .map(releaseNodes -> {
                     cacheExpiryTime = Instant.now().plusSeconds(2 * 60 * 60);
@@ -95,5 +96,4 @@ public class ReleaseNotesServiceCEImpl implements ReleaseNotesServiceCE {
     public void setReleaseNodesCache(List<ReleaseNode> nodes) {
         this.releaseNodesCache = nodes;
     }
-
 }

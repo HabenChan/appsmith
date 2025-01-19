@@ -11,11 +11,11 @@ import Text, { TextType } from "../Text";
 import type { CommonComponentProps } from "../types/common";
 import { Classes } from "../constants/classes";
 
-export type TableDropdownOption = {
+export interface TableDropdownOption {
   id: string;
   name: string;
   desc: string;
-};
+}
 
 type DropdownProps = CommonComponentProps & {
   options: TableDropdownOption[];
@@ -106,6 +106,7 @@ function TableDropdown(props: DropdownProps) {
       setSelectedOption(props.options[index]);
       onSelect && onSelect(props.options[index]);
     }
+
     setIsDropdownOpen(false);
   };
 

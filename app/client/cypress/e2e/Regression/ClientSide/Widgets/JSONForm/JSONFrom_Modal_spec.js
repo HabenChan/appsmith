@@ -1,5 +1,5 @@
 const jsonFormInModalDsl = require("../../../../../fixtures/jsonFormInModalDsl.json");
-const publishPage = require("../../../../../locators/publishWidgetspage.json");
+import * as _ from "../../../../../support/Objects/ObjectsCore";
 
 const fieldPrefix = ".t--jsonformfield";
 
@@ -32,48 +32,51 @@ const checkFormModalValues = (value) => {
   cy.get(".t--modal-widget").should("not.exist");
 };
 
-describe("JSONForm in Modal", () => {
-  it("should show the JSONForm with default values from Table widget", () => {
-    const tableData = [
-      {
-        step: "#1",
-        task: "Drop a table",
-        status: "Done",
-        action: "",
-      },
-      {
-        step: "#2",
-        task: "Create a query fetch_users with the Mock DB",
-        status: "Pending",
-        action: "",
-      },
-      {
-        step: "#3",
-        task: "Bind the query using => fetch_users.data",
-        status: "New",
-        action: "",
-      },
-    ];
-    cy.addDsl(jsonFormInModalDsl);
-    cy.get(".t--widget-tablewidget .tableWrap").should("be.visible");
-    cy.wait(1000);
-    cy.PublishtheApp();
+describe(
+  "JSONForm in Modal",
+  { tags: ["@tag.Widget", "@tag.JSONForm", "@tag.Binding"] },
+  () => {
+    it("should show the JSONForm with default values from Table widget", () => {
+      const tableData = [
+        {
+          step: "#1",
+          task: "Drop a table",
+          status: "Done",
+          action: "",
+        },
+        {
+          step: "#2",
+          task: "Create a query fetch_users with the Mock DB",
+          status: "Pending",
+          action: "",
+        },
+        {
+          step: "#3",
+          task: "Bind the query using => fetch_users.data",
+          status: "New",
+          action: "",
+        },
+      ];
+      cy.addDsl(jsonFormInModalDsl);
+      cy.get(".t--widget-tablewidget .tableWrap").should("be.visible");
+      cy.wait(1000);
+      _.deployMode.DeployApp();
+      // Click action button of first row
+      cy.get(".t--widget-tablewidget .tableWrap")
+        .find("button")
+        .first()
+        .click({ force: true });
+      // Check the contents of the form
+      checkFormModalValues(tableData[0]);
 
-    // Click action button of first row
-    cy.get(".t--widget-tablewidget .tableWrap")
-      .find("button")
-      .first()
-      .click({ force: true });
-    // Check the contents of the form
-    checkFormModalValues(tableData[0]);
+      // Click action button of third row
+      cy.get(".t--widget-tablewidget .tableWrap")
+        .find("button")
+        .last()
+        .click({ force: true });
+      checkFormModalValues(tableData[2]);
 
-    // Click action button of third row
-    cy.get(".t--widget-tablewidget .tableWrap")
-      .find("button")
-      .last()
-      .click({ force: true });
-    checkFormModalValues(tableData[2]);
-
-    cy.get(publishPage.backToEditor).click({ force: true });
-  });
-});
+      _.deployMode.NavigateBacktoEditor();
+    });
+  },
+);

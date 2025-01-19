@@ -3,33 +3,39 @@ package com.appsmith.server.solutions.ce;
 import com.appsmith.external.datatypes.ClientDataType;
 import com.appsmith.external.dtos.ExecuteActionDTO;
 import com.appsmith.external.dtos.ParamProperty;
+import com.appsmith.external.models.ActionDTO;
 import com.appsmith.external.models.ActionExecutionResult;
+import com.appsmith.external.models.Datasource;
 import com.appsmith.external.models.Param;
+import com.appsmith.server.applications.base.ApplicationService;
+import com.appsmith.server.configurations.CommonConfig;
 import com.appsmith.server.constants.FieldName;
+import com.appsmith.server.datasources.base.DatasourceService;
+import com.appsmith.server.datasourcestorages.base.DatasourceStorageService;
 import com.appsmith.server.domains.NewAction;
 import com.appsmith.server.exceptions.AppsmithError;
 import com.appsmith.server.exceptions.AppsmithException;
+import com.appsmith.server.helpers.ActionExecutionSolutionHelper;
 import com.appsmith.server.helpers.PluginExecutorHelper;
-import com.appsmith.server.repositories.NewActionRepository;
+import com.appsmith.server.newactions.base.NewActionService;
+import com.appsmith.server.newpages.base.NewPageService;
+import com.appsmith.server.plugins.base.PluginService;
 import com.appsmith.server.services.AnalyticsService;
-import com.appsmith.server.services.ApplicationService;
 import com.appsmith.server.services.AuthenticationValidator;
+import com.appsmith.server.services.ConfigService;
 import com.appsmith.server.services.DatasourceContextService;
-import com.appsmith.server.services.DatasourceService;
-import com.appsmith.server.services.DatasourceStorageService;
-import com.appsmith.server.services.NewActionService;
-import com.appsmith.server.services.NewPageService;
-import com.appsmith.server.services.PluginService;
+import com.appsmith.server.services.FeatureFlagService;
 import com.appsmith.server.services.SessionUserService;
+import com.appsmith.server.services.TenantService;
 import com.appsmith.server.solutions.ActionPermission;
 import com.appsmith.server.solutions.DatasourcePermission;
-import com.appsmith.server.solutions.DatasourceStorageTransferSolution;
+import com.appsmith.server.solutions.EnvironmentPermission;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.mock.mockito.SpyBean;
@@ -47,7 +53,6 @@ import org.springframework.http.codec.multipart.Part;
 import org.springframework.http.codec.xml.Jaxb2XmlDecoder;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.web.reactive.function.BodyExtractor;
 import org.springframework.web.reactive.function.BodyExtractors;
 import reactor.core.publisher.Flux;
@@ -66,10 +71,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 
-@ExtendWith(SpringExtension.class)
 @SpringBootTest
 class ActionExecutionSolutionCEImplTest {
 
@@ -77,38 +83,65 @@ class ActionExecutionSolutionCEImplTest {
 
     @SpyBean
     NewActionService newActionService;
+
     @MockBean
     ActionPermission actionPermission;
-    @MockBean
+
     ObservationRegistry observationRegistry;
+
     @SpyBean
     ObjectMapper objectMapper;
-    @MockBean
-    NewActionRepository repository;
+
     @SpyBean
     DatasourceService datasourceService;
+
     @MockBean
     PluginService pluginService;
+
     @MockBean
     DatasourceContextService datasourceContextService;
+
     @MockBean
     PluginExecutorHelper pluginExecutorHelper;
+
     @MockBean
     NewPageService newPageService;
-    @MockBean
+
+    @SpyBean
     ApplicationService applicationService;
-    @MockBean
+
+    @SpyBean
     SessionUserService sessionUserService;
+
     @MockBean
     AuthenticationValidator authenticationValidator;
+
     @MockBean
     DatasourcePermission datasourcePermission;
+
     @MockBean
     AnalyticsService analyticsService;
+
     @MockBean
     DatasourceStorageService datasourceStorageService;
-    @MockBean
-    DatasourceStorageTransferSolution datasourceStorageTransferSolution;
+
+    @SpyBean
+    ConfigService configService;
+
+    @SpyBean
+    TenantService tenantService;
+
+    @SpyBean
+    CommonConfig commonConfig;
+
+    @SpyBean
+    ActionExecutionSolutionHelper actionExecutionSolutionHelper;
+
+    @SpyBean
+    FeatureFlagService featureFlagService;
+
+    @Autowired
+    EnvironmentPermission environmentPermission;
 
     private BodyExtractor.Context context;
 
@@ -116,12 +149,13 @@ class ActionExecutionSolutionCEImplTest {
 
     @BeforeEach
     public void beforeEach() {
+        observationRegistry = Mockito.mock(ObservationRegistry.class);
+
         actionExecutionSolution = new ActionExecutionSolutionCEImpl(
                 newActionService,
                 actionPermission,
                 observationRegistry,
                 objectMapper,
-                repository,
                 datasourceService,
                 pluginService,
                 datasourceContextService,
@@ -133,9 +167,15 @@ class ActionExecutionSolutionCEImplTest {
                 datasourcePermission,
                 analyticsService,
                 datasourceStorageService,
-                datasourceStorageTransferSolution);
+                environmentPermission,
+                configService,
+                tenantService,
+                commonConfig,
+                actionExecutionSolutionHelper,
+                featureFlagService);
 
-        ObservationRegistry.ObservationConfig mockObservationConfig = Mockito.mock(ObservationRegistry.ObservationConfig.class);
+        ObservationRegistry.ObservationConfig mockObservationConfig =
+                Mockito.mock(ObservationRegistry.ObservationConfig.class);
         Mockito.when(observationRegistry.observationConfig()).thenReturn(mockObservationConfig);
     }
 
@@ -170,100 +210,91 @@ class ActionExecutionSolutionCEImplTest {
         this.hints = new HashMap<>();
     }
 
-
     @Test
     public void testExecuteAction_withoutExecuteActionDTOPart_failsValidation() {
-        final Mono<ActionExecutionResult> actionExecutionResultMono = actionExecutionSolution
-                .executeAction(Flux.empty(), null, FieldName.UNUSED_ENVIRONMENT_ID);
+        final Mono<ActionExecutionResult> actionExecutionResultMono = actionExecutionSolution.executeAction(
+                Flux.empty(), FieldName.UNUSED_ENVIRONMENT_ID, null, Boolean.FALSE);
 
-        StepVerifier
-                .create(actionExecutionResultMono)
-                .expectErrorMatches(e -> e instanceof AppsmithException &&
-                        e.getMessage().equals(AppsmithError.INVALID_PARAMETER.getMessage(FieldName.ACTION_ID)))
+        StepVerifier.create(actionExecutionResultMono)
+                .expectErrorMatches(e -> e instanceof AppsmithException
+                        && e.getMessage().equals(AppsmithError.INVALID_PARAMETER.getMessage(FieldName.ACTION_ID)))
                 .verify();
     }
 
     @Test
     public void testExecuteAction_withMalformedExecuteActionDTO_failsValidation() {
-        MockServerHttpRequest mock = MockServerHttpRequest
-                .method(HttpMethod.POST, URI.create("https://example.com"))
+        MockServerHttpRequest mock = MockServerHttpRequest.method(HttpMethod.POST, URI.create("https://example.com"))
                 .contentType(new MediaType("multipart", "form-data", Map.of("boundary", "boundary")))
-                .body("""
-                        --boundary\r
-                        Content-Disposition: form-data; name="executeActionDTO"\r
-                        \r
-                        irrelevant content\r
-                        --boundary--\r
-                        """);
+                .body(
+                        """
+                                --boundary\r
+                                Content-Disposition: form-data; name="executeActionDTO"\r
+                                \r
+                                irrelevant content\r
+                                --boundary--\r
+                                """);
 
-        final Flux<Part> partsFlux = BodyExtractors.toParts()
-                .extract(mock, this.context);
+        final Flux<Part> partsFlux = BodyExtractors.toParts().extract(mock, this.context);
 
-        final Mono<ActionExecutionResult> actionExecutionResultMono = actionExecutionSolution
-                .executeAction(partsFlux, null, FieldName.UNUSED_ENVIRONMENT_ID);
+        final Mono<ActionExecutionResult> actionExecutionResultMono =
+                actionExecutionSolution.executeAction(partsFlux, FieldName.UNUSED_ENVIRONMENT_ID, null, Boolean.FALSE);
 
-        StepVerifier
-                .create(actionExecutionResultMono)
-                .expectErrorMatches(e -> e instanceof AppsmithException &&
-                        e.getMessage().equals(AppsmithError.INVALID_PARAMETER.getMessage("executeActionDTO")))
+        StepVerifier.create(actionExecutionResultMono)
+                .expectErrorMatches(e -> e instanceof AppsmithException
+                        && e.getMessage().equals(AppsmithError.GENERIC_REQUEST_BODY_PARSE_ERROR.getMessage()))
                 .verify();
     }
 
     @Test
     public void testExecuteAction_withoutActionId_failsValidation() {
-        MockServerHttpRequest mock = MockServerHttpRequest
-                .method(HttpMethod.POST, URI.create("https://example.com"))
+        MockServerHttpRequest mock = MockServerHttpRequest.method(HttpMethod.POST, URI.create("https://example.com"))
                 .contentType(new MediaType("multipart", "form-data", Map.of("boundary", "boundary")))
-                .body("""
-                        --boundary\r
-                        Content-Disposition: form-data; name="executeActionDTO"\r
-                        \r
-                        {"viewMode":false}\r
-                        --boundary--\r
-                        """);
+                .body(
+                        """
+                                --boundary\r
+                                Content-Disposition: form-data; name="executeActionDTO"\r
+                                \r
+                                {"viewMode":false}\r
+                                --boundary--\r
+                                """);
 
-        final Flux<Part> partsFlux = BodyExtractors.toParts()
-                .extract(mock, this.context);
+        final Flux<Part> partsFlux = BodyExtractors.toParts().extract(mock, this.context);
 
-        final Mono<ActionExecutionResult> actionExecutionResultMono = actionExecutionSolution.executeAction(partsFlux, null, null);
+        final Mono<ActionExecutionResult> actionExecutionResultMono =
+                actionExecutionSolution.executeAction(partsFlux, null, null, Boolean.FALSE);
 
-        StepVerifier
-                .create(actionExecutionResultMono)
-                .expectErrorMatches(e -> e instanceof AppsmithException &&
-                        e.getMessage().equals(AppsmithError.INVALID_PARAMETER.getMessage(FieldName.ACTION_ID)))
+        StepVerifier.create(actionExecutionResultMono)
+                .expectErrorMatches(e -> e instanceof AppsmithException
+                        && e.getMessage().equals(AppsmithError.INVALID_PARAMETER.getMessage(FieldName.ACTION_ID)))
                 .verify();
     }
 
-
     @Test
     public void testExecuteAPIWithUsualOrderingOfTheParts() {
-        String usualOrderOfParts = """
-                --boundary\r
-                Content-Disposition: form-data; name="executeActionDTO"\r
-                \r
-                {"actionId":"63285a3388e48972c7519b18","viewMode":false,"paramProperties":{"k0":{"datatype": "string"}}}\r
-                --boundary\r
-                Content-Disposition: form-data; name="parameterMap"\r
-                \r
-                {"Input1.text":"k0"}\r
-                --boundary\r
-                Content-Disposition: form-data; name="k0"; filename="blob"\r
-                Content-Type: text/plain\r
-                \r
-                xyz\r
-                --boundary--""";
+        String usualOrderOfParts =
+                """
+                    --boundary\r
+                    Content-Disposition: form-data; name="executeActionDTO"\r
+                    \r
+                    {"actionId":"63285a3388e48972c7519b18","viewMode":false,"paramProperties":{"k0":{"datatype": "string"}}}\r
+                    --boundary\r
+                    Content-Disposition: form-data; name="parameterMap"\r
+                    \r
+                    {"Input1.text":"k0"}\r
+                    --boundary\r
+                    Content-Disposition: form-data; name="k0"; filename="blob"\r
+                    Content-Type: text/plain\r
+                    \r
+                    xyz\r
+                    --boundary--""";
 
-        MockServerHttpRequest mock = MockServerHttpRequest
-                .method(HttpMethod.POST, URI.create("https://example.com"))
+        MockServerHttpRequest mock = MockServerHttpRequest.method(HttpMethod.POST, URI.create("https://example.com"))
                 .contentType(new MediaType("multipart", "form-data", Map.of("boundary", "boundary")))
                 .body(usualOrderOfParts);
 
-        final Flux<Part> partsFlux = BodyExtractors.toParts()
-                .extract(mock, this.context);
+        final Flux<Part> partsFlux = BodyExtractors.toParts().extract(mock, this.context);
 
         ActionExecutionSolutionCE executionSolutionSpy = spy(actionExecutionSolution);
-
-        Mono<ActionExecutionResult> actionExecutionResultMono = executionSolutionSpy.executeAction(partsFlux, null, null);
 
         ActionExecutionResult mockResult = new ActionExecutionResult();
         mockResult.setIsExecutionSuccess(true);
@@ -272,49 +303,56 @@ class ActionExecutionSolutionCEImplTest {
 
         NewAction newAction = new NewAction();
         newAction.setId("63285a3388e48972c7519b18");
+        Datasource datasource = new Datasource();
+        ActionDTO actionDTO = new ActionDTO();
+        actionDTO.setDatasource(datasource);
+        newAction.setUnpublishedAction(actionDTO);
+        doReturn(Mono.just(FieldName.UNUSED_ENVIRONMENT_ID))
+                .when(datasourceService)
+                .getTrueEnvironmentId(
+                        any(), any(), any(), Mockito.eq(environmentPermission.getExecutePermission()), anyBoolean());
         doReturn(Mono.just(mockResult)).when(executionSolutionSpy).executeAction(any(), any());
-        doReturn(Mono.just(newAction)).when(newActionService).findByBranchNameAndDefaultActionId(any(), any(), any());
+        doReturn(Mono.just(newAction)).when(newActionService).findById(anyString(), any());
 
+        Mono<ActionExecutionResult> actionExecutionResultMono =
+                executionSolutionSpy.executeAction(partsFlux, null, null, Boolean.FALSE);
 
-        StepVerifier
-                .create(actionExecutionResultMono)
+        StepVerifier.create(actionExecutionResultMono)
                 .assertNext(response -> {
                     assertNotNull(response);
                     assertTrue(response.getIsExecutionSuccess());
-                    assertEquals(mockResult.getBody().toString(), response.getBody().toString());
+                    assertEquals(
+                            mockResult.getBody().toString(), response.getBody().toString());
                 })
                 .verifyComplete();
     }
 
     @Test
     public void testExecuteAPIWithParameterMapAsLastPart() {
-        String parameterMapAtLast = """
-                --boundary\r
-                Content-Disposition: form-data; name="executeActionDTO"\r
-                \r
-                {"actionId":"63285a3388e48972c7519b18","viewMode":false,"paramProperties":{"k0":{"datatype": "string"}}}\r
-                --boundary\r
-                Content-Disposition: form-data; name="k0"; filename="blob"\r
-                Content-Type: text/plain\r
-                \r
-                xyz\r
-                --boundary\r
-                Content-Disposition: form-data; name="parameterMap"\r
-                \r
-                {"Input1.text":"k0"}\r
-                --boundary--""";
+        String parameterMapAtLast =
+                """
+                    --boundary\r
+                    Content-Disposition: form-data; name="executeActionDTO"\r
+                    \r
+                    {"actionId":"63285a3388e48972c7519b18","viewMode":false,"paramProperties":{"k0":{"datatype": "string"}}}\r
+                    --boundary\r
+                    Content-Disposition: form-data; name="k0"; filename="blob"\r
+                    Content-Type: text/plain\r
+                    \r
+                    xyz\r
+                    --boundary\r
+                    Content-Disposition: form-data; name="parameterMap"\r
+                    \r
+                    {"Input1.text":"k0"}\r
+                    --boundary--""";
 
-        MockServerHttpRequest mock = MockServerHttpRequest
-                .method(HttpMethod.POST, URI.create("https://example.com"))
+        MockServerHttpRequest mock = MockServerHttpRequest.method(HttpMethod.POST, URI.create("https://example.com"))
                 .contentType(new MediaType("multipart", "form-data", Map.of("boundary", "boundary")))
                 .body(parameterMapAtLast);
 
-        final Flux<Part> partsFlux = BodyExtractors.toParts()
-                .extract(mock, this.context);
+        final Flux<Part> partsFlux = BodyExtractors.toParts().extract(mock, this.context);
 
         ActionExecutionSolutionCE executionSolutionSpy = spy(actionExecutionSolution);
-
-        Mono<ActionExecutionResult> actionExecutionResultMono = executionSolutionSpy.executeAction(partsFlux, null, null);
 
         ActionExecutionResult mockResult = new ActionExecutionResult();
         mockResult.setIsExecutionSuccess(true);
@@ -323,60 +361,74 @@ class ActionExecutionSolutionCEImplTest {
 
         NewAction newAction = new NewAction();
         newAction.setId("63285a3388e48972c7519b18");
+        Datasource datasource = new Datasource();
+        ActionDTO actionDTO = new ActionDTO();
+        actionDTO.setDatasource(datasource);
+        newAction.setUnpublishedAction(actionDTO);
+        doReturn(Mono.just(FieldName.UNUSED_ENVIRONMENT_ID))
+                .when(datasourceService)
+                .getTrueEnvironmentId(
+                        any(), any(), any(), Mockito.eq(environmentPermission.getExecutePermission()), anyBoolean());
         doReturn(Mono.just(mockResult)).when(executionSolutionSpy).executeAction(any(), any());
-        doReturn(Mono.just(newAction)).when(newActionService).findByBranchNameAndDefaultActionId(any(), any(), any());
+        doReturn(Mono.just(newAction)).when(newActionService).findById(anyString(), any());
 
+        Mono<ActionExecutionResult> actionExecutionResultMono =
+                executionSolutionSpy.executeAction(partsFlux, null, null, Boolean.FALSE);
 
-        StepVerifier
-                .create(actionExecutionResultMono)
+        StepVerifier.create(actionExecutionResultMono)
                 .assertNext(response -> {
                     assertNotNull(response);
                     assertTrue(response.getIsExecutionSuccess());
-                    assertEquals(mockResult.getBody().toString(), response.getBody().toString());
+                    assertEquals(
+                            mockResult.getBody().toString(), response.getBody().toString());
                 })
                 .verifyComplete();
     }
 
     @Test
     public void testParsePartsAndGetParamsFlux_withBlobIdentifiers_replacesValueInParam() {
-        String partsWithBlobRefs = """
-                --boundary\r
-                Content-Disposition: form-data; name="executeActionDTO"\r
-                \r
-                {"actionId":"63285a3388e48972c7519b18","viewMode":false,"paramProperties":{"k0":{"datatype": "string", "blobIdentifiers": ["blob:12345678-1234-1234-1234-123456781234"]}}}\r
-                --boundary\r
-                Content-Disposition: form-data; name="parameterMap"\r
-                \r
-                {"Input1.text":"k0"}\r
-                --boundary\r
-                Content-Disposition: form-data; name="k0"; filename="blob"\r
-                Content-Type: text/plain\r
-                \r
-                {"name": "randomName", "data": "blob:12345678-1234-1234-1234-123456781234"}\r
-                --boundary\r
-                Content-Disposition: form-data; name="blob:12345678-1234-1234-1234-123456781234"; filename="blob"\r
-                Content-Type: text/plain\r
-                \r
-                xy\\nz\r
-                --boundary--""";
+        String partsWithBlobRefs =
+                """
+                    --boundary\r
+                    Content-Disposition: form-data; name="executeActionDTO"\r
+                    \r
+                    {"actionId":"63285a3388e48972c7519b18","viewMode":false,"paramProperties":{"k0":{"datatype": "string", "blobIdentifiers": ["blob:12345678-1234-1234-1234-123456781234"]}}}\r
+                    --boundary\r
+                    Content-Disposition: form-data; name="parameterMap"\r
+                    \r
+                    {"Input1.text":"k0"}\r
+                    --boundary\r
+                    Content-Disposition: form-data; name="k0"; filename="blob"\r
+                    Content-Type: text/plain\r
+                    \r
+                    {"name": "randomName", "data": "blob:12345678-1234-1234-1234-123456781234"}\r
+                    --boundary\r
+                    Content-Disposition: form-data; name="blob:12345678-1234-1234-1234-123456781234"; filename="blob"\r
+                    Content-Type: text/plain\r
+                    \r
+                    xy\\nz\r
+                    --boundary--""";
 
-        MockServerHttpRequest mock = MockServerHttpRequest
-                .method(HttpMethod.POST, URI.create("https://example.com"))
+        MockServerHttpRequest mock = MockServerHttpRequest.method(HttpMethod.POST, URI.create("https://example.com"))
                 .contentType(new MediaType("multipart", "form-data", Map.of("boundary", "boundary")))
                 .body(partsWithBlobRefs);
 
-        final Flux<Part> partsFlux = BodyExtractors.toParts()
-                .extract(mock, this.context);
+        final Flux<Part> partsFlux = BodyExtractors.toParts().extract(mock, this.context);
 
         AtomicLong atomicLong = new AtomicLong();
         ExecuteActionDTO executeActionDTO = new ExecuteActionDTO();
-        Mono<List<Param>> paramsListMono = actionExecutionSolution.parsePartsAndGetParamsFlux(partsFlux, atomicLong, executeActionDTO).collectList().cache();
+        Mono<List<Param>> paramsListMono = actionExecutionSolution
+                .parsePartsAndGetParamsFlux(partsFlux, atomicLong, executeActionDTO)
+                .collectList()
+                .cache();
 
         StepVerifier.create(paramsListMono)
                 .assertNext(paramsList -> {
                     assertEquals(1, paramsList.size());
                     Param param = paramsList.get(0);
-                    assertEquals("{\"name\": \"randomName\", \"data\": \"blob:12345678-1234-1234-1234-123456781234\"}", param.getValue());
+                    assertEquals(
+                            "{\"name\": \"randomName\", \"data\": \"blob:12345678-1234-1234-1234-123456781234\"}",
+                            param.getValue());
                 })
                 .verifyComplete();
     }
@@ -395,7 +447,8 @@ class ActionExecutionSolutionCEImplTest {
         param1.setPseudoBindingName("k0");
         List<Param> params = List.of(param1);
 
-        Mono<ExecuteActionDTO> enrichedDto = actionExecutionSolution.enrichExecutionParam(atomicLong, executeActionDTO, params);
+        Mono<ExecuteActionDTO> enrichedDto =
+                actionExecutionSolution.enrichExecutionParam(atomicLong, executeActionDTO, params);
 
         StepVerifier.create(enrichedDto)
                 .assertNext(dto -> {
@@ -407,5 +460,4 @@ class ActionExecutionSolutionCEImplTest {
                 })
                 .verifyComplete();
     }
-
 }

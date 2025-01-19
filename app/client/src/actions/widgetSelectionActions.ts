@@ -1,20 +1,22 @@
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "./ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import type { SelectionRequestType } from "sagas/WidgetSelectUtils";
 import type { NavigationMethod } from "utils/history";
 
-export type WidgetSelectionRequestPayload = {
+export interface WidgetSelectionRequestPayload {
   selectionRequestType: SelectionRequestType;
   payload?: string[];
   invokedBy?: NavigationMethod;
-  pageId?: string;
-};
+  basePageId?: string;
+  parentId?: string;
+}
 
 export type WidgetSelectionRequest = (
   selectionRequestType: SelectionRequestType,
   payload?: string[],
   invokedBy?: NavigationMethod,
-  pageId?: string,
+  basePageId?: string,
+  parentId?: string,
 ) => ReduxAction<WidgetSelectionRequestPayload>;
 
 // Use to select a widget programmatically via platform action
@@ -22,16 +24,17 @@ export const selectWidgetInitAction: WidgetSelectionRequest = (
   selectionRequestType,
   payload,
   invokedBy?: NavigationMethod,
-  pageId?: string,
+  basePageId?: string,
+  parentId?: string,
 ) => ({
   type: ReduxActionTypes.SELECT_WIDGET_INIT,
-  payload: { selectionRequestType, payload, pageId, invokedBy },
+  payload: { selectionRequestType, payload, basePageId, invokedBy, parentId },
 });
 
-export type SetSelectedWidgetsPayload = {
+export interface SetSelectedWidgetsPayload {
   widgetIds: string[];
   invokedBy?: NavigationMethod;
-};
+}
 
 // To be used to collect selected widget state from url and set on state
 export const setSelectedWidgets = (

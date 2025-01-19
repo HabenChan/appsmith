@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import lombok.experimental.FieldNameConstants;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -19,6 +20,7 @@ import java.util.Map;
 @ToString
 @NoArgsConstructor
 @Document
+@FieldNameConstants
 public class Plugin extends BaseDomain {
 
     public enum ResponseType {
@@ -65,7 +67,6 @@ public class Plugin extends BaseDomain {
     @JsonView(Views.Public.class)
     String version;
 
-    // Legacy field to find which form to use (RapidAPI hack)
     @JsonView(Views.Public.class)
     String uiComponent;
 
@@ -96,17 +97,18 @@ public class Plugin extends BaseDomain {
 
     // Stores the equivalent of editor.json for remote plugins
     @JsonView(Views.Public.class)
-    Map actionUiConfig;
+    Map<?, ?> actionUiConfig;
 
     // Stores the equivalent of form.json for remote plugins
     @JsonView(Views.Public.class)
-    Map datasourceUiConfig;
+    Map<?, ?> datasourceUiConfig;
 
     @Transient
     @JsonView(Views.Public.class)
     Map<String, String> templates;
 
-    // Field to distinguish if the plugin is supported in air-gap instance, by default all the plugins will be supported.
+    // Field to distinguish if the plugin is supported in air-gap instance, by default all the plugins will be
+    // supported.
     // One can opt out by adding this field in DB object. Generally SaaS plugins and DB which can't be self-hosted can
     // be a candidate for opting out of air-gap
     @JsonView(Views.Internal.class)
@@ -116,4 +118,5 @@ public class Plugin extends BaseDomain {
     @JsonView(Views.Internal.class)
     Boolean isDependentOnCS;
 
+    public static class Fields extends BaseDomain.Fields {}
 }

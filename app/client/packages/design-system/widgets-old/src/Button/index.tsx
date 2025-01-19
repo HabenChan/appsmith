@@ -44,7 +44,7 @@ export enum Size {
   large = "large",
 }
 
-type stateStyleType = {
+interface stateStyleType {
   bgColorPrimary: string;
   borderColorPrimary: string;
   txtColorPrimary: string;
@@ -54,20 +54,20 @@ type stateStyleType = {
   bgColorTertiary: string;
   borderColorTertiary: string;
   txtColorTertiary: string;
-};
+}
 
-type BtnColorType = {
+interface BtnColorType {
   bgColor: string;
   txtColor: string;
   border: string;
   outline: string;
-};
+}
 
-type BtnFontType = {
+interface BtnFontType {
   buttonFont: any;
   padding: string;
   height: number;
-};
+}
 
 export enum IconPositions {
   left = "left",
@@ -103,17 +103,17 @@ const defaultProps = {
   tag: "a",
 };
 
-type buttonVariant = {
+interface buttonVariant {
   main: string;
   light: string;
   dark: string;
   darker: string;
   darkest: string;
-};
+}
 
-type ButtonColorType = {
+interface ButtonColorType {
   [index: string]: buttonVariant;
-};
+}
 
 const ButtonColors: ButtonColorType = {
   info: {
@@ -305,6 +305,7 @@ const btnColorStyles = (props: ButtonProps, state: string): BtnColorType => {
     txtColor = "",
     border = "",
     outline = "";
+
   switch (props.category) {
     case Category.primary:
       bgColor = stateStyles(props, state).bgColorPrimary;
@@ -324,6 +325,7 @@ const btnColorStyles = (props: ButtonProps, state: string): BtnColorType => {
       outline = "2px solid var(--ads-color-blue-150)";
       break;
   }
+
   return { bgColor, txtColor, border, outline };
 };
 
@@ -512,8 +514,9 @@ const getButtonContent = (props: ButtonProps) => {
   const iconPos = props.iconPosition
     ? props.iconPosition
     : props.tag === "a"
-    ? IconPositions.right
-    : IconPositions.left;
+      ? IconPositions.right
+      : IconPositions.left;
+
   return (
     <>
       {iconPos === IconPositions.left && getIconContent(props)}
@@ -527,6 +530,7 @@ const getButtonContent = (props: ButtonProps) => {
 function ButtonComponent(props: ButtonProps) {
   const { className, cypressSelector, isLoading, onClick } = props;
   const filteredProps = _.omit(props, ["fill"]);
+
   return (
     <StyledButton
       className={className}
@@ -544,6 +548,7 @@ function ButtonComponent(props: ButtonProps) {
 function LinkButtonComponent(props: ButtonProps) {
   const { className, cypressSelector, href, onClick } = props;
   const filteredProps = _.omit(props, ["fill"]);
+
   return (
     <StyledLinkButton
       className={className}

@@ -1,32 +1,27 @@
 import React from "react";
 import Button from "../../AppViewerButton";
 import { useSelector } from "react-redux";
-import { ALL_APPS, createMessage } from "@appsmith/constants/messages";
+import { ALL_APPS, createMessage } from "ee/constants/messages";
 import { getSelectedAppTheme } from "selectors/appThemingSelectors";
 import { getMenuItemTextColor } from "pages/AppViewer/utils";
 import type { NavigationSetting } from "constants/AppConstants";
 import { NAVIGATION_SETTINGS } from "constants/AppConstants";
 import { get } from "lodash";
-import type { ApplicationPayload } from "@appsmith/constants/ReduxActionConstants";
+import type { ApplicationPayload } from "entities/Application";
 import { useHistory } from "react-router";
 import styled from "styled-components";
 import { getCurrentUser } from "selectors/usersSelectors";
 import type { User } from "constants/userConstants";
 import { ANONYMOUS_USERNAME } from "constants/userConstants";
-import { Tooltip } from "design-system";
-import { importRemixIcon } from "design-system-old";
+import { Icon, Tooltip } from "@appsmith/ads";
 
-const AppsLineIcon = importRemixIcon(
-  () => import("remixicon-react/AppsLineIcon"),
-);
-
-type BackToAppsButtonProps = {
+interface BackToAppsButtonProps {
   currentApplicationDetails?: ApplicationPayload;
   insideSidebar?: boolean;
   isMinimal?: boolean;
-};
+}
 
-const StyledAppIcon = styled(AppsLineIcon)<{
+const StyledAppIcon = styled(Icon)<{
   primaryColor: string;
   navColorStyle: NavigationSetting["colorStyle"];
 }>`
@@ -53,6 +48,7 @@ const BackToAppsButton = (props: BackToAppsButtonProps) => {
   if (currentUser?.username === ANONYMOUS_USERNAME) {
     return null;
   }
+
   return (
     <Tooltip
       content={createMessage(ALL_APPS)}
@@ -64,8 +60,10 @@ const BackToAppsButton = (props: BackToAppsButtonProps) => {
         className="h-8 t--app-viewer-back-to-apps-button"
         icon={
           <StyledAppIcon
+            name="apps-line"
             navColorStyle={navColorStyle}
             primaryColor={primaryColor}
+            size="md"
           />
         }
         insideSidebar={insideSidebar}

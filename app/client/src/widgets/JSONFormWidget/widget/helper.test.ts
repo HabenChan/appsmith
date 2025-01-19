@@ -375,6 +375,7 @@ describe(".generateFieldState", () => {
     inputAndExpectedOutput.forEach(
       ({ expectedOutput, metaInternalFieldState }) => {
         const result = generateFieldState(schema, metaInternalFieldState);
+
         expect(result).toEqual(expectedOutput);
       },
     );
@@ -616,6 +617,7 @@ describe(".computeSchema", () => {
     const existingDynamicBindingPropertyPathList = [
       { key: "dummy.path1" },
       { key: "dummy.path2" },
+      { key: "sourceData" },
     ];
 
     const expectedDynamicPropertyPathList = [
@@ -642,6 +644,7 @@ describe(".computeSchema", () => {
     const existingDynamicBindingPropertyPathList = [
       { key: "dummy.path1" },
       { key: "dummy.path2" },
+      { key: "sourceData" },
     ];
 
     const expectedDynamicPropertyPathList = [

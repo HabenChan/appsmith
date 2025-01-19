@@ -1,14 +1,12 @@
 import _ from "./lodash-wrapper";
 import moment from "moment-timezone";
-import parser from "fast-xml-parser";
 import forge from "node-forge";
-import { defaultLibraries } from "./index";
+import { defaultLibraries, JSLibraryAccessor } from "./index";
 import { JSLibraries, libraryReservedIdentifiers } from "./index";
-
+import { invalidEntityIdentifiers } from "../DependencyMap/utils";
 const defaultLibImplementations = {
   lodash: _,
   moment: moment,
-  xmlParser: parser,
   // We are removing some functionalities of node-forge because they wont
   // work in the worker thread
   forge: /*#__PURE*/ _.omit(forge, ["tls", "http", "xhr", "socket", "task"]),
@@ -20,8 +18,10 @@ export function resetJSLibraries() {
   const defaultLibraryAccessors = defaultLibraries.map(
     (lib) => lib.accessor[0],
   );
+
   for (const key of Object.keys(libraryReservedIdentifiers)) {
     if (defaultLibraryAccessors.includes(key)) continue;
+
     try {
       // @ts-expect-error: Types are not available
       delete self[key];
@@ -29,7 +29,9 @@ export function resetJSLibraries() {
       // @ts-expect-error: Types are not available
       self[key] = undefined;
     }
+    //we have to update invalidEntityIdentifiers as well
     delete libraryReservedIdentifiers[key];
+    delete invalidEntityIdentifiers[key];
   }
 
   JSLibraries.forEach((library) => {
@@ -41,4 +43,5 @@ export function resetJSLibraries() {
     // @ts-expect-error: Types are not available
     self[library.accessor] = defaultLibImplementations[library.name];
   });
+  JSLibraryAccessor.regenerateSet();
 }

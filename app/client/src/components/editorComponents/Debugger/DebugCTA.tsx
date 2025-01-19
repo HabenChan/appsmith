@@ -2,14 +2,14 @@ import React from "react";
 import styled from "styled-components";
 import { setDebuggerSelectedTab, showDebugger } from "actions/debuggerActions";
 import { useDispatch, useSelector } from "react-redux";
-import { getAppMode } from "@appsmith/selectors/applicationSelectors";
-import AnalyticsUtil from "utils/AnalyticsUtil";
-import { getTypographyByKey } from "design-system-old";
+import { getAppMode } from "ee/selectors/applicationSelectors";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { getTypographyByKey } from "@appsmith/ads-old";
 import type { Message } from "entities/AppsmithConsole";
 import ContextualMenu from "./ContextualMenu";
-import { DEBUGGER_TAB_KEYS } from "./helpers";
+import { DEBUGGER_TAB_KEYS } from "./constants";
 import type { FieldEntityInformation } from "../CodeEditor/EditorConfig";
-import { Button } from "design-system";
+import { Button } from "@appsmith/ads";
 
 const EVDebugButton = styled(Button)`
   ${getTypographyByKey("btnSmall")};
@@ -55,11 +55,11 @@ const StyledButton = styled(Button)`
   }
 `;
 
-type DebugCTAProps = {
+interface DebugCTAProps {
   className?: string;
   // For Analytics
   source?: string;
-};
+}
 
 function DebugCTA(props: DebugCTAProps) {
   const dispatch = useDispatch();
@@ -79,10 +79,10 @@ function DebugCTA(props: DebugCTAProps) {
   return <DebugButton className={props.className} onClick={onClick} />;
 }
 
-type DebugButtonProps = {
+interface DebugButtonProps {
   className?: string;
   onClick: () => void;
-};
+}
 
 export function DebugButton(props: DebugButtonProps) {
   return (

@@ -1,6 +1,6 @@
 import { createSelector } from "reselect";
 
-import type { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import type {
   CanvasWidgetsReduxState,
   FlattenedWidgetProps,
@@ -9,31 +9,17 @@ import type {
   AppLayoutConfig,
   PageListReduxState,
 } from "reducers/entityReducers/pageListReducer";
-import type { WidgetConfigReducerState } from "reducers/entityReducers/widgetConfigReducer";
 import type { WidgetCardProps, WidgetProps } from "widgets/BaseWidget";
 
-import type { Page } from "@appsmith/constants/ReduxActionConstants";
-import { ApplicationVersion } from "@appsmith/actions/applicationActions";
+import { ApplicationVersion } from "ee/actions/applicationActions";
 import type {
   OccupiedSpace,
   WidgetSpace,
 } from "constants/CanvasEditorConstants";
 import { PLACEHOLDER_APP_SLUG, PLACEHOLDER_PAGE_SLUG } from "constants/routes";
-import {
-  DefaultDimensionMap,
-  MAIN_CONTAINER_WIDGET_ID,
-  RenderModes,
-} from "constants/WidgetConstants";
+import { DefaultDimensionMap, RenderModes } from "constants/WidgetConstants";
 import { APP_MODE } from "entities/App";
-import type {
-  DataTree,
-  ConfigTree,
-  WidgetEntity,
-  WidgetEntityConfig,
-} from "entities/DataTree/dataTreeFactory";
 import { find, sortBy } from "lodash";
-import CanvasWidgetsNormalizer from "normalizers/CanvasWidgetsNormalizer";
-import { AppPositioningTypes } from "reducers/entityReducers/pageListReducer";
 import {
   getDataTree,
   getLoadingEntities,
@@ -41,43 +27,44 @@ import {
 } from "selectors/dataTreeSelectors";
 import type { MainCanvasReduxState } from "reducers/uiReducers/mainCanvasReducer";
 
+import { getActionEditorSavingMap } from "PluginActionEditor/store";
 import {
-  getActions,
   getCanvasWidgets,
   getJSCollections,
-} from "selectors/entitiesSelector";
-import { checkIsDropTarget } from "utils/WidgetFactoryHelpers";
-import {
-  buildChildWidgetTree,
-  buildFlattenedChildCanvasWidgets,
-  createCanvasWidget,
-  createLoadingWidget,
-} from "utils/widgetRenderUtils";
-import type { ContainerWidgetProps } from "widgets/ContainerWidget/widget";
+} from "ee/selectors/entitiesSelector";
+import { checkIsDropTarget } from "WidgetProvider/factory/helpers";
+import { buildChildWidgetTree } from "utils/widgetRenderUtils";
 import { LOCAL_STORAGE_KEYS } from "utils/localStorage";
-import type { CanvasWidgetStructure } from "widgets/constants";
+import type { CanvasWidgetStructure } from "WidgetProvider/constants";
 import { denormalize } from "utils/canvasStructureHelpers";
 import { isAutoHeightEnabledForWidget } from "widgets/WidgetUtils";
-import WidgetFactory from "utils/WidgetFactory";
-import { isAirgapped } from "@appsmith/utils/airgapHelpers";
+import WidgetFactory from "WidgetProvider/factory";
+import { isAirgapped } from "ee/utils/airgapHelpers";
+import { getIsAnonymousDataPopupVisible } from "./onboardingSelectors";
+import { WDS_V2_WIDGET_MAP } from "modules/ui-builder/ui/wds/constants";
+import { LayoutSystemTypes } from "layoutSystems/types";
+import { getLayoutSystemType } from "./layoutSystemSelectors";
+import { protectedModeSelector } from "./gitSyncSelectors";
+import { getIsAnvilLayout } from "layoutSystems/anvil/integrations/selectors";
+import { getCurrentApplication } from "ee/selectors/applicationSelectors";
+import type { Page } from "entities/Page";
+import { objectKeys } from "@appsmith/utils";
 
 const getIsDraggingOrResizing = (state: AppState) =>
   state.ui.widgetDragResize.isResizing || state.ui.widgetDragResize.isDragging;
 
 const getIsResizing = (state: AppState) => state.ui.widgetDragResize.isResizing;
 
-export const getWidgetConfigs = (state: AppState) =>
-  state.entities.widgetConfig;
 const getPageListState = (state: AppState) => state.entities.pageList;
-
-export const getProviderCategories = (state: AppState) =>
-  state.ui.providers.providerCategories;
 
 const getWidgets = (state: AppState): CanvasWidgetsReduxState =>
   state.entities.canvasWidgets;
 
 export const getIsEditorInitialized = (state: AppState) =>
   state.ui.editor.initialized;
+
+export const getIsWidgetConfigBuilt = (state: AppState) =>
+  state.ui.editor.widgetConfigBuilt;
 
 export const getIsEditorLoading = (state: AppState) =>
   state.ui.editor.loadingStates.loading;
@@ -88,33 +75,40 @@ export const getIsFetchingPage = (state: AppState) =>
 export const getLoadingError = (state: AppState) =>
   state.ui.editor.loadingStates.loadingError;
 
-export const getIsPageSaving = (state: AppState) => {
-  let areApisSaving = false;
-  let areJsObjectsSaving = false;
+export const getIsPageSaving = createSelector(
+  [
+    getActionEditorSavingMap,
+    (state: AppState) => state.ui.jsPane.isSaving,
+    (state: AppState) => state.ui.appTheming.isSaving,
+    (state: AppState) => state.ui.applications.isSavingNavigationSetting,
+    (state: AppState) => state.ui.editor.loadingStates.savingEntity,
+    (state: AppState) => state.ui.editor.loadingStates.saving,
+  ],
+  (
+    savingActions,
+    savingJSObjects,
+    isSavingAppTheme,
+    isSavingNavigationSetting,
+    isEditorSavingEntity,
+    isEditorSaving,
+  ) => {
+    const areActionsSaving = objectKeys(savingActions).some(
+      (actionId) => savingActions[actionId],
+    );
+    const areJsObjectsSaving = objectKeys(savingJSObjects).some(
+      (collectionId) => savingJSObjects[collectionId],
+    );
 
-  const savingApis = state.ui.apiPane.isSaving;
-  const savingJSObjects = state.ui.jsPane.isSaving;
-  const isSavingAppTheme = state.ui.appTheming.isSaving;
-  const isSavingNavigationSetting =
-    state.ui.applications.isSavingNavigationSetting;
-
-  Object.keys(savingApis).forEach((apiId) => {
-    areApisSaving = savingApis[apiId] || areApisSaving;
-  });
-
-  Object.keys(savingJSObjects).forEach((collectionId) => {
-    areJsObjectsSaving = savingJSObjects[collectionId] || areJsObjectsSaving;
-  });
-
-  return (
-    state.ui.editor.loadingStates.saving ||
-    areApisSaving ||
-    areJsObjectsSaving ||
-    isSavingAppTheme ||
-    state.ui.editor.loadingStates.savingEntity ||
-    isSavingNavigationSetting
-  );
-};
+    return (
+      isEditorSavingEntity ||
+      areActionsSaving ||
+      areJsObjectsSaving ||
+      isSavingAppTheme ||
+      isEditorSaving ||
+      isSavingNavigationSetting
+    );
+  },
+);
 
 export const snipingModeSelector = (state: AppState) =>
   state.ui.editor.isSnipingMode;
@@ -139,7 +133,7 @@ export const getIsPublishingApplication = (state: AppState) =>
 export const getPublishingError = (state: AppState) =>
   state.ui.editor.loadingStates.publishingError;
 
-export const getCurrentLayoutId = (state: AppState) =>
+export const getCurrentLayoutId = (state: AppState): string | undefined =>
   state.ui.editor.currentLayoutId;
 
 export const getPageList = (state: AppState) => state.entities.pageList.pages;
@@ -149,8 +143,16 @@ export const getPageById = (pageId: string) =>
     pages.find((page) => page.pageId === pageId),
   );
 
+export const getPageByBaseId = (basePageId: string) =>
+  createSelector(getPageList, (pages: Page[]) =>
+    pages.find((page) => page.basePageId === basePageId),
+  );
+
 export const getCurrentPageId = (state: AppState) =>
   state.entities.pageList.currentPageId;
+
+export const getCurrentBasePageId = (state: AppState) =>
+  state.entities.pageList.currentBasePageId;
 
 export const getCurrentPagePermissions = createSelector(
   getCurrentPageId,
@@ -181,19 +183,22 @@ export const getCurrentPageDescription = createSelector(
 );
 
 export const selectPageSlugToIdMap = createSelector(getPageList, (pages) =>
-  pages.reduce((acc, page: Page) => {
-    // Comeback
-    acc[page.pageId] = page.slug || "";
-    return acc;
-  }, {} as Record<string, string>),
-);
+  pages.reduce(
+    (acc, page: Page) => {
+      // Comeback
+      acc[page.pageId] = page.slug || "";
 
-export const getCurrentApplication = (state: AppState) =>
-  state.ui.applications.currentApplication;
+      return acc;
+    },
+    {} as Record<string, string>,
+  ),
+);
 
 export const getCurrentApplicationId = (state: AppState) =>
   state.entities.pageList.applicationId || "";
-/** this is set during init can assume it to be defined */
+
+export const getCurrentBaseApplicationId = (state: AppState) =>
+  state.entities.pageList.baseApplicationId || "";
 
 export const selectCurrentApplicationSlug = (state: AppState) =>
   state.ui.applications.currentApplication?.slug || PLACEHOLDER_APP_SLUG;
@@ -205,6 +210,7 @@ export const selectApplicationVersion = (state: AppState) =>
 export const selectPageSlugById = (pageId: string) =>
   createSelector(getPageList, (pages) => {
     const page = pages.find((page) => page.pageId === pageId);
+
     return page?.slug || PLACEHOLDER_PAGE_SLUG;
   });
 
@@ -214,9 +220,12 @@ export const selectURLSlugs = createSelector(
   getCurrentPageId,
   (application, pages, pageId) => {
     const applicationSlug = application?.slug || PLACEHOLDER_APP_SLUG;
-    const currentPage = pages.find((page) => page.pageId === pageId);
+    const currentPage: Page | undefined = pages.find(
+      (page) => page.pageId === pageId,
+    );
     const pageSlug = currentPage?.slug || PLACEHOLDER_PAGE_SLUG;
     const customSlug = currentPage?.customSlug;
+
     return { applicationSlug, pageSlug, customSlug };
   },
 );
@@ -227,6 +236,9 @@ export const getRenderMode = (state: AppState) => {
     : RenderModes.PAGE;
 };
 
+export const getIsViewMode = (state: AppState) =>
+  state.entities.app.mode === APP_MODE.PUBLISHED;
+
 export const getViewModePageList = createSelector(
   getPageList,
   getCurrentPageId,
@@ -235,11 +247,13 @@ export const getViewModePageList = createSelector(
       const currentPage = pageList.find(
         (page) => page.pageId === currentPageId,
       );
+
       if (!!currentPage?.isHidden) {
         return [currentPage];
       }
 
       const visiblePages = pageList.filter((page) => !page.isHidden);
+
       return visiblePages;
     }
 
@@ -254,52 +268,27 @@ const defaultLayout: AppLayoutConfig = {
 const getAppLayout = (state: AppState) =>
   state.ui.applications.currentApplication?.appLayout || defaultLayout;
 
-export const getAppPositioningType = (state: AppState) => {
-  if (
-    state.ui.applications?.currentApplication?.applicationDetail?.appPositioning
-      ?.type
-  ) {
-    return AppPositioningTypes[
-      state.ui.applications.currentApplication?.applicationDetail
-        ?.appPositioning?.type
-    ];
-  }
-  return AppPositioningTypes.FIXED;
-};
-
-export const isAutoLayoutEnabled = (state: AppState): boolean => {
-  return state.ui.users.featureFlag.data.AUTO_LAYOUT === true;
-};
-
-export const getCurrentAppPositioningType = createSelector(
-  isAutoLayoutEnabled,
-  getAppPositioningType,
-  (
-    autoLayoutEnabled: boolean,
-    appPositionType: AppPositioningTypes,
-  ): AppPositioningTypes => {
-    return autoLayoutEnabled ? appPositionType : AppPositioningTypes.FIXED;
-  },
+export const getIsMobileCanvasLayout = createSelector(
+  getAppLayout,
+  (appLayout: AppLayoutConfig) => appLayout.type === "MOBILE",
 );
 
 export const getIsAutoLayout = createSelector(
-  getCurrentAppPositioningType,
-  (positioningType) => positioningType === AppPositioningTypes.AUTO,
+  getLayoutSystemType,
+  (layoutSystemType) => layoutSystemType === LayoutSystemTypes.AUTO,
 );
 
 export const getCurrentApplicationLayout = createSelector(
   getAppLayout,
-  getCurrentAppPositioningType,
-  (appLayout: AppLayoutConfig, appPositionType) => {
-    return appPositionType === AppPositioningTypes.FIXED
+  getLayoutSystemType,
+  (appLayout: AppLayoutConfig, layoutSystemType) => {
+    return layoutSystemType === LayoutSystemTypes.FIXED
       ? appLayout
       : defaultLayout;
   },
 );
 
 export const getCanvasWidth = (state: AppState) => state.ui.mainCanvas.width;
-export const getCanvasScale = (state: AppState) => state.ui.mainCanvas.scale;
-
 export const getMainCanvasProps = (state: AppState) => state.ui.mainCanvas;
 
 export const getMetaWidgets = (state: AppState) => state.entities.metaWidgets;
@@ -340,21 +329,41 @@ export const getCurrentPageName = createSelector(
 );
 
 export const getWidgetCards = createSelector(
-  getWidgetConfigs,
   getIsAutoLayout,
-  (widgetConfigs: WidgetConfigReducerState, isAutoLayout: boolean) => {
-    const cards = Object.values(widgetConfigs.config).filter((config) => {
-      return isAirgapped()
-        ? config.widgetName !== "Map" && !config.hideCard
-        : !config.hideCard;
+  getIsAnvilLayout,
+  (isAutoLayout, isAnvilLayout) => {
+    const widgetConfigs = WidgetFactory.getConfigs();
+    const widgetConfigsArray = Object.values(widgetConfigs);
+    const layoutSystemBasesWidgets = widgetConfigsArray.filter((config) => {
+      const isAnvilWidget = Object.values(WDS_V2_WIDGET_MAP).includes(
+        config.type,
+      );
+
+      if (isAnvilLayout) {
+        return isAnvilWidget;
+      }
+
+      return !isAnvilWidget;
     });
+    const cards = layoutSystemBasesWidgets.filter((config) => {
+      if (isAirgapped()) {
+        return config.widgetName !== "Map" && !config.hideCard;
+      }
+
+      return !config.hideCard;
+    });
+
     const _cards: WidgetCardProps[] = cards.map((config) => {
       const {
         detachFromLayout = false,
         displayName,
+        displayOrder,
         iconSVG,
+        isSearchWildcard,
         key,
         searchTags,
+        tags,
+        thumbnailSVG,
         type,
       } = config;
       let { columns, rows } = config;
@@ -365,6 +374,10 @@ export const getWidgetCards = createSelector(
         columns = autoLayoutConfig?.defaults?.columns ?? columns;
       }
 
+      const { IconCmp, ThumbnailCmp } = WidgetFactory.getWidgetMethods(
+        config.type,
+      );
+
       return {
         key,
         type,
@@ -372,16 +385,24 @@ export const getWidgetCards = createSelector(
         columns,
         detachFromLayout,
         displayName,
+        displayOrder,
         icon: iconSVG,
+        thumbnail: thumbnailSVG,
+        IconCmp,
+        ThumbnailCmp,
         searchTags,
+        tags,
         isDynamicHeight: isAutoHeightEnabledForWidget(config as WidgetProps),
+        isSearchWildcard: isSearchWildcard,
       };
     });
     const sortedCards = sortBy(_cards, ["displayName"]);
+
     return sortedCards;
   },
 );
 const getIsMobileBreakPoint = (state: AppState) => state.ui.mainCanvas.isMobile;
+
 export const getIsAutoLayoutMobileBreakPoint = createSelector(
   getIsAutoLayout,
   getIsMobileBreakPoint,
@@ -404,36 +425,48 @@ export const getDimensionMap = createSelector(
   },
 );
 const addWidgetDimensionProxy = (
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dimensionMap: any,
   widgets: CanvasWidgetsReduxState,
 ) => {
   const dimensions = Object.keys(dimensionMap);
   const proxyHandler = {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     get(target: any, prop: any) {
       if (dimensions.includes(prop)) {
         const actualMap = dimensionMap[prop];
+
         if (!!target[actualMap]) {
           return target[actualMap];
         }
       }
+
       return Reflect.get(target, prop);
     },
   };
+
   return Object.keys(widgets).reduce((allWidgets, each) => {
     const widget = { ...allWidgets[each] };
     const proxyWidget = new Proxy(widget, proxyHandler);
+
     allWidgets = {
       ...allWidgets,
       [each]: proxyWidget,
     };
+
     return allWidgets;
   }, widgets);
 };
+
 export const getWidgetsForBreakpoint = createSelector(
   getDimensionMap,
   getIsAutoLayoutMobileBreakPoint,
   getWidgets,
   (
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     dimensionMap: any,
     isAutoLayoutMobileBreakPoint: boolean,
     widgets: CanvasWidgetsReduxState,
@@ -455,82 +488,6 @@ export const computeMainContainerWidget = (
   minHeight: mainCanvasProps.height,
 });
 
-export const getMainContainer = (
-  canvasWidgets: CanvasWidgetsReduxState,
-  evaluatedDataTree: DataTree,
-  configTree: ConfigTree,
-  mainCanvasProps: MainCanvasReduxState,
-) => {
-  const canvasWidget = computeMainContainerWidget(
-    canvasWidgets[MAIN_CONTAINER_WIDGET_ID],
-    mainCanvasProps,
-  );
-
-  //TODO: Need to verify why `evaluatedDataTree` is required here.
-  const evaluatedWidget = find(evaluatedDataTree, {
-    widgetId: MAIN_CONTAINER_WIDGET_ID,
-  }) as WidgetEntity;
-  const evaluatedWidgetConfig = find(configTree, {
-    widgetId: MAIN_CONTAINER_WIDGET_ID,
-  }) as WidgetEntityConfig;
-  return createCanvasWidget(
-    canvasWidget,
-    evaluatedWidget,
-    evaluatedWidgetConfig,
-  );
-};
-
-export const getCanvasWidgetDsl = createSelector(
-  getCanvasWidgets,
-  getDataTree,
-  getConfigTree,
-  getLoadingEntities,
-  getMainCanvasProps,
-  (
-    canvasWidgets: CanvasWidgetsReduxState,
-    evaluatedDataTree,
-    configTree,
-    loadingEntities,
-    mainCanvasProps,
-  ): ContainerWidgetProps<WidgetProps> => {
-    const widgets: Record<string, WidgetEntity> = {
-      [MAIN_CONTAINER_WIDGET_ID]: getMainContainer(
-        canvasWidgets,
-        evaluatedDataTree,
-        configTree,
-        mainCanvasProps,
-      ),
-    };
-    Object.keys(canvasWidgets)
-      .filter((each) => each !== MAIN_CONTAINER_WIDGET_ID)
-      .forEach((widgetKey) => {
-        const canvasWidget = canvasWidgets[widgetKey];
-        const evaluatedWidget = find(evaluatedDataTree, {
-          widgetId: widgetKey,
-        }) as WidgetEntity;
-        const evaluatedWidgetConfig = find(configTree, {
-          widgetId: widgetKey,
-        });
-        if (evaluatedWidget) {
-          widgets[widgetKey] = createCanvasWidget(
-            canvasWidget,
-            evaluatedWidget,
-            evaluatedWidgetConfig,
-          );
-        } else {
-          widgets[widgetKey] = createLoadingWidget(canvasWidget);
-        }
-        widgets[widgetKey].isLoading = loadingEntities.has(
-          canvasWidget.widgetName,
-        );
-      });
-
-    return CanvasWidgetsNormalizer.denormalize("0", {
-      canvasWidgets: widgets,
-    });
-  },
-);
-
 export const getChildWidgets = createSelector(
   [
     getCanvasWidgets,
@@ -541,14 +498,6 @@ export const getChildWidgets = createSelector(
     (_state: AppState, widgetId: string) => widgetId,
   ],
   buildChildWidgetTree,
-);
-
-export const getFlattenedChildCanvasWidgets = createSelector(
-  [
-    getCanvasWidgets,
-    (_state: AppState, parentWidgetId: string) => parentWidgetId,
-  ],
-  buildFlattenedChildCanvasWidgets,
 );
 
 const getOccupiedSpacesForContainer = (
@@ -564,6 +513,7 @@ const getOccupiedSpacesForContainer = (
       bottom: widget.bottomRow,
       right: widget.rightColumn,
     };
+
     return occupiedSpace;
   });
 };
@@ -579,6 +529,7 @@ const getWidgetSpacesForContainer = (
     rightColumn: rightColumnMap,
     topRow: topRowMap,
   } = dimensionMap;
+
   return widgets.map((widget) => {
     const hasAutoHeight = isAutoHeightEnabledForWidget(widget);
     const fixedHeight = hasAutoHeight
@@ -595,6 +546,7 @@ const getWidgetSpacesForContainer = (
       isDropTarget: checkIsDropTarget(widget.type),
       fixedHeight,
     };
+
     return occupiedSpace;
   });
 };
@@ -610,11 +562,13 @@ const generateOccupiedSpacesMap = (
   widgets: CanvasWidgetsReduxState,
   fetchNow = true,
   dimensionMap = DefaultDimensionMap,
-): { [containerWidgetId: string]: WidgetSpace[] } | undefined => {
+): { [containerWidgetId: string]: WidgetSpace[] } => {
   const occupiedSpaces: {
     [containerWidgetId: string]: WidgetSpace[];
   } = {};
-  if (!fetchNow) return;
+
+  if (!fetchNow) return {};
+
   // Get all widgets with type "CONTAINER_WIDGET" and has children
   const containerWidgets: FlattenedWidgetProps[] = Object.values(
     widgets,
@@ -631,6 +585,7 @@ const generateOccupiedSpacesMap = (
           containerWidget.children.indexOf(widgetId) > -1 &&
           !widgets[widgetId].detachFromLayout,
       );
+
       // Get the occupied spaces in this container
       // Assign it to the containerWidgetId key in occupiedSpaces
       occupiedSpaces[containerWidgetId] = getWidgetSpacesForContainer(
@@ -640,8 +595,9 @@ const generateOccupiedSpacesMap = (
       );
     });
   }
+
   // Return undefined if there are no occupiedSpaces.
-  return Object.keys(occupiedSpaces).length > 0 ? occupiedSpaces : undefined;
+  return Object.keys(occupiedSpaces).length > 0 ? occupiedSpaces : {};
 };
 
 // returns occupied spaces
@@ -671,6 +627,7 @@ export const getOccupiedSpaces = createSelector(
             containerWidget.children.indexOf(widgetId) > -1 &&
             !widgets[widgetId].detachFromLayout,
         );
+
         // Get the occupied spaces in this container
         // Assign it to the containerWidgetId key in occupiedSpaces
         occupiedSpaces[containerWidgetId] = getOccupiedSpacesForContainer(
@@ -725,20 +682,26 @@ export const getOccupiedSpacesGroupedByParentCanvas = createSelector(
         // Get the nesting level of this Canvas:
         let parentId = canvasWidget.parentId;
         let level = 0;
+
         while (parentId) {
           const parent = widgets[parentId];
+
           if (parent.type === "CANVAS_WIDGET") level++;
+
           parentId = parent.parentId;
         }
+
         canvasLevelMap[canvasWidget.widgetId] = level;
         // Initialise the occupied spaces with an empty array
         occupiedSpaces[canvasWidgetId] = {};
+
         // If this canvas widget has children
         if (canvasWidget.children && canvasWidget.children.length > 0) {
           // Iterate through all children
           canvasWidget.children.forEach((childWidgetId: string) => {
             // Get the widget props
             const widget = widgets[childWidgetId];
+
             // If the widget is not detached from layout, which means
             // They actually exist by being displayed within the canvas
             // (unlike a modal widget or another canvas widget)
@@ -805,6 +768,7 @@ const generateOccupiedSpacesForContainer = (
     containerId,
     childWidgets.map((widgetId) => widgets[widgetId]),
   );
+
   return occupiedSpaces;
 };
 
@@ -850,6 +814,7 @@ const generateWidgetSpacesForContainer = (
     childWidgets.map((widgetId) => widgets[widgetId]),
     dimensionMap,
   );
+
   return occupiedSpaces;
 };
 
@@ -914,27 +879,35 @@ export function getContainerWidgetSpacesSelectorWhileMoving(
   );
 }
 
-export const getActionById = createSelector(
-  [getActions, (state: any, props: any) => props.match.params.apiId],
-  (actions, id) => {
-    const action = actions.find((action) => action.config.id === id);
+export const getJSCollectionDataById = createSelector(
+  [getJSCollections, (state: AppState, collectionId: string) => collectionId],
+  (jsActions, collectionId) => {
+    const action = jsActions.find(
+      (action) => action.config.id === collectionId,
+    );
+
     if (action) {
-      return action.config;
+      return action;
     } else {
       return undefined;
     }
   },
 );
 
-export const getJSCollectionById = createSelector(
+export const getJSCollectionDataByBaseId = createSelector(
   [
     getJSCollections,
-    (state: any, props: any) => props.match.params.collectionId,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (state: AppState, baseCollectionId: any) => baseCollectionId,
   ],
-  (jsActions, id) => {
-    const action = jsActions.find((action) => action.config.id === id);
+  (jsActions, baseCollectionId) => {
+    const action = jsActions.find(
+      (action) => action.config.baseId === baseCollectionId,
+    );
+
     if (action) {
-      return action.config;
+      return action;
     } else {
       return undefined;
     }
@@ -953,6 +926,20 @@ export const getApplicationLastDeployedAt = (state: AppState) =>
 export const previewModeSelector = (state: AppState) => {
   return state.ui.editor.isPreviewMode;
 };
+
+/**
+ * This selector is used to identify if the application is in an edit-only state,
+ * meaning it is in the canvas render mode but not in preview or protected mode.
+ * This is useful for enabling or disabling certain UI elements or functionalities
+ * that are only applicable in this specific mode.
+ */
+export const isEditOnlyModeSelector = createSelector(
+  getRenderMode,
+  previewModeSelector,
+  protectedModeSelector,
+  (renderMode, isPreviewMode, isProtectedMode) =>
+    renderMode === RenderModes.CANVAS && !(isPreviewMode || isProtectedMode),
+);
 
 /**
  * returns the `state.ui.editor.zoomLevel`
@@ -980,14 +967,17 @@ export const showCanvasTopSectionSelector = createSelector(
   getCanvasWidgets,
   previewModeSelector,
   getCurrentPageId,
-  (canvasWidgets, inPreviewMode, pageId) => {
+  getIsAnonymousDataPopupVisible,
+  (canvasWidgets, inPreviewMode, pageId, isAnonymousDataPopupVisible) => {
     const state = JSON.parse(
       localStorage.getItem(LOCAL_STORAGE_KEYS.CANVAS_CARDS_STATE) ?? "{}",
     );
+
     if (
       !state[pageId] ||
       Object.keys(canvasWidgets).length > 1 ||
-      inPreviewMode
+      inPreviewMode ||
+      isAnonymousDataPopupVisible
     )
       return false;
 

@@ -1,6 +1,6 @@
 import { createSelector } from "reselect";
 import { get, set } from "lodash";
-import type { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 
 import type { CanvasWidgetsReduxState } from "reducers/entityReducers/canvasWidgetsReducer";
 import {
@@ -19,17 +19,31 @@ const getPropsFromTree = (tree: unknown, widgetName?: string): unknown => {
   return get(tree, widgetName, undefined);
 };
 
-export type EnhancementFns = {
+export interface EnhancementFns {
   enhancementFns: {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     updateDataTreePathFn: any;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     propertyPaneEnhancementFn: any;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     autoCompleteEnhancementFn: any;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     customJSControlEnhancementFn: any;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     hideEvaluatedValueEnhancementFn: any;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     shouldHidePropertyFn: any;
   };
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   parentIdWithEnhancementFn: any;
-};
+}
 
 export const getWidgetEnhancementSelector = (widgetId: string | undefined) => {
   return createSelector(

@@ -3,21 +3,24 @@ import type {
   FlattenedWidgetProps,
 } from "reducers/entityReducers/canvasWidgetsReducer";
 import type {
-  ConfigTree,
-  DataTree,
   WidgetEntity,
   WidgetEntityConfig,
-} from "entities/DataTree/dataTreeFactory";
+} from "ee/entities/DataTree/types";
+import type { ConfigTree, DataTree } from "entities/DataTree/dataTreeTypes";
 import { ENTITY_TYPE } from "entities/DataTree/dataTreeFactory";
 import { pick } from "lodash";
 import {
   WIDGET_DSL_STRUCTURE_PROPS,
   WIDGET_STATIC_PROPS,
 } from "constants/WidgetConstants";
-import WidgetFactory from "./WidgetFactory";
+import WidgetFactory from "../WidgetProvider/factory";
 import type { WidgetProps } from "widgets/BaseWidget";
 import type { LoadingEntitiesState } from "reducers/evaluationReducers/loadingEntitiesReducer";
 import type { MetaWidgetsReduxState } from "reducers/entityReducers/metaWidgetsReducer";
+import type { WidgetError } from "widgets/BaseWidget";
+import { get } from "lodash";
+import type { DataTreeError } from "utils/DynamicBindingUtils";
+import { EVAL_ERROR_PATH } from "utils/DynamicBindingUtils";
 
 export const createCanvasWidget = (
   canvasWidget: FlattenedWidgetProps,
@@ -40,14 +43,52 @@ export const createCanvasWidget = (
     ? pick(evaluatedWidget, specificChildProps)
     : evaluatedWidget;
 
-  return {
+  const widgetProps = {
     ...evaluatedStaticProps,
     ...evaluatedWidgetConfig,
     ...widgetStaticProps,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
+
+  return widgetProps;
 };
 
-const WidgetTypes = WidgetFactory.widgetTypes;
+export function widgetErrorsFromStaticProps(props: Record<string, unknown>) {
+  /**
+   * Evaluation Error Map
+   * {
+     widgetPropertyName : DataTreeError[]
+    }
+   */
+
+  const evaluationErrorMap = get(props, EVAL_ERROR_PATH, {}) as Record<
+    string,
+    DataTreeError[]
+  >;
+  const widgetErrors: WidgetError[] = [];
+
+  Object.keys(evaluationErrorMap).forEach((propertyPath) => {
+    const propertyErrors = evaluationErrorMap[propertyPath];
+
+    propertyErrors.forEach((evalError) => {
+      const widgetError: WidgetError = {
+        name: evalError.errorMessage.name,
+        message: evalError.errorMessage.message,
+        stack: evalError.raw,
+        type: "property",
+        path: propertyPath,
+      };
+
+      widgetErrors.push(widgetError);
+    });
+  });
+
+  return widgetErrors;
+}
+
+const WidgetTypes = WidgetFactory?.widgetTypes;
+
 export const createLoadingWidget = (
   canvasWidget: FlattenedWidgetProps,
 ): WidgetEntity => {
@@ -55,9 +96,15 @@ export const createLoadingWidget = (
     canvasWidget,
     Object.keys(WIDGET_STATIC_PROPS),
   ) as WidgetProps;
+
   return {
     ...widgetStaticProps,
-    type: WidgetTypes.SKELETON_WIDGET,
+    type:
+      // We don't need to set skeleton type for modals
+      // since modals are not displayed when the app is loaded
+      canvasWidget?.type !== "MODAL_WIDGET"
+        ? WidgetTypes.SKELETON_WIDGET
+        : canvasWidget?.type,
     ENTITY_TYPE: ENTITY_TYPE.WIDGET,
     bindingPaths: {},
     reactivePaths: {},
@@ -138,25 +185,6 @@ export function buildChildWidgetTree(
   }
 
   return [];
-}
-
-export function buildFlattenedChildCanvasWidgets(
-  canvasWidgets: CanvasWidgetsReduxState,
-  parentWidgetId: string,
-  flattenedChildCanvasWidgets: Record<string, FlattenedWidgetProps> = {},
-) {
-  const parentWidget = canvasWidgets[parentWidgetId];
-  parentWidget?.children?.forEach((childId) => {
-    flattenedChildCanvasWidgets[childId] = canvasWidgets[childId];
-
-    buildFlattenedChildCanvasWidgets(
-      canvasWidgets,
-      childId,
-      flattenedChildCanvasWidgets,
-    );
-  });
-
-  return flattenedChildCanvasWidgets;
 }
 
 function getWidgetSpecificChildProps(type: string) {

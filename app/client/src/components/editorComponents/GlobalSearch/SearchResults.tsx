@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useContext, useMemo } from "react";
 import { useSelector } from "react-redux";
-import { Highlight as AlgoliaHighlight } from "react-instantsearch-dom";
-import type { Hit as IHit } from "react-instantsearch-core";
 import styled, { css } from "styled-components";
-import { getTypographyByKey } from "design-system-old";
+import { getTypographyByKey } from "@appsmith/ads-old";
 import Highlight from "./Highlight";
 import ActionLink, { StyledActionLink } from "./ActionLink";
 import scrollIntoView from "scroll-into-view-if-needed";
@@ -13,7 +11,6 @@ import {
   getItemTitle,
   SEARCH_ITEM_TYPES,
   comboHelpText,
-  isSnippet,
 } from "./utils";
 import SearchContext from "./GlobalSearchContext";
 import {
@@ -24,12 +21,12 @@ import {
   JsFileIconV2,
 } from "pages/Editor/Explorer/ExplorerIcons";
 import { getActionConfig } from "pages/Editor/Explorer/Actions/helpers";
-import type { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import { keyBy, noop } from "lodash";
 import { getPageList } from "selectors/editorSelectors";
-import { PluginType } from "entities/Action";
+import { PluginType } from "entities/Plugin";
 import WidgetIcon from "pages/Editor/Explorer/Widgets/WidgetIcon";
-import { Icon, Text } from "design-system";
+import { Text } from "@appsmith/ads";
 
 const overflowCSS = css`
   overflow: hidden;
@@ -48,7 +45,7 @@ export const SearchItemContainer = styled.div<{
       : "default"};
   display: flex;
   align-items: center;
-  padding: ${(props) => props.theme.spaces[4]}px};
+  padding: ${(props) => props.theme.spaces[4] + "px"};
   transition: 0.3s background-color ease;
   border-radius: var(--ads-v2-border-radius);
   background-color: ${(props) =>
@@ -111,30 +108,12 @@ const ItemTitle = styled.div`
   }
 `;
 
-const StyledDocumentIcon = styled(Icon)`
-  display: flex;
-`;
-
 const TextWrapper = styled.div`
   flex: 1;
   display: flex;
   justify-content: space-between;
   font-size: 14px;
 `;
-
-function DocumentationItem(props: { item: SearchItem; isActiveItem: boolean }) {
-  return (
-    <>
-      <StyledDocumentIcon name="file-text-fill" />
-      <ItemTitle>
-        <span>
-          <AlgoliaHighlight attribute="title" hit={props.item} />
-        </span>
-        <ActionLink isActiveItem={props.isActiveItem} item={props.item} />
-      </ItemTitle>
-    </>
-  );
-}
 
 const WidgetIconWrapper = styled.span<{ isActiveItem: boolean }>`
   display: flex;
@@ -149,6 +128,7 @@ const WidgetIconWrapper = styled.span<{ isActiveItem: boolean }>`
 const usePageName = (pageId: string) => {
   const pages = useSelector(getPageList);
   const page = pages.find((page) => page.pageId === pageId);
+
   return page?.pageName;
 };
 
@@ -162,6 +142,7 @@ function WidgetItem(props: {
   const title = getItemTitle(item);
   const pageName = usePageName(item.pageId);
   const subText = `${pageName}`;
+
   return (
     <>
       <WidgetIconWrapper
@@ -254,6 +235,7 @@ function DatasourceItem(props: {
   const pluginGroups = useMemo(() => keyBy(plugins, "id"), [plugins]);
   const icon = getPluginIcon(pluginGroups[item.pluginId]);
   const title = getItemTitle(item);
+
   return (
     <>
       {icon}
@@ -361,22 +343,6 @@ function CategoryItem({
   );
 }
 
-const FlexWrapper = styled.div`
-  display: flex;
-  align-items: center;
-`;
-
-function SnippetItem({ item: { body } }: any) {
-  return (
-    <FlexWrapper>
-      <Icon className="snippet-icon" name="snippet" size="md" />
-      <ItemTitle>
-        <span>{body.shortTitle || body.title}</span>
-      </ItemTitle>
-    </FlexWrapper>
-  );
-}
-
 const ActionOperation = styled.div<{ isActive: boolean }>`
   display: flex;
   align-items: center;
@@ -402,12 +368,15 @@ const ActionOperation = styled.div<{ isActive: boolean }>`
   }
 `;
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ActionOperationItem({ isActiveItem, item }: any) {
   const plugins = useSelector((state: AppState) => {
     return state.entities.plugins.list;
   });
   const pluginGroups = useMemo(() => keyBy(plugins, "id"), [plugins]);
   const icon = item.pluginId && getPluginIcon(pluginGroups[item.pluginId]);
+
   return (
     <ActionOperation isActive={isActiveItem}>
       <div className="action-icon">
@@ -420,7 +389,6 @@ function ActionOperationItem({ isActiveItem, item }: any) {
 }
 
 const SearchItemByType = {
-  [SEARCH_ITEM_TYPES.document]: DocumentationItem,
   [SEARCH_ITEM_TYPES.widget]: WidgetItem,
   [SEARCH_ITEM_TYPES.action]: ActionItem,
   [SEARCH_ITEM_TYPES.datasource]: DatasourceItem,
@@ -429,15 +397,14 @@ const SearchItemByType = {
   [SEARCH_ITEM_TYPES.placeholder]: Placeholder,
   [SEARCH_ITEM_TYPES.jsAction]: JSCollectionItem,
   [SEARCH_ITEM_TYPES.category]: CategoryItem,
-  [SEARCH_ITEM_TYPES.snippet]: SnippetItem,
   [SEARCH_ITEM_TYPES.actionOperation]: ActionOperationItem,
 };
 
-type ItemProps = {
-  item: IHit | SearchItem;
+interface ItemProps {
+  item: SearchItem;
   index: number;
   query: string;
-};
+}
 
 function SearchItemComponent(props: ItemProps) {
   const { index, item, query } = props;
@@ -459,7 +426,7 @@ function SearchItemComponent(props: ItemProps) {
 
   return (
     <SearchItemContainer
-      className="t--docHit"
+      className="t--searchHit"
       isActiveItem={isActiveItem}
       itemType={itemType}
       onClick={(e: React.MouseEvent) => {
@@ -486,7 +453,7 @@ const SearchResultsContainer = styled.div<{ category: SearchCategory }>`
   .container {
     height: 100%;
     width: 100%;
-    padding-bottom: ${(props) => (isSnippet(props.category) ? "50px" : "0")};
+    padding-bottom: 0;
   }
 `;
 
@@ -515,4 +482,4 @@ function SearchResults({
   );
 }
 
-export default SearchResults;
+export default React.memo(SearchResults);

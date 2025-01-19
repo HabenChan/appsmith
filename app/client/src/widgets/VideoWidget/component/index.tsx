@@ -2,7 +2,7 @@ import ReactPlayer from "react-player";
 import type { Ref } from "react";
 import React from "react";
 import styled from "styled-components";
-import { createMessage, ENTER_VIDEO_URL } from "@appsmith/constants/messages";
+import { createMessage, ENTER_VIDEO_URL } from "ee/constants/messages";
 export interface VideoComponentProps {
   url?: string;
   autoPlay?: boolean;
@@ -36,6 +36,7 @@ const VideoWrapper = styled.div<{
   backgroundColor?: string;
 }>`
   height: 100%;
+  width: 100%;
 
   & video,
   & > div {
@@ -64,6 +65,7 @@ export default function VideoComponent(props: VideoComponentProps) {
     playing,
     url,
   } = props;
+
   return url ? (
     <VideoWrapper
       backgroundColor={props.backgroundColor}

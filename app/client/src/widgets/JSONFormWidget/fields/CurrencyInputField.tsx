@@ -1,6 +1,4 @@
 import * as Sentry from "@sentry/react";
-import _ from "lodash";
-import moment from "moment";
 import React, { useCallback, useContext, useMemo, useState } from "react";
 
 import type { BaseInputComponentProps } from "./BaseInputField";
@@ -27,7 +25,7 @@ type CurrencyInputComponentProps = BaseInputComponentProps & {
 export type CurrencyInputFieldProps =
   BaseFieldComponentProps<CurrencyInputComponentProps>;
 
-type CurrencyTypeDropdownComponentProps = {
+interface CurrencyTypeDropdownComponentProps {
   allowCurrencyChange?: boolean;
   borderRadius?: string;
   currencyCountryCode: string;
@@ -35,7 +33,7 @@ type CurrencyTypeDropdownComponentProps = {
   accentColor?: string;
   propertyPath: string;
   fieldName: string;
-};
+}
 
 const COMPONENT_DEFAULT_VALUES: CurrencyInputComponentProps = {
   currencyCountryCode: getDefaultCurrency().currency,
@@ -53,6 +51,7 @@ export const isValid = (
   inputValue?: string | null,
 ) => {
   let hasValidValue, value;
+
   try {
     value = Number(inputValue);
     hasValidValue = !isEmpty(inputValue) && Number.isFinite(value);
@@ -124,6 +123,7 @@ function CurrencyInputField({
     (inputValue: string) => {
       let text = "";
       const decimalSeperator = getLocaleDecimalSeperator();
+
       try {
         if (inputValue && inputValue.includes(decimalSeperator)) {
           text = limitDecimalValue(schemaItem.decimalsInCurrency, inputValue);
@@ -135,7 +135,7 @@ function CurrencyInputField({
         Sentry.captureException(e);
       }
 
-      const value = derived.value({ text }, moment, _);
+      const value = derived.value({ text });
 
       return {
         text,

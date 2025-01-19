@@ -16,7 +16,13 @@ export default {
       hideByColumnType(
         props,
         propertyPath,
-        [ColumnTypes.TEXT, ColumnTypes.NUMBER, ColumnTypes.DATE],
+        [
+          ColumnTypes.TEXT,
+          ColumnTypes.NUMBER,
+          ColumnTypes.DATE,
+          ColumnTypes.CURRENCY,
+          ColumnTypes.SELECT,
+        ],
         true,
       )
     );

@@ -1,58 +1,85 @@
-import { ObjectsRegistry } from "../../../../support/Objects/Registry";
+import {
+  agHelper,
+  apiPage,
+  assertHelper,
+  debuggerHelper,
+  entityExplorer,
+  entityItems,
+  propPane,
+} from "../../../../support/Objects/ObjectsCore";
+import EditorNavigation, {
+  EntityType,
+  PageLeftPane,
+  PagePaneSegment,
+} from "../../../../support/Pages/EditorNavigation";
 
-let dataSet: any;
-const ee = ObjectsRegistry.EntityExplorer,
-  agHelper = ObjectsRegistry.AggregateHelper,
-  propPane = ObjectsRegistry.PropertyPane,
-  apiPage = ObjectsRegistry.ApiPage;
-
-describe("JSObjects OnLoad Actions tests", function () {
-  before(() => {
-    cy.fixture("tableWidgetDsl").then((val: any) => {
-      agHelper.AddDsl(val);
+describe(
+  "JSObjects OnLoad Actions tests",
+  { tags: ["@tag.PropertyPane", "@tag.JS", "@tag.Binding"] },
+  function () {
+    before(() => {
+      agHelper.AddDsl("tableWidgetDsl");
     });
-    cy.fixture("testdata").then(function (data: any) {
-      dataSet = data;
+
+    it("1. Api mapping on page load", function () {
+      cy.fixture("testdata").then(function (dataSet: any) {
+        apiPage.CreateAndFillApi(
+          dataSet.baseUrl + dataSet.methods,
+          "PageLoadApi",
+        );
+      });
+      agHelper.PressEscape();
+      EditorNavigation.SelectEntityByName("Table1", EntityType.Widget, {}, [
+        "Container3",
+      ]);
+      propPane.UpdatePropertyFieldValue(
+        "Table data",
+        `{{PageLoadApi.data.data}}`,
+      );
+      agHelper.ValidateToastMessage(
+        "[PageLoadApi] will be executed automatically on page load",
+      );
+      agHelper.RefreshPage();
+      assertHelper.AssertNetworkStatus("@postExecute");
     });
-  });
 
-  it("1. Api mapping on page load", function () {
-    ee.NavigateToSwitcher("Explorer");
-    apiPage.CreateAndFillApi(dataSet.baseUrl + dataSet.methods, "PageLoadApi");
-    agHelper.PressEscape();
-    ee.ExpandCollapseEntity("Container3");
-    ee.SelectEntityByName("Table1");
-    propPane.UpdatePropertyFieldValue(
-      "Table data",
-      `{{PageLoadApi.data.data}}`,
-    );
-    agHelper.ValidateToastMessage(
-      "[PageLoadApi] will be executed automatically on page load",
-    );
-    agHelper.RefreshPage();
-    agHelper.ValidateNetworkStatus("@postExecute");
-  });
+    it("2. Shows when API failed to load on page load.", function () {
+      cy.fixture("testdata").then(function (dataSet: any) {
+        apiPage.CreateAndFillApi(
+          "https://www.google.com/" + dataSet.methods,
+          "PageLoadApi2",
+        );
+      });
+      apiPage.ToggleOnPageLoadRun(true);
+      EditorNavigation.SelectEntityByName("Table1", EntityType.Widget, {}, [
+        "Container3",
+      ]);
+      propPane.UpdatePropertyFieldValue(
+        "Table data",
+        `{{PageLoadApi2.data.data}}`,
+      );
+      agHelper.RefreshPage();
+      debuggerHelper.OpenDebugger();
+      debuggerHelper.ClickLogsTab();
+      debuggerHelper.DoesConsoleLogExist(
+        "Failed execution",
+        true,
+        "PageLoadApi2",
+      );
+    });
 
-  it("2. Shows when API failed to load on page load.", function () {
-    apiPage.CreateAndFillApi(
-      "https://abc.com/" + dataSet.methods,
-      "PageLoadApi2",
-    );
-    apiPage.ToggleOnPageLoadRun(true);
-    ee.ExpandCollapseEntity("Widgets");
-    ee.ExpandCollapseEntity("Container3");
-    ee.SelectEntityByName("Table1");
-    propPane.UpdatePropertyFieldValue(
-      "Table data",
-      `{{PageLoadApi2.data.data}}`,
-    );
-    agHelper.RefreshPage();
-    agHelper.ValidateToastMessage(`The action "PageLoadApi2" has failed.`);
-  });
-
-  after(() => {
-    ee.ExpandCollapseEntity("Queries/JS");
-    ee.ActionContextMenuByEntityName("PageLoadApi", "Delete", "Are you sure?");
-    ee.ActionContextMenuByEntityName("PageLoadApi2", "Delete", "Are you sure?");
-  });
-});
+    after(() => {
+      PageLeftPane.switchSegment(PagePaneSegment.Queries);
+      entityExplorer.ActionContextMenuByEntityName({
+        entityNameinLeftSidebar: "PageLoadApi",
+        action: "Delete",
+        entityType: entityItems.Api,
+      });
+      entityExplorer.ActionContextMenuByEntityName({
+        entityNameinLeftSidebar: "PageLoadApi2",
+        action: "Delete",
+        entityType: entityItems.Api,
+      });
+    });
+  },
+);

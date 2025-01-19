@@ -7,13 +7,13 @@ import {
   ModalHeader,
   ModalFooter,
   Text,
-} from "design-system";
+} from "@appsmith/ads";
 import {
   DELETE_CONFIRMATION_MODAL_TITLE,
   DELETE_CONFIRMATION_MODAL_SUBTITLE,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 
-type DeleteConfirmationProps = {
+interface DeleteConfirmationProps {
   userToBeDeleted: {
     name: string;
     username: string;
@@ -26,7 +26,7 @@ type DeleteConfirmationProps = {
   onClose: () => void;
   onConfirm: () => void;
   isDeletingUser: boolean;
-};
+}
 
 function DeleteConfirmationModal(props: DeleteConfirmationProps) {
   const { isDeletingUser, isOpen, onClose, onConfirm, userToBeDeleted } = props;

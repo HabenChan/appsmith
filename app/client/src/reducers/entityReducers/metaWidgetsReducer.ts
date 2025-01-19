@@ -1,15 +1,16 @@
 import { get, set, split, unset } from "lodash";
+import { klona } from "klona";
 
 import { createImmerReducer } from "utils/ReducerUtils";
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import type { WidgetProps } from "widgets/BaseWidget";
 import type { BatchPropertyUpdatePayload } from "actions/controlActions";
 import type { UpdateWidgetsPayload } from "./canvasWidgetsReducer";
 
-export type MetaWidgetsReduxState = {
+export interface MetaWidgetsReduxState {
   [widgetId: string]: FlattenedWidgetProps;
-};
+}
 
 export type FlattenedWidgetProps<orType = never> =
   | (WidgetProps & {
@@ -26,28 +27,29 @@ export type FlattenedWidgetProps<orType = never> =
  *  addOrUpdate/deleteIds. If a list widget creates creates/adds a bunch of meta widgets then
  *  the creatorId would be the list widget's widgetId.
  */
-export type ModifyMetaWidgetPayload = {
+export interface ModifyMetaWidgetPayload {
   addOrUpdate: Record<string, FlattenedWidgetProps>;
   deleteIds: string[];
   propertyUpdates?: MetaWidgetPropertyUpdate[];
   creatorId?: string;
-};
+}
 
-export type UpdateMetaWidgetPropertyPayload = {
+export interface UpdateMetaWidgetPropertyPayload {
   updates: BatchPropertyUpdatePayload;
   widgetId: string;
   creatorId?: string;
-};
-export type DeleteMetaWidgetsPayload = {
-  creatorIds: string[];
-};
+}
 
-type MetaWidgetPropertyUpdate = {
+export interface DeleteMetaWidgetsPayload {
+  creatorIds: string[];
+}
+
+interface MetaWidgetPropertyUpdate {
   path: string;
   value: unknown;
-};
+}
 
-const initialState: MetaWidgetsReduxState = {};
+export const initialState: MetaWidgetsReduxState = {};
 
 const metaWidgetsReducer = createImmerReducer(initialState, {
   [ReduxActionTypes.MODIFY_META_WIDGETS]: (
@@ -74,6 +76,7 @@ const metaWidgetsReducer = createImmerReducer(initialState, {
     (propertyUpdates || []).forEach(({ path, value }) => {
       const [widgetId, ...propertyPathChunks] = split(path, ".");
       const propertyPath = propertyPathChunks.join(".");
+
       set(state[widgetId], propertyPath, value);
     });
 
@@ -111,6 +114,7 @@ const metaWidgetsReducer = createImmerReducer(initialState, {
         unset(state[widgetId], propertyPath);
       });
     }
+
     return state;
   },
   [ReduxActionTypes.INIT_CANVAS_LAYOUT]: (state: MetaWidgetsReduxState) => {
@@ -132,12 +136,16 @@ const metaWidgetsReducer = createImmerReducer(initialState, {
         const path = `${widgetId}.${propertyPath}`;
         // Get original value in reducer
         const originalPropertyValue = get(state, path);
+
         // If the original and new values are different
         if (propertyValue !== originalPropertyValue)
           // Set the new values
           set(state, path, propertyValue);
       });
     }
+  },
+  [ReduxActionTypes.RESET_EDITOR_REQUEST]: () => {
+    return klona(initialState);
   },
 });
 

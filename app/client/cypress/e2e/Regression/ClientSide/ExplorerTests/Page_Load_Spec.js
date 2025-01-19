@@ -1,32 +1,41 @@
-const dsl = require("../../../../fixtures/PageLoadDsl.json");
+import EditorNavigation, {
+  EntityType,
+} from "../../../../support/Pages/EditorNavigation";
+
 const commonlocators = require("../../../../locators/commonlocators.json");
-const publish = require("../../../../locators/publishWidgetspage.json");
+import {
+  agHelper,
+  deployMode,
+  entityExplorer,
+} from "../../../../support/Objects/ObjectsCore";
+import PageList from "../../../../support/Pages/PageList";
+import { EntityItems } from "../../../../support/Pages/AssertHelper";
 
-import * as _ from "../../../../support/Objects/ObjectsCore";
-
-describe("Page Load tests", () => {
+describe("Page Load tests", { tags: ["@tag.IDE", "@tag.PropertyPane"] }, () => {
   afterEach(() => {
-    _.agHelper.SaveLocalStorageCache();
+    agHelper.SaveLocalStorageCache();
   });
 
   beforeEach(() => {
-    _.agHelper.RestoreLocalStorageCache();
+    agHelper.RestoreLocalStorageCache();
   });
 
   before(() => {
-    cy.addDsl(dsl);
-    cy.CreatePage();
-    cy.get("h2").contains("Drag and drop a widget here");
+    agHelper.AddDsl("PageLoadDsl");
+    PageList.AddNewPage();
+    cy.get("h2").contains(
+      Cypress.env("MESSAGES").EMPTY_CANVAS_HINTS.DRAG_DROP_WIDGET_HINT(),
+    );
   });
 
   it("1. Published page loads correctly", () => {
     //add page within page
-    cy.addDsl(dsl);
+    agHelper.AddDsl("PageLoadDsl");
     // Update the text to be asserted later
     cy.openPropertyPane("textwidget");
     cy.testCodeMirror("This is Page 2");
     // Publish
-    cy.PublishtheApp();
+    deployMode.DeployApp();
     // Assert active page tab
     cy.get(".t--page-switch-tab")
       .contains("Page2")
@@ -42,7 +51,7 @@ describe("Page Load tests", () => {
       "This is Page 2",
     );
     // Test after reload
-    cy.reload();
+    agHelper.RefreshPage("getConsolidatedData");
     // Assert active page tab
     cy.get(".t--page-switch-tab")
       .contains("Page2")
@@ -76,18 +85,22 @@ describe("Page Load tests", () => {
   });
 
   it("2. Hide Page and validate published app", () => {
-    cy.get(publish.backToEditor).click();
-    _.entityExplorer.ActionContextMenuByEntityName("Page1", "Hide");
-    cy.PublishtheApp();
+    deployMode.NavigateBacktoEditor();
+    entityExplorer.ActionContextMenuByEntityName({
+      entityNameinLeftSidebar: "Page1",
+      action: "Hide",
+      entityType: EntityItems.Page,
+    });
+    deployMode.DeployApp();
     // Assert active page DSL
     cy.get(commonlocators.headingTextStyle).should(
       "have.text",
       "This is Page 1",
     );
     cy.contains("Page2").should("not.exist");
-    cy.get(publish.backToEditor).click();
-    _.entityExplorer.SelectEntityByName("Page2");
-    cy.PublishtheApp();
+    deployMode.NavigateBacktoEditor();
+    EditorNavigation.SelectEntityByName("Page2", EntityType.Page);
+    deployMode.DeployApp();
     // Assert active page DSL
     cy.get(commonlocators.headingTextStyle).should(
       "have.text",

@@ -3,11 +3,11 @@ import type { ControlProps } from "./BaseControl";
 import BaseControl from "./BaseControl";
 import styled from "styled-components";
 import type { ControlType } from "constants/PropertyControlConstants";
-import { get, isNil } from "lodash";
+import { get, isEmpty, isNil } from "lodash";
 import type { WrappedFieldInputProps, WrappedFieldMetaProps } from "redux-form";
 import { Field } from "redux-form";
 import { connect } from "react-redux";
-import type { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import { getDynamicFetchedValues } from "selectors/formSelectors";
 import { change, getFormValues } from "redux-form";
 import {
@@ -16,8 +16,8 @@ import {
   MATCH_ACTION_CONFIG_PROPERTY,
 } from "workers/Evaluation/formEval";
 import type { Action } from "entities/Action";
-import type { SelectOptionProps } from "design-system";
-import { Icon, Option, Select } from "design-system";
+import type { SelectOptionProps } from "@appsmith/ads";
+import { Icon, Option, Select } from "@appsmith/ads";
 
 const DropdownSelect = styled.div<{
   width: string;
@@ -44,11 +44,13 @@ class DropDownControl extends BaseControl<Props> {
         dependencies.forEach((dependencyPath) => {
           const prevValue = get(prevProps?.formValues, dependencyPath);
           const currentValue = get(this.props?.formValues, dependencyPath);
+
           if (prevValue !== currentValue) {
             hasDependenciesChanged = true;
           }
         });
       }
+
       if (hasDependenciesChanged) {
         this.props.updateConfigPropertyValue(
           this.props.formName,
@@ -70,6 +72,7 @@ class DropDownControl extends BaseControl<Props> {
         this.props?.formValues,
         FormDataPaths.COMMAND,
       );
+
       if (prevCommandValue !== currentCommandValue) {
         this.props.updateConfigPropertyValue(
           this.props.formName,
@@ -91,7 +94,7 @@ class DropDownControl extends BaseControl<Props> {
 
     return (
       <DropdownSelect
-        className={`t--${this?.props?.configProperty}`}
+        className={`t--${this?.props?.configProperty} uqi-dropdown-select`}
         data-testid={this.props.configProperty}
         style={styles}
         width={styles.width}
@@ -119,15 +122,23 @@ function renderDropdown(
   } & DropDownControlProps,
 ): JSX.Element {
   let selectedValue: string | string[];
-  if (isNil(props.input?.value)) {
+
+  if (isEmpty(props.input?.value)) {
     if (props.isMultiSelect)
       selectedValue = props?.initialValue ? (props.initialValue as string) : [];
-    else
+    else {
       selectedValue = props?.initialValue
         ? (props.initialValue as string[])
         : "";
+
+      if (props.setFirstOptionAsDefault && props.options.length > 0) {
+        selectedValue = props.options[0].value as string;
+        props.input?.onChange(selectedValue);
+      }
+    }
   } else {
     selectedValue = props.input?.value;
+
     if (props.isMultiSelect) {
       if (!Array.isArray(selectedValue)) {
         selectedValue = [selectedValue];
@@ -136,8 +147,10 @@ function renderDropdown(
       }
     }
   }
+
   let options: SelectOptionProps[] = [];
   let selectedOptions: SelectOptionProps[] = [];
+
   if (typeof props.options === "object" && Array.isArray(props.options)) {
     options = props.options;
     selectedOptions =
@@ -147,6 +160,7 @@ function renderDropdown(
         else return selectedValue === option.value;
       }) || [];
   }
+
   // Function to handle selection of options
   const onSelectOptions = (value: string | undefined) => {
     if (!isNil(value)) {
@@ -158,6 +172,7 @@ function renderDropdown(
           selectedValue = [selectedValue as string, value];
         }
       } else selectedValue = value;
+
       props.input?.onChange(selectedValue);
     }
   };
@@ -176,49 +191,68 @@ function renderDropdown(
           selectedValue = [];
         }
       } else selectedValue = "";
+
       props.input?.onChange(selectedValue);
+    }
+  };
+
+  const clearAllOptions = () => {
+    if (!isNil(selectedValue)) {
+      if (props.isMultiSelect) {
+        if (Array.isArray(selectedValue)) {
+          selectedValue = [];
+          props.input?.onChange([]);
+        }
+      } else {
+        selectedValue = "";
+        props.input?.onChange("");
+      }
     }
   };
 
   if (props.options.length > 0) {
     if (props.isMultiSelect) {
       const tempSelectedValues: string[] = [];
+
       selectedOptions.forEach((option: SelectOptionProps) => {
         if (selectedValue.includes(option.value as string)) {
           tempSelectedValues.push(option.value as string);
         }
       });
+
       if (tempSelectedValues.length !== selectedValue.length) {
         selectedValue = [...tempSelectedValues];
         props.input?.onChange(tempSelectedValues);
       }
     } else {
       let tempSelectedValues = "";
+
       selectedOptions.forEach((option: SelectOptionProps) => {
         if (selectedValue === (option.value as string)) {
           tempSelectedValues = option.value as string;
         }
       });
 
-      if (selectedValue !== tempSelectedValues) {
-        // when pre-selected value is not found in dropdown options,
-        // initializing dropdown to initial value instead of blank
-        const tempValues = !isNil(props?.initialValue)
-          ? (props.initialValue as string[])
-          : tempSelectedValues;
-        selectedValue = tempValues;
-        props.input?.onChange(tempValues);
+      // we also check if the selected options are present at all.
+      // this is because sometimes when a transition is happening the previous options become an empty array.
+      // before the new options are loaded.
+      if (selectedValue !== tempSelectedValues && selectedOptions.length > 0) {
+        selectedValue = tempSelectedValues;
+        props.input?.onChange(tempSelectedValues);
       }
 
       const isOptionDynamic = options.some((opt) => "disabled" in opt);
+
       if (isOptionDynamic && !!props?.isRequired) {
         const isCurrentOptionDisabled = options.some(
           (opt) => opt?.value === selectedValue && opt.disabled,
         );
+
         if (!tempSelectedValues || isCurrentOptionDisabled) {
           const firstEnabledOption = props?.options.find(
             (opt) => !opt?.disabled,
           );
+
           if (firstEnabledOption) {
             selectedValue = firstEnabledOption?.value as string;
             props.input?.onChange(firstEnabledOption?.value);
@@ -230,11 +264,13 @@ function renderDropdown(
 
   return (
     <Select
+      allowClear={props.isMultiSelect && !isEmpty(selectedValue)}
       data-testid={`t--dropdown-${props?.configProperty}`}
       defaultValue={props.initialValue}
       isDisabled={props.disabled}
       isLoading={props.isLoading}
       isMultiSelect={props?.isMultiSelect}
+      onClear={clearAllOptions}
       onDeselect={onRemoveOptions}
       onSelect={(value) => onSelectOptions(value)}
       placeholder={props?.placeholderText}
@@ -245,6 +281,7 @@ function renderDropdown(
         return (
           <Option
             aria-label={option.label}
+            disabled={option.disabled}
             isDisabled={option.isDisabled}
             key={option.value}
             value={option.value}
@@ -269,15 +306,18 @@ export interface DropDownControlProps extends ControlProps {
   fetchOptionsConditionally?: boolean;
   isLoading: boolean;
   formValues: Partial<Action>;
+  setFirstOptionAsDefault?: boolean;
 }
 
-type ReduxDispatchProps = {
+interface ReduxDispatchProps {
   updateConfigPropertyValue: (
     formName: string,
     field: string,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any,
   ) => void;
-};
+}
 
 type Props = DropDownControlProps & ReduxDispatchProps;
 
@@ -297,16 +337,24 @@ const mapStateToProps = (
   try {
     if (ownProps.fetchOptionsConditionally) {
       const dynamicFetchedValues = getDynamicFetchedValues(state, ownProps);
+
       isLoading = dynamicFetchedValues.isLoading;
       options = dynamicFetchedValues.data;
     }
   } catch (e) {
+    // Printing error to console
+    // eslint-disable-next-line no-console
+    console.error(e);
   } finally {
     return { isLoading, options, formValues };
   }
 };
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapDispatchToProps = (dispatch: any): ReduxDispatchProps => ({
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateConfigPropertyValue: (formName: string, field: string, value: any) => {
     dispatch(change(formName, field, value));
   },

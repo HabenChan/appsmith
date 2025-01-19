@@ -1,6 +1,5 @@
 export * from "ce/sagas/userSagas";
 import {
-  createUserSaga,
   getCurrentUserSaga,
   runUserSideEffectsSaga,
   forgotPasswordSaga,
@@ -16,13 +15,13 @@ import {
   leaveWorkspaceSaga,
   fetchFeatureFlags,
   updateFirstTimeUserOnboardingSage,
+  fetchProductAlertSaga,
 } from "ce/sagas/userSagas";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import { takeLatest, all } from "redux-saga/effects";
 
 export default function* userSagas() {
   yield all([
-    takeLatest(ReduxActionTypes.CREATE_USER_INIT, createUserSaga),
     takeLatest(ReduxActionTypes.FETCH_USER_INIT, getCurrentUserSaga),
     takeLatest(
       ReduxActionTypes.FETCH_USER_DETAILS_SUCCESS,
@@ -49,6 +48,10 @@ export default function* userSagas() {
     takeLatest(ReduxActionTypes.UPLOAD_PROFILE_PHOTO, updatePhoto),
     takeLatest(ReduxActionTypes.LEAVE_WORKSPACE_INIT, leaveWorkspaceSaga),
     takeLatest(ReduxActionTypes.FETCH_FEATURE_FLAGS_INIT, fetchFeatureFlags),
+    takeLatest(
+      ReduxActionTypes.FETCH_PRODUCT_ALERT_INIT,
+      fetchProductAlertSaga,
+    ),
     takeLatest(
       ReduxActionTypes.FETCH_USER_DETAILS_SUCCESS,
       updateFirstTimeUserOnboardingSage,

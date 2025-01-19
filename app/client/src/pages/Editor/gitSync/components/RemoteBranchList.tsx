@@ -1,7 +1,7 @@
 import { RemoteBranchListItem } from "./RemoteBranchListItem";
 import React from "react";
-import { createMessage, REMOTE_BRANCHES } from "@appsmith/constants/messages";
-import { Text } from "design-system";
+import { createMessage, REMOTE_BRANCHES } from "ee/constants/messages";
+import { Text } from "@appsmith/ads";
 
 /**
  * RemoteBranchList: returns a list of remote branches
@@ -18,7 +18,8 @@ export function RemoteBranchList(
         <Text
           color="var(--ads-v2-color-fg-muted)"
           data-testid="t--branch-list-header-local"
-          kind="heading-xs"
+          kind="heading-s"
+          style={{ fontWeight: 600 }}
         >
           {createMessage(REMOTE_BRANCHES)}
         </Text>

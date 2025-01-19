@@ -1,17 +1,17 @@
 import styled from "styled-components";
 import type { CodeEditorBorder } from "components/editorComponents/CodeEditor/EditorConfig";
+
 import {
   EditorSize,
   EditorTheme,
 } from "components/editorComponents/CodeEditor/EditorConfig";
+import { CodeEditorColors } from "components/editorComponents/CodeEditor/constants";
 import type { Theme } from "constants/DefaultTheme";
 import { Skin } from "constants/DefaultTheme";
 import { Colors } from "constants/Colors";
-import {
-  NAVIGATION_CLASSNAME,
-  PEEKABLE_CLASSNAME,
-  PEEK_STYLE_PERSIST_CLASS,
-} from "./MarkHelpers/entityMarker";
+import { NAVIGATION_CLASSNAME } from "./MarkHelpers/entityMarker";
+
+export const PEEK_STYLE_PERSIST_CLASS = "peek-style-persist";
 
 const getBorderStyle = (
   props: { theme: Theme } & {
@@ -23,21 +23,14 @@ const getBorderStyle = (
   },
 ) => {
   if (props.hasError) return "var(--ads-v2-color-border-error)";
+
   if (props.editorTheme !== EditorTheme.DARK) {
     if (props.isFocused) return "var(--ads-v2-color-border-emphasis)";
+
     return "var(--ads-v2-color-border)";
   }
-  return "transparent";
-};
 
-export const CodeEditorColors = {
-  KEYWORD: "#304eaa",
-  FOLD_MARKER: "#442334",
-  STRING: "#1659df",
-  OPERATOR: "#009595",
-  NUMBER: "#555",
-  COMMENT: "#008000",
-  FUNCTION_ARGS: "hsl(288, 44%, 44%)",
+  return "transparent";
 };
 
 export const EditorWrapper = styled.div<{
@@ -58,6 +51,9 @@ export const EditorWrapper = styled.div<{
   codeEditorVisibleOverflow?: boolean;
   ctrlPressed: boolean;
   removeHoverAndFocusStyle?: boolean;
+  AIEnabled?: boolean;
+  mode: string;
+  maxHeight?: string | number;
 }>`
   // Bottom border was getting clipped
   .CodeMirror.cm-s-duotone-light.CodeMirror-wrap {
@@ -76,6 +72,7 @@ export const EditorWrapper = styled.div<{
   `
       : `position: relative;`}
   min-height: 36px;
+  max-height: ${(props) => props.maxHeight || "auto"};
   height: ${(props) => props.height || "auto"};
   background-color: ${(props) =>
     props.disabled ? "var(--ads-v2-color-bg-muted)" : "var(--ads-v2-color-bg)"};
@@ -95,7 +92,6 @@ export const EditorWrapper = styled.div<{
           : props.theme.colors.textDefault} !important;
     }
     .cm-s-duotone-light.CodeMirror {
-      padding: 0 6px;
       border-radius: var(--ads-v2-border-radius);
       /* ${(props) =>
         props.isFocused &&
@@ -126,6 +122,7 @@ export const EditorWrapper = styled.div<{
               return "var(--ads-v2-color-border)";
           }
         }};
+      ${(props) => props.borderLess && "border: none;"}
 
       background: var(--ads-v2-color-bg);
       color: var(--ads-v2-color-fg);
@@ -135,10 +132,14 @@ export const EditorWrapper = styled.div<{
         }
       }
       .cm-property {
-        color: hsl(21, 70%, 53%);
+        color: ${CodeEditorColors.PROPERTY};
       }
       .cm-keyword {
         color: ${CodeEditorColors.KEYWORD};
+      }
+
+      .cm-comment {
+        color: ${CodeEditorColors.COMMENT};
       }
 
       .CodeMirror-foldgutter {
@@ -166,7 +167,7 @@ export const EditorWrapper = styled.div<{
 
       /* json response in the debugger */
       .cm-string.cm-property {
-        color: hsl(21, 70%, 53%);
+        color: ${CodeEditorColors.PROPERTY};
       }
 
       // /* +, =>, -, etc. operators */
@@ -192,9 +193,6 @@ export const EditorWrapper = styled.div<{
       }
 
       .cm-atom + span + .cm-property,
-      .cm-variable-2 + span + .cm-property {
-        color: #364252;
-      }
 
       /* object keys, object methods */
       .cm-keyword + span + .cm-property,
@@ -222,9 +220,8 @@ export const EditorWrapper = styled.div<{
         color: #364252;
       }
 
-      .binding-brackets,
-      .CodeMirror-matchingbracket,
-      .binding-highlight {
+      .cm-binding-brackets,
+      .CodeMirror-matchingbracket {
         font-weight: 400;
       }
 
@@ -233,7 +230,7 @@ export const EditorWrapper = styled.div<{
         font-weight: 600;
       }
 
-      .binding-brackets {
+      .cm-binding-brackets {
         // letter-spacing: -1.8px;
         color: hsl(222, 70%, 77%);
       }
@@ -241,7 +238,6 @@ export const EditorWrapper = styled.div<{
       /* some sql fixes */
       .cm-m-sql.cm-keyword {
         font-weight: 400;
-        text-transform: uppercase;
       }
 
       .CodeMirror-activeline-background {
@@ -255,7 +251,7 @@ export const EditorWrapper = styled.div<{
       background: var(--ads-v2-color-bg-subtle);
     }
     .cm-s-duotone-light .CodeMirror-linenumber,
-    .binding-brackets {
+    .cm-binding-brackets {
       color: ${(props) =>
         props.editorTheme === EditorTheme.DARK
           ? props.theme.colors.bindingTextDark
@@ -263,7 +259,7 @@ export const EditorWrapper = styled.div<{
       font-weight: 700;
     }
 
-    .${PEEKABLE_CLASSNAME}:hover, .${PEEK_STYLE_PERSIST_CLASS} {
+    .${PEEK_STYLE_PERSIST_CLASS} {
       border-color: var(--ads-v2-color-border-emphasis);
       background-color: #ededed;
     }
@@ -389,13 +385,17 @@ export const EditorWrapper = styled.div<{
 
     &:hover {
       .CodeMirror.cm-s-duotone-light {
-        border-color: var(--ads-v2-color-border-emphasis);
+        border-color: ${(props) =>
+          props.borderLess ? "none" : "var(--ads-v2-color-border-emphasis)"};
       }
     }
 
     &:focus {
       .CodeMirror.cm-s-duotone-light {
-        border-color: var(--ads-v2-color-border-emphasis-plus);
+        border-color: ${(props) =>
+          props.borderLess
+            ? "none"
+            : "var(--ads-v2-color-border-emphasis-plus)"};
       }
     }
 
@@ -414,6 +414,7 @@ export const EditorWrapper = styled.div<{
 
     ${(props) => {
       let height = props.height || "auto";
+
       if (
         (props.size === EditorSize.COMPACT ||
           props.size === EditorSize.COMPACT_RETAIN_FORMATTING) &&
@@ -421,6 +422,7 @@ export const EditorWrapper = styled.div<{
       ) {
         height = props.height || "36px";
       }
+
       return `height: ${height}`;
     }}
   }

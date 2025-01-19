@@ -1,17 +1,19 @@
-import React from "react";
+import React, { useState } from "react";
 import { useSelector } from "react-redux";
 import styled from "styled-components";
-import { Switch, Icon, Tooltip, Link, Text } from "design-system";
+import { Switch, Icon, Tooltip, Link, Text } from "@appsmith/ads";
 import useUpdateEmbedSnippet from "pages/Applications/EmbedSnippet/useUpdateEmbedSnippet";
 import EmbedCodeSnippet from "pages/Applications/EmbedSnippet/Snippet";
-import {
-  createMessage,
-  IN_APP_EMBED_SETTING,
-} from "@appsmith/constants/messages";
-import { getCurrentApplication } from "selectors/editorSelectors";
-import PrivateEmbeddingContent from "pages/Applications/EmbedSnippet/PrivateEmbeddingContent";
+import { createMessage, IN_APP_EMBED_SETTING } from "ee/constants/messages";
+import PrivateEmbeddingContent, {
+  PrivateEmbedRampModal,
+  PrivateEmbedRampSidebar,
+} from "pages/Applications/EmbedSnippet/PrivateEmbeddingContent";
 import PropertyHelpLabel from "pages/Editor/PropertyPane/PropertyHelpLabel";
 import { ADMIN_SETTINGS_PATH } from "constants/routes";
+import { defaultOptionSelected, to, getSnippetUrl } from "ee/utils";
+import { PrivateEmbedSettings } from "ee/pages/Applications/PrivateEmbedSettings";
+import { getCurrentApplication } from "ee/selectors/applicationSelectors";
 
 export const StyledPropertyHelpLabel = styled(PropertyHelpLabel)`
   .bp3-popover-content > div {
@@ -40,34 +42,19 @@ export const EmbedWrapper = styled.div`
   }
 `;
 
-export function EmbedSnippetTab({
-  changeTab,
-  isAppSettings,
-}: {
-  changeTab?: () => void;
-  isAppSettings?: boolean;
-}) {
-  const currentApplicationDetails = useSelector(getCurrentApplication);
-
-  const isPublicApp = currentApplicationDetails?.isPublic || false;
-
-  if (!isPublicApp) {
-    return (
-      <PrivateEmbeddingContent
-        changeTab={changeTab}
-        isAppSettings={isAppSettings}
-        userAppPermissions={currentApplicationDetails?.userPermissions ?? []}
-      />
-    );
-  }
-
-  if (isAppSettings) return <AppSettings />;
-
-  return <ShareModal />;
-}
-
-function ShareModal() {
+export function ShareModal() {
   const embedSnippet = useUpdateEmbedSnippet();
+  const [selectedMethod, setSelectedMethod] = useState<string>(
+    defaultOptionSelected,
+  );
+  const currentApplicationDetails = useSelector(getCurrentApplication);
+  const isPublicApp = currentApplicationDetails?.isPublic || false;
+  const snippetUrl = getSnippetUrl(
+    embedSnippet.appViewEndPoint,
+    isPublicApp,
+    selectedMethod,
+  );
+
   return (
     <div className="flex flex-col gap-6">
       {embedSnippet.isSuperUser && (
@@ -113,10 +100,16 @@ function ShareModal() {
         {createMessage(IN_APP_EMBED_SETTING.showNavigationBar)}
       </Switch>
 
-      <EmbedCodeSnippet
-        isAppSettings={false}
-        snippet={embedSnippet.appViewEndPoint}
-      />
+      {!isPublicApp && (
+        <PrivateEmbedSettings
+          selectedMethod={selectedMethod}
+          setSelectedMethod={setSelectedMethod}
+        />
+      )}
+
+      <EmbedCodeSnippet isAppSettings={false} snippet={snippetUrl} />
+
+      <PrivateEmbedRampModal />
 
       <BottomWrapper className={`flex justify-end pt-5`}>
         <Link
@@ -124,7 +117,7 @@ function ShareModal() {
           data-testid="preview-embed"
           endIcon="share-box-line"
           target={"_blank"}
-          to={embedSnippet.appViewEndPoint}
+          to={to(snippetUrl)}
         >
           {createMessage(IN_APP_EMBED_SETTING.previewEmbeddedApp)}
         </Link>
@@ -133,8 +126,18 @@ function ShareModal() {
   );
 }
 
-function AppSettings() {
+export function AppSettings() {
   const embedSnippet = useUpdateEmbedSnippet();
+  const [selectedMethod, setSelectedMethod] = useState<string>(
+    defaultOptionSelected,
+  );
+  const currentApplicationDetails = useSelector(getCurrentApplication);
+  const isPublicApp = currentApplicationDetails?.isPublic || false;
+  const snippetUrl = getSnippetUrl(
+    embedSnippet.appViewEndPoint,
+    isPublicApp,
+    selectedMethod,
+  );
 
   return (
     <EmbedWrapper className="px-4">
@@ -182,13 +185,51 @@ function AppSettings() {
           {createMessage(IN_APP_EMBED_SETTING.showNavigationBar)}
         </Switch>
 
-        <EmbedCodeSnippet
-          isAppSettings
-          snippet={embedSnippet.appViewEndPoint}
-        />
+        {!isPublicApp && (
+          <PrivateEmbedSettings
+            selectedMethod={selectedMethod}
+            setSelectedMethod={setSelectedMethod}
+          />
+        )}
+
+        <EmbedCodeSnippet isAppSettings snippet={snippetUrl} />
       </div>
     </EmbedWrapper>
   );
+}
+
+export function EmbedSnippetTab({
+  changeTab,
+  isAppSettings,
+}: {
+  changeTab?: () => void;
+  isAppSettings?: boolean;
+}) {
+  const currentApplicationDetails = useSelector(getCurrentApplication);
+
+  const isPublicApp = currentApplicationDetails?.isPublic || false;
+
+  if (!isPublicApp) {
+    return (
+      <PrivateEmbeddingContent
+        changeTab={changeTab}
+        isAppSettings={isAppSettings}
+        userAppPermissions={currentApplicationDetails?.userPermissions ?? []}
+      />
+    );
+  }
+
+  if (isAppSettings)
+    return (
+      <>
+        <AppSettings />
+        <div className="px-4">
+          <PrivateEmbedRampSidebar />
+        </div>
+      </>
+    );
+
+  return <ShareModal />;
 }
 
 export default EmbedSnippetTab;

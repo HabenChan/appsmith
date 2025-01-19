@@ -1,7 +1,15 @@
 import widgetLocators from "../../../../locators/Widgets.json";
 import template from "../../../../locators/TemplatesLocators.json";
-const publish = require("../../../../locators/publishWidgetspage.json");
-import * as _ from "../../../../support/Objects/ObjectsCore";
+import {
+  agHelper,
+  assertHelper,
+  locators,
+  templates,
+} from "../../../../support/Objects/ObjectsCore";
+import EditorNavigation, {
+  EntityType,
+} from "../../../../support/Pages/EditorNavigation";
+import PageList from "../../../../support/Pages/PageList";
 
 beforeEach(() => {
   // Closes template dialog if it is already open - useful for retry
@@ -10,33 +18,35 @@ beforeEach(() => {
       cy.xpath(template.closeButton).click({ force: true });
     }
   });
-  cy.CheckAndUnfoldEntityItem("Pages");
-  cy.get(`.t--entity-name:contains(Page1)`)
-    .trigger("mouseover")
-    .click({ force: true });
+  EditorNavigation.SelectEntityByName("Page1", EntityType.Page);
 });
 
 describe(
-  "excludeForAirgap",
   "Fork a template to the current app from new page popover",
+  {
+    tags: [
+      "@tag.Templates",
+      "@tag.excludeForAirgap",
+      "@tag.Sanity",
+      "@tag.Git",
+      "@tag.ImportExport",
+      "@tag.Fork",
+    ],
+  },
   () => {
     it("1. Fork template from page section", () => {
       //Fork template button to be visible always
-      _.agHelper.RefreshPage();
-      cy.wait(5000);
-      cy.AddPageFromTemplate();
-      cy.wait(5000);
-      _.agHelper.AssertElementExist(_.templates.locators._forkApp);
-      cy.get(template.templateDialogBox).should("be.visible");
-      cy.wait(4000);
-      cy.xpath(
-        "//h1[text()='Meeting Scheduler']/parent::div//button[contains(@class, 't--fork-template')]",
-      )
-        .scrollIntoView()
-        .wait(500)
-        .click();
-      cy.wait(1000);
-      _.agHelper.CheckForErrorToast(
+      PageList.AddNewPage("Add page from template");
+      agHelper.AssertElementExist(template.templateDialogBox);
+      agHelper.AssertElementVisibility(template.templateDialogBox);
+      agHelper.AssertElementVisibility(templates.locators._templateCard);
+      agHelper.AssertElementVisibility(template.vehicleMaintenenceApp);
+      agHelper.GetNClick(template.vehicleMaintenenceApp);
+      agHelper.AssertElementAbsence(
+        "//*[text()='Loading template details']",
+        Cypress.config().pageLoadTimeout,
+      );
+      agHelper.FailIfErrorToast(
         "Internal server error while processing request",
       );
       cy.get("body").then(($ele) => {
@@ -46,51 +56,93 @@ describe(
           }
         }
       });
-      cy.get(widgetLocators.toastAction).should(
-        "contain",
-        "template added successfully",
+      agHelper.AssertElementAbsence(
+        locators._visibleTextSpan("Setting up the template"),
+        Cypress.config().pageLoadTimeout,
       );
+      agHelper.ValidateToastMessage("template added successfully");
+      agHelper.AssertElementVisibility(locators._itemContainerWidget);
+      agHelper.WaitUntilAllToastsDisappear();
     });
 
     it("2. Add selected page of template from page section", () => {
-      cy.AddPageFromTemplate();
-      cy.wait(5000);
-      cy.get(template.templateDialogBox).should("be.visible");
-      cy.wait(4000);
-      cy.xpath("//h1[text()='Meeting Scheduler']").click();
-      cy.wait("@getTemplatePages").should(
-        "have.nested.property",
-        "response.body.responseMeta.status",
-        200,
+      PageList.AddNewPage("Add page from template");
+      agHelper.AssertElementVisibility(template.templateDialogBox);
+      agHelper.AssertElementVisibility(templates.locators._templateCard);
+      agHelper.AssertElementVisibility(template.vehicleMaintenenceApp);
+      agHelper.GetNClick(template.vehicleMaintenenceApp);
+      agHelper.AssertElementAbsence(
+        "//*[text()='Loading template details']",
+        Cypress.config().pageLoadTimeout,
       );
-      //cy.xpath(template.selectAllPages).next().click();
-      // cy.xpath("//span[text()='CALENDAR MOBILE']").parent().next().click();
-      cy.get(template.templateViewForkButton).click();
-      cy.wait("@fetchTemplate").should(
-        "have.nested.property",
-        "response.body.responseMeta.status",
-        200,
+      assertHelper.AssertNetworkStatus("getTemplatePages");
+      agHelper.CheckUncheck(template.selectAllPages, false);
+      agHelper.CheckUncheck(
+        "div:has(> span:contains('New vehicle')) + label input[type='checkbox']",
       );
-      cy.get(widgetLocators.toastAction).should(
-        "contain",
-        "template added successfully",
+      agHelper.GetNClick(template.templateViewForkButton);
+      agHelper.AssertElementAbsence(
+        locators._visibleTextSpan("Setting up the template"),
+        Cypress.config().pageLoadTimeout,
       );
+      assertHelper.AssertNetworkStatus("fetchTemplate");
+      agHelper.WaitUntilToastDisappear("template added successfully");
+      agHelper.AssertElementVisibility(locators._itemContainerWidget);
     });
 
-    it("3. Fork template button should take user to 'select pages from template' page", () => {
-      _.agHelper.RefreshPage();
-      cy.AddPageFromTemplate();
-      cy.get(_.templates.locators._forkApp).first().click();
-      cy.get(template.templateViewForkButton).should("be.visible");
-      //Similar templates add icon should take user to 'select pages from template'
-      _.agHelper.RefreshPage();
-      cy.AddPageFromTemplate();
-      // We are currentlyon on templates list page
-      cy.get(_.templates.locators._forkApp).first().click();
-      // Here we are on template detail page, with similar templates at the bottom
-      cy.get(_.templates.locators._forkApp).first().click();
+    it("3. Templates card should take user to 'select pages from template' page", () => {
+      PageList.AddNewPage("Add page from template");
+      agHelper.AssertElementVisibility(templates.locators._templateCard);
+      agHelper.GetNClick(templates.locators._templateCard);
+      agHelper.AssertElementVisibility(template.templateViewForkButton);
+      agHelper.GetNClick(templates.locators._closeTemplateDialogBoxBtn);
 
-      cy.get(template.templateViewForkButton).should("be.visible");
+      //Similar templates add icon should take user to 'select pages from template'
+      //agHelper.RefreshPage();
+      PageList.AddNewPage("Add page from template");
+      // We are currentlyon on templates list page
+      agHelper.GetNClick(templates.locators._templateCard);
+      // Here we are on template detail page, with similar templates at the bottom
+      agHelper.GetNClick(templates.locators._templateCard);
+      agHelper.AssertElementVisibility(template.templateViewForkButton);
+      agHelper.GetNClick(templates.locators._closeTemplateDialogBoxBtn);
+    });
+
+    it("4. Add page from template to show only apps with 'allowPageImport:true'", () => {
+      cy.fixture("Templates/AllowPageImportTemplates.json").then((data) => {
+        cy.intercept(
+          {
+            method: "GET",
+            url: "/api/v1/app-templates",
+          },
+          {
+            statusCode: 200,
+            body: data,
+          },
+        ).as("fetchAllTemplates");
+        agHelper.RefreshPage(); //is important for intercept to go thru!
+
+        PageList.AddNewPage("Add page from template");
+
+        agHelper.AssertElementVisibility(template.templateDialogBox);
+        cy.wait("@fetchAllTemplates");
+        cy.get("@fetchAllTemplates").then(({ request, response }) => {
+          // in the fixture data we are sending some tempaltes with `allowPageImport: false`
+          cy.get(template.templateCard).should(
+            "not.have.length",
+            response.body.data.length,
+          );
+
+          const templatesInResponse = response.body.data.filter(
+            (card) => !!card.allowPageImport,
+          );
+          agHelper.AssertElementLength(
+            template.templateCard,
+            templatesInResponse.length,
+          );
+          agHelper.GetNClick(templates.locators._closeTemplateDialogBoxBtn);
+        });
+      });
     });
   },
 );

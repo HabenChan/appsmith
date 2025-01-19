@@ -1,11 +1,11 @@
 import { createImmerReducer } from "utils/ReducerUtils";
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+} from "ee/constants/ReduxActionConstants";
 import recommendedLibraries from "pages/Editor/Explorer/Libraries/recommendedLibraries";
-import type { TJSLibrary } from "workers/common/JSLibrary";
+import type { JSLibrary } from "workers/common/JSLibrary";
 import { defaultLibraries } from "workers/common/JSLibrary";
 
 export enum InstallState {
@@ -15,16 +15,16 @@ export enum InstallState {
   Success,
 }
 
-export type LibraryState = {
+export interface LibraryState {
   installationStatus: Record<string, InstallState>;
-  installedLibraries: TJSLibrary[];
+  installedLibraries: JSLibrary[];
   isInstallerOpen: boolean;
-};
+}
 
 const initialState = {
   isInstallerOpen: false,
   installationStatus: {},
-  installedLibraries: defaultLibraries.map((lib: TJSLibrary) => {
+  installedLibraries: defaultLibraries.map((lib: JSLibrary) => {
     return {
       name: lib.name,
       docsURL: lib.docsURL,
@@ -38,9 +38,10 @@ const initialState = {
 const jsLibraryReducer = createImmerReducer(initialState, {
   [ReduxActionTypes.INSTALL_LIBRARY_INIT]: (
     state: LibraryState,
-    action: ReduxAction<Partial<TJSLibrary>>,
+    action: ReduxAction<Partial<JSLibrary>>,
   ) => {
     const { url } = action.payload;
+
     state.installationStatus[url as string] =
       state.installationStatus[url as string] || InstallState.Queued;
   },
@@ -63,6 +64,7 @@ const jsLibraryReducer = createImmerReducer(initialState, {
     const recommendedLibrary = recommendedLibraries.find(
       (lib) => lib.url === url,
     );
+
     state.installationStatus[url] = InstallState.Success;
     state.installedLibraries.unshift({
       name: recommendedLibrary?.name || name,
@@ -91,7 +93,7 @@ const jsLibraryReducer = createImmerReducer(initialState, {
   },
   [ReduxActionTypes.FETCH_JS_LIBRARIES_SUCCESS]: (
     state: LibraryState,
-    action: ReduxAction<TJSLibrary[]>,
+    action: ReduxAction<JSLibrary[]>,
   ) => {
     state.installedLibraries = action.payload.concat(
       initialState.installedLibraries,
@@ -99,9 +101,10 @@ const jsLibraryReducer = createImmerReducer(initialState, {
   },
   [ReduxActionTypes.UNINSTALL_LIBRARY_SUCCESS]: (
     state: LibraryState,
-    action: ReduxAction<TJSLibrary>,
+    action: ReduxAction<JSLibrary>,
   ) => {
     const uLib = action.payload;
+
     state.installedLibraries = state.installedLibraries.filter(
       (lib) => uLib.url !== lib.url,
     );

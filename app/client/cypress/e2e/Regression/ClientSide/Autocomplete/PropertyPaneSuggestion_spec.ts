@@ -1,63 +1,58 @@
-import { ObjectsRegistry } from "../../../../support/Objects/Registry";
+import {
+  agHelper,
+  locators,
+  entityExplorer,
+  jsEditor,
+  propPane,
+  draggableWidgets,
+} from "../../../../support/Objects/ObjectsCore";
+import EditorNavigation, {
+  EntityType,
+} from "../../../../support/Pages/EditorNavigation";
 
-const {
-  AggregateHelper,
-  CommonLocators,
-  EntityExplorer,
-  JSEditor,
-  PropertyPane,
-} = ObjectsRegistry;
-
-describe("Property Pane Suggestions", () => {
-  before(() => {
-    cy.fixture("buttondsl").then((val: any) => {
-      AggregateHelper.AddDsl(val);
+describe(
+  "Property Pane Suggestions",
+  { tags: ["@tag.JS", "@tag.Binding"] },
+  () => {
+    before(() => {
+      entityExplorer.DragDropWidgetNVerify(draggableWidgets.BUTTON);
     });
-  });
 
-  it("1. Should show Property Pane Suggestions on / command & when typing {{}}", () => {
-    EntityExplorer.SelectEntityByName("Button1", "Widgets");
-    PropertyPane.TypeTextIntoField("Label", "/");
-    AggregateHelper.GetNAssertElementText(CommonLocators._hints, "Bind data");
-    AggregateHelper.GetNAssertElementText(
-      CommonLocators._hints,
-      "New binding",
-      "have.text",
-      1,
-    );
-    AggregateHelper.GetNClickByContains(CommonLocators._hints, "New binding");
-    PropertyPane.ValidatePropertyFieldValue("Label", "{{}}");
+    it("1. Should show Property Pane Suggestions on / command & when typing {{}}", () => {
+      EditorNavigation.SelectEntityByName("Button1", EntityType.Widget);
+      propPane.TypeTextIntoField("Label", "/");
+      agHelper.GetElementsNAssertTextPresence(locators._hints, "Add a binding");
+      agHelper.GetNClickByContains(locators._hints, "Add a binding");
+      propPane.ValidatePropertyFieldValue("Label", "{{}}");
 
-    //typing {{}}
-    EntityExplorer.SelectEntityByName("Button1", "Widgets");
-    PropertyPane.TypeTextIntoField("Label", "{{");
-    AggregateHelper.GetNAssertElementText(CommonLocators._hints, "appsmith");
-    AggregateHelper.GetNClickByContains(CommonLocators._hints, "appsmith");
+      //typing {{}}
+      EditorNavigation.SelectEntityByName("Button1", EntityType.Widget);
+      propPane.TypeTextIntoField("Label", "{{");
+      agHelper.GetElementsNAssertTextPresence(
+        locators._hints,
+        "Button1.isVisible",
+      );
+      agHelper.GetNClickByContains(locators._hints, "Button1.isVisible");
+      propPane.ValidatePropertyFieldValue("Label", "{{Button1.isVisible}}");
+    });
 
-    PropertyPane.ValidatePropertyFieldValue("Label", "{{appsmith}}");
-  });
+    it("2. [Bug]-[2040]: undefined binding on / command dropdown", () => {
+      // Create js object
+      jsEditor.CreateJSObject("");
+      EditorNavigation.SelectEntityByName("Button1", EntityType.Widget);
+      propPane.TypeTextIntoField("Label", "/");
+      agHelper.GetElementsNAssertTextPresence(
+        locators._slashCommandHintText,
+        "JSObject1",
+      );
+    });
 
-  it("2. [Bug]-[2040]: undefined binding on / command dropdown", () => {
-    // Create js object
-    JSEditor.CreateJSObject("");
-    EntityExplorer.SelectEntityByName("Button1", "Widgets");
-    PropertyPane.TypeTextIntoField("Label", "/");
-    AggregateHelper.GetNAssertElementText(
-      CommonLocators._hints,
-      "JSObject1",
-      "have.text",
-      1,
-    );
-  });
-
-  it("3. Should add Autocomplete Suggestions on Tab press", () => {
-    EntityExplorer.SelectEntityByName("Button1", "Widgets");
-    PropertyPane.TypeTextIntoField("Label", "{{");
-    AggregateHelper.GetNAssertElementText(CommonLocators._hints, "appsmith");
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    cy.get("body").tab();
-
-    PropertyPane.ValidatePropertyFieldValue("Label", "{{appsmith}}");
-  });
-});
+    it("3. Should add Autocomplete Suggestions on Tab press", () => {
+      EditorNavigation.SelectEntityByName("Button1", EntityType.Widget);
+      propPane.TypeTextIntoField("Label", "{{J");
+      agHelper.GetElementsNAssertTextPresence(locators._hints, "JSObject1");
+      cy.get("body").tab();
+      propPane.ValidatePropertyFieldValue("Label", "{{JSObject1}}");
+    });
+  },
+);

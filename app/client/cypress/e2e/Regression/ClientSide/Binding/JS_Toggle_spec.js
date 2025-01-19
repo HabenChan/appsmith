@@ -1,12 +1,18 @@
-const dsl = require("../../../../fixtures/Js_toggle_dsl.json");
+import {
+  entityExplorer,
+  agHelper,
+} from "../../../../support/Objects/ObjectsCore";
+import EditorNavigation, {
+  EntityType,
+} from "../../../../support/Pages/EditorNavigation";
 
-describe("JS Toggle tests", () => {
+describe("JS Toggle tests", { tags: ["@tag.Binding"] }, () => {
   before(() => {
-    cy.addDsl(dsl);
+    agHelper.AddDsl("Js_toggle_dsl");
   });
 
   it("1. switches the toggle to Button widget", () => {
-    cy.openPropertyPane("buttonwidget");
+    EditorNavigation.SelectEntityByName("Button1", EntityType.Widget);
     cy.get(".t--property-control-visible").find(".t--js-toggle").click();
 
     cy.get(".t--property-control-visible")

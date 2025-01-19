@@ -1,20 +1,24 @@
 import type { MutableRefObject } from "react";
+import { useState } from "react";
 import React, { useEffect, useRef } from "react";
 import ReactJson from "react-json-view";
 import { JsonWrapper, reactJsonProps } from "./JsonWrapper";
 import { componentWillAppendToBody } from "react-append-to-body";
-import { debounce } from "lodash";
+import _, { debounce } from "lodash";
 import { zIndexLayers } from "constants/CanvasEditorConstants";
 import { objectCollapseAnalytics, textSelectAnalytics } from "./Analytics";
-import { Divider } from "design-system";
+import { Divider } from "@appsmith/ads";
+import { useSelector } from "react-redux";
+import { getConfigTree, getDataTree } from "selectors/dataTreeSelectors";
+import { filterInternalProperties } from "utils/FilterInternalProperties";
+import { getJSCollections } from "ee/selectors/entitiesSelector";
 
-export type PeekOverlayStateProps = {
-  name: string;
+export interface PeekOverlayStateProps {
+  objectName: string;
+  propertyPath: string[];
   position: DOMRect;
   textWidth: number;
-  data: unknown;
-  dataType: string;
-};
+}
 
 /*
  * using `componentWillAppendToBody` to work with variable height for peek overlay
@@ -29,6 +33,22 @@ export const PeekOverlayPopUp = componentWillAppendToBody(
 
 export const PEEK_OVERLAY_DELAY = 200;
 
+const getPropertyData = (src: unknown, propertyPath: string[]) => {
+  return propertyPath.length > 0 ? _.get(src, propertyPath) : src;
+};
+
+const getDataTypeHeader = (data: unknown) => {
+  const dataType = typeof data;
+
+  if (dataType === "object") {
+    if (Array.isArray(data)) return "array";
+
+    if (data === null) return "null";
+  }
+
+  return dataType;
+};
+
 export function PeekOverlayPopUpContent(
   props: PeekOverlayStateProps & {
     hidePeekOverlay: () => void;
@@ -36,6 +56,25 @@ export function PeekOverlayPopUpContent(
 ) {
   const CONTAINER_MAX_HEIGHT_PX = 252;
   const dataWrapperRef: MutableRefObject<HTMLDivElement | null> = useRef(null);
+  const dataTree = useSelector(getDataTree);
+  const configTree = useSelector(getConfigTree);
+  const jsActions = useSelector(getJSCollections);
+
+  const filteredData = filterInternalProperties(
+    props.objectName,
+    dataTree[props.objectName],
+    jsActions,
+    dataTree,
+    configTree,
+  );
+
+  // Because getPropertyData can return a function
+  // And we don't want to execute it.
+  const [jsData] = useState(() =>
+    getPropertyData(filteredData, props.propertyPath),
+  );
+
+  const [dataType] = useState(getDataTypeHeader(jsData));
 
   useEffect(() => {
     const wheelCallback = () => {
@@ -43,6 +82,7 @@ export function PeekOverlayPopUpContent(
     };
 
     window.addEventListener("wheel", wheelCallback);
+
     return () => {
       window.removeEventListener("wheel", wheelCallback);
     };
@@ -50,7 +90,9 @@ export function PeekOverlayPopUpContent(
 
   useEffect(() => {
     if (!dataWrapperRef.current) return;
+
     dataWrapperRef.current.addEventListener("copy", textSelectAnalytics);
+
     return () =>
       dataWrapperRef.current?.removeEventListener("copy", textSelectAnalytics);
   }, [dataWrapperRef, dataWrapperRef.current]);
@@ -60,12 +102,12 @@ export function PeekOverlayPopUpContent(
     PEEK_OVERLAY_DELAY,
   );
 
-  const getDataTypeHeader = (dataType: string) => {
-    if (props.dataType === "object") {
-      if (Array.isArray(props.data)) return "array";
-      if (props.data === null) return "null";
-    }
-    return dataType;
+  const getLeftPosition = (position: DOMRect) => {
+    let left = position.right - 300;
+
+    if (left < 0) left = 8;
+
+    return left;
   };
 
   return (
@@ -82,7 +124,7 @@ export function PeekOverlayPopUpContent(
         backgroundColor: "var(--ads-v2-color-bg)",
         boxShadow: "0px 0px 10px #0000001A", // color used from designs
         borderRadius: "var(--ads-v2-border-radius)",
-        left: `${props.position.left + props.position.width - 300}px`,
+        left: `${getLeftPosition(props.position)}px`,
         ...(props.position.top >= CONTAINER_MAX_HEIGHT_PX
           ? {
               bottom: `calc(100vh - ${props.position.top}px)`,
@@ -101,7 +143,7 @@ export function PeekOverlayPopUpContent(
           fontSize: "10px",
         }}
       >
-        {getDataTypeHeader(props.dataType)}
+        {dataType}
       </div>
       <Divider style={{ display: "block" }} />
       <div
@@ -113,8 +155,9 @@ export function PeekOverlayPopUpContent(
           fontSize: "10px",
         }}
       >
-        {props.dataType === "object" && props.data !== null && (
+        {(dataType === "object" || dataType === "array") && jsData !== null && (
           <JsonWrapper
+            className="as-mask"
             onClick={objectCollapseAnalytics}
             style={{
               minHeight: "20px",
@@ -122,31 +165,32 @@ export function PeekOverlayPopUpContent(
               overflowY: "auto",
             }}
           >
-            <ReactJson src={props.data} {...reactJsonProps} />
+            <ReactJson src={jsData} {...reactJsonProps} />
           </JsonWrapper>
         )}
-        {props.dataType === "function" && (
-          <div>{(props.data as any).toString()}</div>
-        )}
-        {props.dataType === "boolean" && (
-          <div>{(props.data as any).toString()}</div>
-        )}
-        {props.dataType === "string" && (
-          <div>{(props.data as any).toString()}</div>
-        )}
-        {props.dataType === "number" && (
-          <div>{(props.data as any).toString()}</div>
-        )}
-        {((props.dataType !== "object" &&
-          props.dataType !== "function" &&
-          props.dataType !== "boolean" &&
-          props.dataType !== "string" &&
-          props.dataType !== "number") ||
-          props.data === null) && (
+        {/* TODO: Fix this the next time the file is edited */}
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {dataType === "function" && <div>{(jsData as any).toString()}</div>}
+        {/* TODO: Fix this the next time the file is edited */}
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {dataType === "boolean" && <div>{(jsData as any).toString()}</div>}
+        {/* TODO: Fix this the next time the file is edited */}
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {dataType === "string" && <div>{(jsData as any).toString()}</div>}
+        {/* TODO: Fix this the next time the file is edited */}
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {dataType === "number" && <div>{(jsData as any).toString()}</div>}
+        {((dataType !== "object" &&
+          dataType !== "function" &&
+          dataType !== "boolean" &&
+          dataType !== "string" &&
+          dataType !== "array" &&
+          dataType !== "number") ||
+          jsData === null) && (
           <div>
-            {(props.data as any)?.toString() ??
-            props.data ??
-            props.data === undefined
+            {/* TODO: Fix this the next time the file is edited */}
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {(jsData as any)?.toString() ?? jsData ?? jsData === undefined
               ? "undefined"
               : "null"}
           </div>

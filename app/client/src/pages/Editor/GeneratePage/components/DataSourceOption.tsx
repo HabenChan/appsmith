@@ -1,15 +1,15 @@
 import React from "react";
 import styled from "styled-components";
 import { useSelector } from "react-redux";
-import { getPluginImages } from "selectors/entitiesSelector";
+import { getPluginImages } from "ee/selectors/entitiesSelector";
 import type {
   DropdownOption,
   RenderDropdownOptionType,
-} from "design-system-old";
-import { Classes, Text, TextType } from "design-system-old";
+} from "@appsmith/ads-old";
+import { Classes, Text, TextType } from "@appsmith/ads-old";
 import _ from "lodash";
-import { Icon, Tooltip } from "design-system";
-import { getAssetUrl } from "@appsmith/utils/airgapHelpers";
+import { Tooltip, Icon } from "@appsmith/ads";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
 
 // ---------- Helpers and constants ----------
 
@@ -50,12 +50,6 @@ const OptionWrapper = styled.div<{
   }
 `;
 
-const CreateIconWrapper = styled.div`
-  margin: 0px 8px 0px 0px;
-  cursor: pointer;
-  height: 16px;
-`;
-
 const ImageWrapper = styled.div`
   height: 16px;
   width: auto;
@@ -69,10 +63,17 @@ export const DatasourceImage = styled.img`
   width: 16px;
 `;
 
+const CreateIconWrapper = styled.div`
+  margin: 0px 8px 0px 0px;
+  cursor: pointer;
+  height: 16px;
+`;
+
 interface DataSourceOptionType extends RenderDropdownOptionType {
   dataTestid: string;
   optionWidth: string;
 }
+
 function DataSourceOption({
   dataTestid,
   isHighlighted,
@@ -94,8 +95,9 @@ function DataSourceOption({
   const optionCypressSelector = isConnectNewDataSourceBtn
     ? ".t--connectNewDatasource-option"
     : isSelectedNode
-    ? ""
-    : dataTestid;
+      ? ""
+      : dataTestid;
+
   return (
     <Tooltip
       content="Not supported for template generation"
@@ -114,6 +116,7 @@ function DataSourceOption({
           if (isNotSupportedDatasource) {
             return;
           }
+
           if (optionClickHandler) {
             optionClickHandler(dropdownOption as DropdownOption);
           }

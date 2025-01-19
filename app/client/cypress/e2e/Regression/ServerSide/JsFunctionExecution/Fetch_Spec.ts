@@ -1,11 +1,16 @@
-import { ObjectsRegistry } from "../../../../support/Objects/Registry";
-const jsEditor = ObjectsRegistry.JSEditor;
-const agHelper = ObjectsRegistry.AggregateHelper;
-const explorerHelper = ObjectsRegistry.EntityExplorer;
-const propertyPaneHelper = ObjectsRegistry.PropertyPane;
-const aggregateHelper = ObjectsRegistry.AggregateHelper;
+import {
+  agHelper,
+  apiPage,
+  dataManager,
+  entityExplorer,
+  jsEditor,
+  propPane,
+} from "../../../../support/Objects/ObjectsCore";
+import EditorNavigation, {
+  EntityType,
+} from "../../../../support/Pages/EditorNavigation";
 
-describe("Tests fetch calls", () => {
+describe("Tests fetch calls", { tags: ["@tag.JS", "@tag.Binding"] }, () => {
   it("1. Ensures that cookies are not passed with fetch calls", function () {
     jsEditor.CreateJSObject(
       `export default {
@@ -73,19 +78,25 @@ describe("Tests fetch calls", () => {
   });
 
   it("3. Tests if fetch works with store value", function () {
-    explorerHelper.NavigateToSwitcher("Widgets");
-    explorerHelper.DragDropWidgetNVerify("buttonwidget", 500, 200);
-    explorerHelper.SelectEntityByName("Button1");
-    propertyPaneHelper.TypeTextIntoField("Label", "getUserID");
-    propertyPaneHelper.EnterJSContext(
-      "onClick",
-      `{{fetch('https://jsonplaceholder.typicode.com/todos/1')
-    .then(res => res.json())
-    .then(json => storeValue('userId', json.userId))
-    .then(() => showAlert("UserId: " + appsmith.store.userId))}}`,
+    apiPage.CreateAndFillApi(
+      dataManager.dsValues[dataManager.defaultEnviorment].mockGenderAge +
+        `{{this.params.person}}`,
+      "Gender_Age",
     );
-    aggregateHelper.Sleep(2000);
-    aggregateHelper.ClickButton("getUserID");
-    agHelper.AssertContains("UserId: 1", "exist");
+    apiPage.RunAPI();
+    entityExplorer.DragDropWidgetNVerify("buttonwidget", 500, 200);
+    EditorNavigation.SelectEntityByName("Button1", EntityType.Widget);
+    propPane.TypeTextIntoField("Label", "getUserName");
+    propPane.EnterJSContext(
+      "onClick",
+      `{{(async function(){
+          const gender = await Gender_Age.run({ person: "sagar" });
+          storeValue("Gender", gender);
+          showAlert("Your name is " + appsmith.store.Gender.name);
+        })()}}`,
+    );
+
+    agHelper.ClickButton("getUserName");
+    agHelper.AssertContains("Your name is sagar", "exist");
   });
 });

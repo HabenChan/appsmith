@@ -1,16 +1,16 @@
 import { createReducer } from "utils/ReducerUtils";
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import type { User } from "constants/userConstants";
 import type { APP_MODE } from "entities/App";
 
-export type AuthUserState = {
+export interface AuthUserState {
   username: string;
   email: string;
   id: string;
-};
+}
 
-export type UrlDataState = {
+export interface UrlDataState {
   queryParams: Record<string, string>;
   protocol: string;
   host: string;
@@ -19,11 +19,11 @@ export type UrlDataState = {
   pathname: string;
   hash: string;
   fullPath: string;
-};
+}
 
 export type AppStoreState = Record<string, unknown>;
 
-export type AppDataState = {
+export interface AppDataState {
   mode?: APP_MODE;
   user: AuthUserState;
   URL: UrlDataState;
@@ -32,7 +32,10 @@ export type AppDataState = {
     canBeRequested: boolean;
     currentPosition?: Partial<GeolocationPosition>;
   };
-};
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  workflows: Record<string, any>;
+}
 
 const initialState: AppDataState = {
   user: {
@@ -55,6 +58,7 @@ const initialState: AppDataState = {
     canBeRequested: "geolocation" in navigator,
     currentPosition: {},
   },
+  workflows: {},
 };
 
 const appReducer = createReducer(initialState, {

@@ -1,28 +1,31 @@
-let appId;
+import {
+  agHelper,
+  homePage,
+  adminSettings,
+} from "../../../../support/Objects/ObjectsCore";
 
 describe(
-  "excludeForAirgap",
   "Checks for analytics for enableTelemtry",
+  { tags: ["@tag.excludeForAirgap"] },
   function () {
     before(() => {
-      cy.visit("/applications");
-      cy.get(".admin-settings-menu-option").click();
+      homePage.NavigateToHome();
+      agHelper.GetNClick(adminSettings._adminSettingsBtn);
       cy.get("[data-testid='APPSMITH_DISABLE_TELEMETRY']").should("be.checked"); //Bug 21191
       cy.get("[data-testid='APPSMITH_DISABLE_TELEMETRY']").uncheck({
         force: true,
-      });
-      //disabling sharing of anonymous data
-      cy.get(".t--admin-settings-save-button").click();
+      }); //disabling sharing of anonymous data
+      agHelper.GetNClick(adminSettings._saveButton);
       cy.wait(2000);
-      cy.get(".t--admin-settings-restart-notice", { timeout: 120000 }).should(
+      cy.get(".t--admin-settings-restart-notice", { timeout: 180000 }).should(
         "not.exist",
       );
       cy.wait("@getGeneral").its("response.statusCode").should("eq", 200);
     });
 
     it("1. Should check analytics is not initialised when enableTelemtry is false", function () {
-      cy.visit("/applications");
-      // cy.reload();
+      agHelper.VisitNAssert("/applications", "getAllWorkspaces");
+      // agHelper.RefreshPage();
       // cy.wait(3000);
       // cy.wait("@getMe")
       //   //.wait("@getMe")
@@ -40,11 +43,7 @@ describe(
         req.continue();
       });
       cy.get(".t--new-button").should("be.visible");
-      cy.generateUUID().then((id) => {
-        appId = id;
-        cy.CreateAppInFirstListedWorkspace(id);
-        localStorage.setItem("AppName", appId);
-      });
+      homePage.CreateNewApplication();
       cy.wait(3000);
       cy.window().then(() => {
         cy.wrap(interceptFlag).should("eq", false);
@@ -52,10 +51,9 @@ describe(
     });
 
     it("2. Should check smartlook is not initialised when enableTelemtry is false", function () {
-      cy.visit("/applications");
-      cy.reload();
+      agHelper.VisitNAssert("/applications", "getAllWorkspaces");
       cy.wait(3000);
-      cy.wait("@getMe");
+      cy.wait("@getConsolidatedData");
       cy.window().then((window) => {
         expect(window.smartlook).to.be.equal(undefined);
       });
@@ -64,11 +62,8 @@ describe(
         interceptFlag = true;
         req.continue();
       });
-      cy.generateUUID().then((id) => {
-        appId = id;
-        cy.CreateAppInFirstListedWorkspace(id);
-        localStorage.setItem("AppName", appId);
-      });
+
+      homePage.CreateNewApplication();
       cy.wait(3000);
       cy.window().then(() => {
         cy.wrap(interceptFlag).should("eq", false);
@@ -76,10 +71,9 @@ describe(
     });
 
     it("3. Should check Sentry is not initialised when enableTelemtry is false", function () {
-      cy.visit("/applications");
-      cy.reload();
+      agHelper.VisitNAssert("/applications", "getAllWorkspaces");
       cy.wait(3000);
-      cy.wait("@getMe");
+      cy.wait("@getConsolidatedData");
       cy.window().then((window) => {
         expect(window.Sentry).to.be.equal(undefined);
       });
@@ -88,11 +82,7 @@ describe(
         interceptFlag = true;
         req.continue();
       });
-      cy.generateUUID().then((id) => {
-        appId = id;
-        cy.CreateAppInFirstListedWorkspace(id);
-        localStorage.setItem("AppName", appId);
-      });
+      homePage.CreateNewApplication();
       cy.wait(3000);
       cy.window().then(() => {
         cy.wrap(interceptFlag).should("eq", false);

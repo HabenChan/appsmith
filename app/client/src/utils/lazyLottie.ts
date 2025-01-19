@@ -8,7 +8,7 @@ let cachedLottie: LottiePlayer | null = null;
 
 export type LazyAnimationItem = Pick<
   AnimationItem,
-  "play" | "addEventListener" | "destroy"
+  "play" | "addEventListener" | "destroy" | "goToAndStop"
 >;
 
 const lazyLottie = {
@@ -32,7 +32,9 @@ const lazyLottie = {
 
     const abortController = new AbortController();
     const queuedCommands: Array<{
-      commandName: "play" | "addEventListener";
+      commandName: "play" | "addEventListener" | "goToAndStop";
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       args: any[];
     }> = [];
 
@@ -43,8 +45,11 @@ const lazyLottie = {
 
       cachedLottie = lottie;
       const animation = lottie.loadAnimation(params);
+
       for (const command of queuedCommands) {
         // @ts-expect-error – Getting “A spread argument must either have a tuple type or be passed to a rest parameter”, and it’s tricky to work around with this generalized code
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         animation[command.commandName](...(command.args as any));
       }
     });
@@ -59,6 +64,9 @@ const lazyLottie = {
         return () => {
           throw new Error("Not implemented");
         };
+      },
+      goToAndStop(...args) {
+        queuedCommands.push({ commandName: "goToAndStop", args });
       },
       destroy() {
         abortController.abort();
